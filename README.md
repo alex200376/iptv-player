@@ -6,7 +6,7 @@
 ![Electron](https://img.shields.io/badge/Electron-43.x-47848F?logo=electron)
 ![React](https://img.shields.io/badge/React-19.x-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript)
-![Platform](https://img.shields.io/badge/platform-Windows)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20)
 
 ---
 
