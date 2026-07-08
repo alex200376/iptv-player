@@ -5,6 +5,7 @@ import TopBar from './components/TopBar'
 import SettingsPage from './components/SettingsPage'
 import EpgPage from './components/EpgPage'
 import Onboarding from './components/Onboarding'
+import UpdateDialog from './components/UpdateDialog'
 import { useStore } from './stores/useStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { applyTheme } from './themes'
@@ -15,6 +16,7 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(() => {
     return !localStorage.getItem('iptv-player-onboarded')
   })
+  const [showUpdateDialog, setShowUpdateDialog] = useState(false)
   const currentChannel = useStore((s) => s.currentChannel)
   const setChannels = useStore((s) => s.setChannels)
   const settingsOpen = useStore((s) => s.settingsOpen)
@@ -163,6 +165,7 @@ export default function App() {
         onToggleSidebar={toggleSidebar}
         onOpenSettings={openSettings}
         onOpenEpg={() => setEpgPageOpen(true)}
+        onOpenUpdate={() => setShowUpdateDialog(true)}
       />
       <div className="flex-1 flex overflow-hidden">
         <div
@@ -185,6 +188,7 @@ export default function App() {
         </div>
       </div>
       {showOnboarding && <Onboarding onDone={handleOnboardingDone} />}
+      {showUpdateDialog && <UpdateDialog onClose={() => setShowUpdateDialog(false)} />}
     </div>
   )
 }

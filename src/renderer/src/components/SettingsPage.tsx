@@ -273,6 +273,19 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
             </div>
             <div className="pt-4 border-t border-tv-border space-y-4">
               <p className="text-tv-sm text-tv-text-secondary">VLC 版本: 3.0.23</p>
+              <div className="flex items-center gap-3 py-1">
+                <input
+                  type="checkbox"
+                  id="auto-download-updates"
+                  checked={settings.autoDownloadUpdates}
+                  onChange={(e) => updateSettings({ autoDownloadUpdates: e.target.checked })}
+                  className="w-4 h-4 accent-tv-accent"
+                />
+                <label htmlFor="auto-download-updates" className="text-tv-sm text-tv-text-primary cursor-pointer select-none">
+                  背景自动下载更新
+                </label>
+                <span className="text-tv-xs text-tv-text-secondary">（发现新版后自动下载，不打扰）</span>
+              </div>
               <button
                 onClick={() => setShowUpdateDialog(true)}
                 className="w-full py-2.5 bg-tv-accent text-white text-tv-sm rounded-lg hover:bg-tv-accent-hover transition-colors"

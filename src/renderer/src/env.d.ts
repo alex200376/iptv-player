@@ -70,6 +70,8 @@ interface Settings {
   playlistRefreshInterval: number
   streamProxy: boolean
   proxyResolution: string
+  autoDownloadUpdates: boolean
+  snoozeUpdateUntil: number
 }
 
 interface PlayResult {
@@ -123,12 +125,14 @@ interface ElectronAPI {
 
   // Update
   getAppVersion: () => Promise<string>
+  snoozeUpdate: (until: number) => Promise<boolean>
   checkForUpdate: () => Promise<{ available: boolean; info?: { version: string; releaseDate?: string; releaseNotes?: string }; error?: string; checking?: boolean }>
   downloadUpdate: () => Promise<{ downloading: boolean; error?: string }>
   installUpdate: () => Promise<boolean>
   onUpdateStatus: (callback: (text: string) => void) => void
   onUpdateDownloadProgress: (callback: (progress: { percent: number; bytesPerSecond: number; total: number; transferred: number }) => void) => void
   onUpdateDownloaded: (callback: (info: { version: string }) => void) => void
+  onUpdateAvailable: (callback: (info: { version: string; releaseDate?: string; releaseNotes?: string }) => void) => void
 }
 
 interface Window {

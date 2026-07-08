@@ -1,17 +1,20 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { useStore } from '../stores/useStore'
 import OpenStreamDialog from './OpenStreamDialog'
+import UpdateBadge from './UpdateBadge'
 
 export default function TopBar({
   sidebarOpen,
   onToggleSidebar,
   onOpenSettings,
   onOpenEpg,
+  onOpenUpdate,
 }: {
   sidebarOpen: boolean
   onToggleSidebar: () => void
   onOpenSettings: () => void
   onOpenEpg: () => void
+  onOpenUpdate: () => void
 }) {
   const [streamDialogOpen, setStreamDialogOpen] = useState(false)
   const [localSearch, setLocalSearch] = useState('')
@@ -101,6 +104,7 @@ export default function TopBar({
             <path d="M2 2h11v11H2zM2 6h11M6 2v11" />
           </svg>
         </button>
+        <UpdateBadge onShowDialog={onOpenUpdate} />
         <button
           onClick={onOpenSettings}
           className="p-1.5 rounded-md text-tv-text-secondary hover:text-tv-text-primary hover:bg-tv-bg-surface transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"

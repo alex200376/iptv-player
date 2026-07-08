@@ -14,6 +14,8 @@ export interface Settings {
   avcodecHwDisabled: boolean
   streamProxy: boolean
   proxyResolution: string
+  autoDownloadUpdates: boolean
+  snoozeUpdateUntil: number
 }
 
 interface SettingsStore {
@@ -36,6 +38,8 @@ const DEFAULTS: Settings = {
   avcodecHwDisabled: false,
   streamProxy: false,
   proxyResolution: 'original',
+  autoDownloadUpdates: false,
+  snoozeUpdateUntil: 0,
 }
 
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
