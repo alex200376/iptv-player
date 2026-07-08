@@ -22,6 +22,11 @@ let currentProcess: ChildProcess | null = null
 let currentStreamUrl = ''
 let currentScale: string | null = null
 
+// Debounce state for rapid stream switching
+let switchTimer: ReturnType<typeof setTimeout> | null = null
+let switchResolve: ((url: string) => void) | null = null
+let switchReject: ((err: Error) => void) | null = null
+
 function findFfmpeg(vlcDir?: string | null): string {
   if (vlcDir) {
     for (const name of ['ffmpeg.exe', 'ffmpeg']) {
@@ -30,6 +35,20 @@ function findFfmpeg(vlcDir?: string | null): string {
     }
   }
   return 'ffmpeg'
+}
+
+/**
+ * Safely kill a process using a captured local reference.
+ * Avoids targeting the wrong process if currentProcess is reassigned.
+ */
+function safeKill(proc: ChildProcess): void {
+  if (proc.killed) return
+  proc.kill('SIGTERM')
+  const timer = setTimeout(() => {
+    if (!proc.killed) proc.kill('SIGKILL')
+  }, 1500)
+  // Unref so the timer doesn't keep the Node event loop alive
+  if (timer.unref) timer.unref()
 }
 
 function ensureServer(vlcDir?: string | null): Promise<number> {
@@ -58,7 +77,13 @@ function ensureServer(vlcDir?: string | null): Promise<number> {
   })
 }
 
-function handleProxyRequest(streamUrl: string, req: IncomingMessage, res: ServerResponse, vlcDir?: string | null) {
+function handleProxyRequest(
+  streamUrl: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+  vlcDir?: string | null
+) {
+  // Same stream already running — just respond
   if (currentProcess && currentStreamUrl === streamUrl && !currentProcess.killed) {
     res.writeHead(200, {
       'Content-Type': 'video/x-flv',
@@ -69,12 +94,12 @@ function handleProxyRequest(streamUrl: string, req: IncomingMessage, res: Server
     res.end()
     return
   }
+
+  // Kill old process — capture reference BEFORE nulling currentProcess
   if (currentProcess) {
-    currentProcess.kill('SIGTERM')
-    setTimeout(() => {
-      if (currentProcess && !currentProcess.killed) currentProcess.kill('SIGKILL')
-    }, 2000)
+    const oldProc = currentProcess
     currentProcess = null
+    safeKill(oldProc)
   }
 
   currentStreamUrl = streamUrl
@@ -83,7 +108,9 @@ function handleProxyRequest(streamUrl: string, req: IncomingMessage, res: Server
   const useScale = currentScale && SCALE_MAP[currentScale]
   const args = [
     '-i', streamUrl,
-    ...(useScale ? ['-vf', useScale, '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-c:a', 'aac'] : ['-c', 'copy']),
+    ...(useScale
+      ? ['-vf', useScale, '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-c:a', 'aac']
+      : ['-c', 'copy']),
     '-f', 'flv',
     '-flvflags', 'no_duration_filesize',
     '-fflags', 'nobuffer',
@@ -115,7 +142,14 @@ function handleProxyRequest(streamUrl: string, req: IncomingMessage, res: Server
     const text = data.toString()
     for (const line of text.split('\n')) {
       const t = line.trim()
-      if (t && (t.includes('Error') || t.includes('error') || t.includes('Invalid') || t.includes('frame=') || t.includes('Stream'))) {
+      if (
+        t &&
+        (t.includes('Error') ||
+          t.includes('error') ||
+          t.includes('Invalid') ||
+          t.includes('frame=') ||
+          t.includes('Stream'))
+      ) {
         console.debug('[ffmpeg]', t)
       }
     }
@@ -123,23 +157,22 @@ function handleProxyRequest(streamUrl: string, req: IncomingMessage, res: Server
 
   proc.on('close', (code) => {
     console.log('[stream-proxy] ffmpeg exited, code:', code)
-    currentProcess = null
+    if (currentProcess === proc) currentProcess = null
     if (!res.writableEnded) res.end()
   })
 
   proc.on('error', (err) => {
     console.error('[stream-proxy] ffmpeg error:', err.message)
-    currentProcess = null
+    if (currentProcess === proc) currentProcess = null
     if (!res.writableEnded) res.end()
   })
 
   req.on('close', () => {
-    if (currentProcess && !currentProcess.killed) {
-      currentProcess.kill('SIGTERM')
-      setTimeout(() => {
-        if (currentProcess && !currentProcess.killed) currentProcess.kill('SIGKILL')
-      }, 2000)
+    // Only kill if this is still the active process
+    if (currentProcess === proc && !proc.killed) {
+      const p = proc
       currentProcess = null
+      safeKill(p)
     }
   })
 }
@@ -148,26 +181,62 @@ export function needsProxy(url: string): boolean {
   return NEEDS_PROXY_RE.test(url)
 }
 
-export async function getProxyUrl(streamUrl: string, vlcDir?: string | null, scale?: string): Promise<string> {
-  currentScale = scale && SCALE_MAP[scale] ? scale : null
-  const port = await ensureServer(vlcDir)
-  const encoded = Buffer.from(streamUrl).toString('base64url')
-  return `http://127.0.0.1:${port}/proxy/${encoded}`
+/**
+ * Returns a proxy URL for the given stream.
+ * Includes a 200 ms debounce to prevent spawning multiple ffmpeg processes
+ * when the user rapidly switches channels.
+ */
+export function getProxyUrl(
+  streamUrl: string,
+  vlcDir?: string | null,
+  scale?: string
+): Promise<string> {
+  // Cancel any pending debounced switch
+  if (switchTimer !== null) {
+    clearTimeout(switchTimer)
+    switchTimer = null
+    // Reject the previous pending promise so callers don't hang
+    switchReject?.(new Error('Stream switch superseded'))
+    switchResolve = null
+    switchReject = null
+  }
+
+  return new Promise<string>((resolve, reject) => {
+    switchResolve = resolve
+    switchReject = reject
+
+    switchTimer = setTimeout(async () => {
+      switchTimer = null
+      switchResolve = null
+      switchReject = null
+
+      try {
+        currentScale = scale && SCALE_MAP[scale] ? scale : null
+        const port = await ensureServer(vlcDir)
+        const encoded = Buffer.from(streamUrl).toString('base64url')
+        resolve(`http://127.0.0.1:${port}/proxy/${encoded}`)
+      } catch (err) {
+        reject(err)
+      }
+    }, 200)
+  })
 }
 
 export function stopProxy() {
   if (currentProcess) {
-    currentProcess.kill('SIGTERM')
-    setTimeout(() => {
-      if (currentProcess && !currentProcess.killed) currentProcess.kill('SIGKILL')
-    }, 2000)
+    const p = currentProcess
     currentProcess = null
+    safeKill(p)
   }
   currentStreamUrl = ''
 }
 
 export function destroyProxy() {
   stopProxy()
+  if (switchTimer !== null) {
+    clearTimeout(switchTimer)
+    switchTimer = null
+  }
   if (httpServer) {
     httpServer.close()
     httpServer = null
