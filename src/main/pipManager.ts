@@ -8,15 +8,15 @@ export function getPipHtml(): string {
 <meta charset="utf-8">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-user-select:none;user-select:none}
-html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:Inter,Noto Sans SC,system-ui,sans-serif}
 #player{position:absolute;top:10px;left:0;right:0;bottom:36px}
 #player video,#player canvas{width:100%!important;height:100%!important;display:block;object-fit:contain}
 #drag-strip{position:absolute;top:0;left:0;right:0;height:10px;z-index:10;-webkit-app-region:drag;display:flex;align-items:center;justify-content:center;pointer-events:none}
 #drag-handle{width:24px;height:4px;border-radius:2px;background:rgba(255,255,255,0.35);pointer-events:none}
-#controls-bar{position:absolute;bottom:0;left:0;right:0;height:36px;display:flex;align-items:center;gap:6px;padding:0 8px;background:rgba(20,20,30,0.85);-webkit-app-region:drag}
+#controls-bar{position:absolute;bottom:0;left:0;right:0;height:36px;display:flex;align-items:center;gap:6px;padding:0 8px;background:rgba(20,22,26,0.9);-webkit-app-region:drag}
 #controls-bar button,#controls-bar input{-webkit-app-region:no-drag}
-.ctrl-btn{background:none;border:none;color:#fff;cursor:pointer;width:28px;height:28px;border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .15s}
-.ctrl-btn:hover{background:rgba(255,255,255,0.15)}
+.ctrl-btn{background:none;border:none;color:#fff;cursor:pointer;width:28px;height:28px;border-radius:2px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .15s}
+.ctrl-btn:hover{background:rgba(255,138,61,0.2)}
 .ctrl-btn svg{width:16px;height:16px;fill:currentColor}
 #close-btn.ctrl-btn:hover{background:rgba(220,50,50,0.7)}
 #time-display{color:rgba(255,255,255,0.75);font-size:11px;white-space:nowrap;font-variant-numeric:tabular-nums;flex-shrink:0;min-width:68px;text-align:center;-webkit-app-region:no-drag}
@@ -27,7 +27,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-ap
 #volume-wrap{display:flex;align-items:center;gap:4px;flex-shrink:0;-webkit-app-region:no-drag}
 #volume-slider{width:50px;height:4px;-webkit-appearance:none;appearance:none;background:rgba(255,255,255,0.2);border-radius:2px;outline:none;cursor:pointer}
 #volume-slider::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;border-radius:50%;background:#fff}
-body{border-radius:10px;overflow:hidden;--pip-radius:10px}
+body{border-radius:4px;overflow:hidden;--pip-radius:4px}
 </style>
 </head>
 <body>

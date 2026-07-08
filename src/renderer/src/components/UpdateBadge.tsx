@@ -17,10 +17,10 @@ export default function UpdateBadge({ onShowDialog }: { onShowDialog: () => void
   return (
     <button
       onClick={onShowDialog}
-      className="relative flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-tv-accent/15 text-tv-accent text-tv-xs hover:bg-tv-accent/25 transition-colors"
+      className="relative flex items-center gap-1.5 px-2.5 py-1 rounded-tv-sm bg-tv-accent/15 text-tv-accent text-tv-xs hover:bg-tv-accent/25 transition-colors"
       title={`新版本 v${available.version} 可用`}
     >
-      <span className="w-1.5 h-1.5 rounded-full bg-tv-accent animate-pulse" />
+      <span className="w-1.5 h-1.5 rounded-tv-sm bg-tv-accent animate-pulse-dot" />
       v{available.version}
     </button>
   )

@@ -1,24 +1,8 @@
+@import '../../styles/signal-deck-theme.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-:root {
-  --tv-bg: #0f0f1a;
-  --tv-bg-secondary: #1a1a2e;
-  --tv-bg-surface: #252542;
-  --tv-text-primary: #f0f0f0;
-  --tv-text-secondary: #a0a0b0;
-  --tv-accent: #3b82f6;
-  --tv-accent-hover: #2563eb;
-  --tv-border: #2a2a3e;
-  --tv-focus-ring: #60a5fa;
-
-  --tv-font-xs: 11px;
-  --tv-font-sm: 13px;
-  --tv-font-base: 14px;
-  --tv-font-lg: 16px;
-  --tv-font-xl: 20px;
-}
 
 [data-font-size="small"] {
   --tv-font-xs: 10px;
@@ -59,8 +43,9 @@
 }
 
 *:focus-visible {
-  outline: 2px solid var(--tv-focus-ring);
-  outline-offset: 1px;
+  outline: 3px solid var(--tv-accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 8px 4px var(--tv-accent-glow);
 }
 
 html, body, #root {
@@ -69,8 +54,23 @@ html, body, #root {
   overflow: hidden;
   background: var(--tv-bg);
   color: var(--tv-text-primary);
-  font-family: 'Roboto', 'Noto Sans SC', system-ui, sans-serif;
+  font-family: var(--tv-font-body);
   font-size: var(--tv-font-base);
+}
+
+/* CRT scanline overlay */
+.scanline-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, var(--tv-scanline-opacity, 0.03)) 2px,
+    rgba(0, 0, 0, var(--tv-scanline-opacity, 0.03)) 3px
+  );
 }
 
 #player-container {
@@ -105,7 +105,6 @@ html, body, #root {
 
 ::-webkit-scrollbar-thumb {
   background: var(--tv-border);
-  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -136,7 +135,6 @@ html, body, #root {
   appearance: none;
   height: 4px;
   background: rgba(255,255,255,0.2);
-  border-radius: 2px;
   outline: none;
   cursor: pointer;
 }
@@ -146,7 +144,7 @@ html, body, #root {
   appearance: none;
   width: 12px;
   height: 12px;
-  border-radius: 50%;
+  border-radius: var(--tv-radius-sm);
   background: var(--tv-accent);
   cursor: pointer;
 }
@@ -157,7 +155,6 @@ html, body, #root {
 
 .video-controls-overlay .controls-btn {
   padding: 6px;
-  border-radius: 6px;
   color: rgba(255,255,255,0.85);
   transition: all 0.15s ease;
 }
@@ -172,7 +169,7 @@ html, body, #root {
   background: linear-gradient(90deg, var(--tv-bg-surface) 25%, var(--tv-bg-secondary) 50%, var(--tv-bg-surface) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
-  border-radius: 4px;
+  border-radius: var(--tv-radius-sm);
 }
 
 @keyframes shimmer {
@@ -187,8 +184,7 @@ html, body, #root {
   min-width: 180px;
   background: var(--tv-bg-surface);
   border: 1px solid var(--tv-border);
-  border-radius: 8px;
-  padding: 4px;
+  padding: 4px 0;
   box-shadow: 0 8px 32px rgba(0,0,0,0.5);
   animation: fadeIn 0.1s ease;
 }
@@ -199,7 +195,6 @@ html, body, #root {
   gap: 8px;
   width: 100%;
   padding: 7px 12px;
-  border-radius: 4px;
   font-size: var(--tv-font-sm);
   color: var(--tv-text-primary);
   cursor: pointer;
@@ -225,7 +220,7 @@ html, body, #root {
   margin: 4px 8px;
 }
 
-/* Channel card hover */
+/* Channel card - 0px radius, bold focus/active */
 .channel-card {
   transition: background 0.12s ease;
 }
@@ -237,6 +232,19 @@ html, body, #root {
 .channel-card.active {
   background: var(--tv-accent);
   color: white;
+}
+
+.channel-card.active .status-dot {
+  background: white !important;
+}
+
+.channel-card:focus-visible {
+  outline: 3px solid var(--tv-accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 8px 4px var(--tv-accent-glow);
+  transform: scale(1.01);
+  z-index: 1;
+  position: relative;
 }
 
 /* Status bar */
@@ -257,7 +265,6 @@ html, body, #root {
   appearance: none;
   height: 4px;
   background: rgba(255,255,255,0.2);
-  border-radius: 2px;
   outline: none;
   cursor: pointer;
   width: 80px;
@@ -268,9 +275,32 @@ html, body, #root {
   appearance: none;
   width: 12px;
   height: 12px;
-  border-radius: 50%;
   background: var(--tv-accent);
   cursor: pointer;
+}
+
+/* Live/recording pulsing dot */
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tv-live);
+  animation: pulse-dot 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.rec-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tv-rec);
+  animation: pulse-dot 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
 @media (max-width: 700px) {

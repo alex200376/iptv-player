@@ -95,7 +95,7 @@ function ChannelList() {
         {filteredGroups.map((group, i) => (
           <Accordion.Item key={i} value={`group-${i}`}>
             <Accordion.Header>
-              <Accordion.Trigger className="flex items-center gap-2 w-full px-3 py-1.5 text-tv-xs text-tv-text-secondary hover:bg-tv-bg-surface transition-colors group focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring">
+              <Accordion.Trigger className="flex items-center gap-2 w-full px-3 py-1.5 text-tv-xs text-tv-text-secondary hover:bg-tv-bg-surface transition-colors group">
                 <svg className="w-3 h-3 transition-transform duration-150 group-data-[state=closed]:-rotate-90 flex-shrink-0" viewBox="0 0 15 15" fill="none">
                   <path d="M4 6l3.5 3.5L11 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -263,7 +263,7 @@ const ChannelRow = memo(function ChannelRow({
       ref={currentChannel?.id === ch.id && ctxMenu === null ? activeRef : undefined}
       onClick={() => onPlay(ch)}
       onContextMenu={(e) => onContextMenu(e, ch)}
-      className={`channel-card w-full flex items-center gap-2.5 px-3 py-1.5 text-tv-sm text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring ${
+      className={`channel-card w-full flex items-center gap-2.5 px-3 py-1.5 text-tv-sm text-left transition-colors ${
         currentChannel?.id === ch.id
           ? 'active'
           : 'text-tv-text-secondary hover:text-tv-text-primary'
@@ -271,9 +271,9 @@ const ChannelRow = memo(function ChannelRow({
     >
       <StatusDot status={ch.status} />
       {ch.logo ? (
-        <img src={ch.logo} alt="" loading="lazy" className="w-5 h-5 rounded object-contain flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+        <img src={ch.logo} alt="" loading="lazy" className="w-5 h-5 rounded-tv-sm object-contain flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
       ) : (
-        <span className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0">
+        <span className="w-5 h-5 rounded-tv-sm flex items-center justify-center flex-shrink-0">
           <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" />
           </svg>
@@ -282,7 +282,7 @@ const ChannelRow = memo(function ChannelRow({
       <span className="flex-1 truncate">{ch.name}</span>
       <span
         onClick={(e) => { e.stopPropagation(); onToggleFav(ch.id) }}
-        className={`flex-shrink-0 p-1.5 rounded transition-colors ${
+        className={`flex-shrink-0 p-1.5 rounded-tv-sm transition-colors ${
           isFav ? 'text-yellow-400' : 'text-tv-text-secondary opacity-40 hover:opacity-100'
         }`}
         title={isFav ? '取消收藏' : '收藏'}

@@ -121,10 +121,10 @@ export default function UpdateDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 animate-[fadeIn_200ms_ease]">
-      <div className="w-[90vw] max-w-[440px] bg-tv-bg-surface border border-tv-border rounded-xl shadow-2xl overflow-hidden">
+      <div className="w-[90vw] max-w-[440px] bg-tv-bg-surface border border-tv-border rounded-tv-md shadow-2xl overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-tv-border">
           <h2 className="text-tv-lg font-bold text-tv-text-primary">更新</h2>
-          <button onClick={onClose} className="text-tv-text-secondary hover:text-tv-text-primary p-1 rounded transition-colors">
+          <button onClick={onClose} className="text-tv-text-secondary hover:text-tv-text-primary p-1 rounded-tv-sm transition-colors">
             <svg className="w-5 h-5" viewBox="0 0 15 15" fill="none"><path d="M4 4l7 7M11 4l-7 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
           </button>
         </div>
@@ -171,20 +171,20 @@ export default function UpdateDialog({ onClose }: { onClose: () => void }) {
                 </p>
               )}
               {state.notes && (
-                <div className="bg-tv-bg rounded-lg p-4 max-h-60 overflow-y-auto border border-tv-border/50 space-y-0.5">
+                <div className="bg-tv-bg rounded-tv-md p-4 max-h-60 overflow-y-auto border border-tv-border/50 space-y-0.5">
                   {renderNotes(state.notes)}
                 </div>
               )}
               <div className="flex gap-2">
                 <button
                   onClick={handleDownload}
-                  className="flex-1 py-2.5 bg-tv-accent text-white text-tv-sm rounded-lg hover:bg-tv-accent-hover transition-colors"
+                  className="flex-1 py-2.5 bg-tv-accent text-white text-tv-sm rounded-tv-md hover:bg-tv-accent-hover transition-colors"
                 >
                   下载更新
                 </button>
                 <button
                   onClick={handleSnooze}
-                  className="py-2.5 px-4 bg-tv-bg border border-tv-border text-tv-text-secondary text-tv-sm rounded-lg hover:text-tv-text-primary transition-colors"
+                  className="py-2.5 px-4 bg-tv-bg border border-tv-border text-tv-text-secondary text-tv-sm rounded-tv-md hover:text-tv-text-primary transition-colors"
                 >
                   稍后提醒
                 </button>
@@ -214,7 +214,7 @@ export default function UpdateDialog({ onClose }: { onClose: () => void }) {
               {!isAutoDownload && (
                 <button
                   onClick={handleBackgroundDownload}
-                  className="w-full py-2 text-tv-xs text-tv-accent hover:text-tv-accent-hover transition-colors"
+                  className="w-full py-2 rounded-tv-sm text-tv-xs text-tv-accent hover:text-tv-accent-hover transition-colors"
                 >
                   背景下载，关闭此窗口
                 </button>
@@ -232,13 +232,13 @@ export default function UpdateDialog({ onClose }: { onClose: () => void }) {
               <div className="flex gap-2">
                 <button
                   onClick={handleInstall}
-                  className="flex-1 py-2.5 bg-tv-accent text-white text-tv-sm rounded-lg hover:bg-tv-accent-hover transition-colors"
+                  className="flex-1 py-2.5 bg-tv-accent text-white text-tv-sm rounded-tv-md hover:bg-tv-accent-hover transition-colors"
                 >
                   立即重启安装
                 </button>
                 <button
                   onClick={onClose}
-                  className="py-2.5 px-4 bg-tv-bg border border-tv-border text-tv-text-secondary text-tv-sm rounded-lg hover:text-tv-text-primary transition-colors"
+                  className="py-2.5 px-4 bg-tv-bg border border-tv-border text-tv-text-secondary text-tv-sm rounded-tv-md hover:text-tv-text-primary transition-colors"
                 >
                   稍后
                 </button>
@@ -255,7 +255,7 @@ export default function UpdateDialog({ onClose }: { onClose: () => void }) {
               <p className="text-tv-xs text-tv-text-secondary">{state.message}</p>
               <button
                 onClick={handleRetry}
-                className="w-full py-2.5 bg-tv-accent text-white text-tv-sm rounded-lg hover:bg-tv-accent-hover transition-colors"
+                className="w-full py-2.5 bg-tv-accent text-white text-tv-sm rounded-tv-md hover:bg-tv-accent-hover transition-colors"
               >
                 重试
               </button>

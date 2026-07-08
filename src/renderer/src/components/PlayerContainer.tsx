@@ -102,6 +102,7 @@ export default function PlayerContainer() {
 
   return (
     <div className="flex-1 relative bg-black flex flex-col min-w-0">
+      <div className="scanline-overlay" />
       {currentChannel && (
         <div
           className={`absolute top-0 left-0 right-0 z-10 px-4 py-2 bg-gradient-to-b from-black/70 to-transparent transition-opacity duration-300 ${
@@ -110,7 +111,7 @@ export default function PlayerContainer() {
         >
           <div className="flex items-center gap-2">
             {currentChannel.logo && (
-              <img src={currentChannel.logo} alt="" className="w-5 h-5 rounded object-contain" />
+              <img src={currentChannel.logo} alt="" className="w-5 h-5 rounded-tv-sm object-contain" />
             )}
             <span className="text-tv-sm font-medium text-white drop-shadow">{currentChannel.name}</span>
             {currentProgram && (
@@ -121,7 +122,7 @@ export default function PlayerContainer() {
             {tvgUrl && (
               <button
                 onClick={() => setShowEpg(true)}
-                className="ml-auto text-tv-xs text-white/50 hover:text-white/90 transition-colors px-1.5 py-0.5 rounded"
+                className="ml-auto text-tv-xs text-white/50 hover:text-white/90 transition-colors px-1.5 py-0.5 rounded-tv-sm"
                 title="节目表 (G)"
               >
                 EPG
@@ -145,7 +146,7 @@ export default function PlayerContainer() {
           <div className="absolute inset-0 flex items-center justify-center z-20">
             <button
               onClick={handleReplay}
-              className="flex items-center gap-2 px-5 py-2.5 bg-tv-accent/20 hover:bg-tv-accent/30 border border-tv-accent/40 rounded-lg text-tv-sm text-tv-accent transition-colors"
+              className="flex items-center gap-2 px-5 py-2.5 bg-tv-accent/20 hover:bg-tv-accent/30 border border-tv-accent/40 rounded-tv-md text-tv-sm text-tv-accent transition-colors"
             >
               <svg className="w-4 h-4" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M4 2.5v10l8-5z" />

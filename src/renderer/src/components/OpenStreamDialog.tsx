@@ -31,10 +31,10 @@ export default function OpenStreamDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 animate-[fadeIn_150ms_ease]">
-      <div className="w-[90vw] max-w-[480px] bg-tv-bg-surface rounded-lg border border-tv-border p-6 shadow-xl">
+      <div className="w-[90vw] max-w-[480px] bg-tv-bg-surface rounded-tv-md border border-tv-border p-6 shadow-xl">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-tv-base font-semibold text-tv-text-primary">打开网络流</h2>
-          <button onClick={onClose} className="text-tv-text-secondary hover:text-tv-text-primary p-0.5 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring">
+          <button onClick={onClose} className="text-tv-text-secondary hover:text-tv-text-primary p-0.5 rounded-tv-sm">
             <svg className="w-4 h-4" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
               <path d="M4 4l7 7M11 4l-7 7" />
             </svg>
@@ -48,19 +48,19 @@ export default function OpenStreamDialog({ onClose }: { onClose: () => void }) {
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handlePlay()}
             placeholder="rtmp:// 或 rtsp:// 或 http://..."
-            className="w-full px-3 py-2 bg-tv-bg border border-tv-border rounded-md text-tv-sm text-tv-text-primary placeholder-tv-text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+            className="w-full px-3 py-2 bg-tv-bg border border-tv-border rounded-tv-sm text-tv-sm text-tv-text-primary placeholder-tv-text-secondary"
           />
-          {error && <div className="text-tv-xs text-red-400 bg-red-900/30 border border-red-800 rounded-md px-3 py-2">{error}</div>}
+          {error && <div className="text-tv-xs text-red-400 bg-red-900/30 border border-red-800 rounded-tv-sm px-3 py-2">{error}</div>}
           <div className="flex gap-2">
             <button
               onClick={onClose}
-              className="flex-1 py-2 px-3 bg-tv-bg border border-tv-border hover:bg-tv-bg-surface rounded-md text-tv-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+              className="flex-1 py-2 px-3 bg-tv-bg border border-tv-border hover:bg-tv-bg-surface rounded-tv-sm text-tv-sm transition-colors"
             >
               取消
             </button>
             <button
               onClick={handlePlay}
-              className="flex-1 py-2 px-3 bg-tv-accent hover:bg-tv-accent-hover rounded-md text-tv-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+              className="flex-1 py-2 px-3 bg-tv-accent hover:bg-tv-accent-hover rounded-tv-sm text-tv-sm font-medium transition-colors"
             >
               播放
             </button>

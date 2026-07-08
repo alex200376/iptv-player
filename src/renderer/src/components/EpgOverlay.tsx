@@ -83,7 +83,7 @@ export default function EpgOverlay({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
-        className="w-[90vw] max-w-[600px] max-h-[80vh] bg-tv-bg-surface border border-tv-border rounded-xl shadow-2xl overflow-hidden"
+         className="w-[90vw] max-w-[600px] max-h-[80vh] bg-tv-bg-surface border border-tv-border rounded-tv-md shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-tv-border">
@@ -94,14 +94,14 @@ export default function EpgOverlay({ onClose }: { onClose: () => void }) {
             {!showImport && (
               <button
                 onClick={() => { setShowImport(true); setTimeout(() => inputRef.current?.focus(), 50) }}
-                className="text-tv-xs text-tv-accent hover:text-tv-accent-hover px-2 py-1 rounded transition-colors"
+                className="text-tv-xs text-tv-accent hover:text-tv-accent-hover px-2 py-1 rounded-tv-sm transition-colors"
               >
                 + 导入 EPG
               </button>
             )}
             <button
               onClick={onClose}
-              className="text-tv-text-secondary hover:text-tv-text-primary p-1 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+              className="text-tv-text-secondary hover:text-tv-text-primary p-1 rounded-tv-sm"
             >
               <svg className="w-5 h-5" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M4 4l7 7M11 4l-7 7" />
@@ -120,11 +120,11 @@ export default function EpgOverlay({ onClose }: { onClose: () => void }) {
                 onChange={(e) => setImportUrl(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleImport()}
                 placeholder="粘贴 EPG (XMLTV) 链接..."
-                className="flex-1 px-3 py-1.5 bg-tv-bg border border-tv-border rounded-md text-tv-sm text-tv-text-primary placeholder-tv-text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+                className="flex-1 px-3 py-1.5 bg-tv-bg border border-tv-border rounded-tv-sm text-tv-sm text-tv-text-primary placeholder-tv-text-secondary"
               />
               <button
                 onClick={handleImport}
-                className="px-3 py-1.5 bg-tv-accent text-white text-tv-sm rounded-md hover:bg-tv-accent-hover transition-colors"
+                className="px-3 py-1.5 bg-tv-accent text-white text-tv-sm rounded-tv-sm hover:bg-tv-accent-hover transition-colors"
               >
                 导入
               </button>
@@ -150,7 +150,7 @@ export default function EpgOverlay({ onClose }: { onClose: () => void }) {
                 <button
                   key={es.url}
                   onClick={() => { setImportUrl(es.url); setShowImport(true) }}
-                  className="text-tv-xs text-tv-text-secondary bg-tv-bg border border-tv-border px-2 py-0.5 rounded hover:text-tv-accent transition-colors truncate max-w-[200px]"
+                  className="text-tv-xs text-tv-text-secondary bg-tv-bg border border-tv-border px-2 py-0.5 rounded-tv-sm hover:text-tv-accent transition-colors truncate max-w-[200px]"
                   title={es.url}
                 >
                   {es.url.length > 30 ? es.url.slice(0, 27) + '...' : es.url}
@@ -176,10 +176,10 @@ export default function EpgOverlay({ onClose }: { onClose: () => void }) {
           )}
 
           {current && (
-            <div className="mb-6 p-4 bg-tv-accent/10 border border-tv-accent/30 rounded-lg">
+            <div className="mb-6 p-4 bg-tv-accent/10 border border-tv-accent/30 rounded-tv-md">
               <div className="text-tv-xs text-tv-accent font-medium mb-1">正在播放</div>
               <div className="text-tv-sm text-tv-text-primary font-medium">{current.title}</div>
-              <div className="text-tv-xs text-tv-text-secondary mt-1">
+              <div className="text-tv-xs text-tv-text-secondary mt-1 font-mono">
                 {formatEpgTime(current.start)} — {formatEpgTime(current.stop)}
               </div>
               {current.description && (
@@ -195,11 +195,11 @@ export default function EpgOverlay({ onClose }: { onClose: () => void }) {
                 {nextPrograms.map((p, i) => (
                   <div
                     key={i}
-                    className="flex items-start gap-3 p-3 bg-tv-bg rounded-lg border border-tv-border"
+                    className="flex items-start gap-3 p-3 bg-tv-bg rounded-tv-md border border-tv-border"
                   >
-                    <div className="text-tv-xs text-tv-text-secondary whitespace-nowrap min-w-[70px]">
-                      {formatEpgTime(p.start)}
-                    </div>
+                     <div className="text-tv-xs text-tv-text-secondary whitespace-nowrap min-w-[70px] font-mono">
+                       {formatEpgTime(p.start)}
+                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-tv-sm text-tv-text-primary truncate">{p.title}</div>
                       {p.description && (
@@ -207,7 +207,7 @@ export default function EpgOverlay({ onClose }: { onClose: () => void }) {
                       )}
                     </div>
                     {p.category && (
-                      <span className="text-tv-xs text-tv-text-secondary bg-tv-bg-surface px-2 py-0.5 rounded whitespace-nowrap">
+                      <span className="text-tv-xs text-tv-text-secondary bg-tv-bg-surface px-2 py-0.5 rounded-tv-sm whitespace-nowrap">
                         {p.category}
                       </span>
                     )}

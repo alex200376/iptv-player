@@ -45,14 +45,14 @@ export default function TopBar({
       <div className="flex items-center gap-2">
         <button
           onClick={onToggleSidebar}
-          className="p-1.5 rounded-md text-tv-text-secondary hover:text-tv-text-primary hover:bg-tv-bg-surface transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+          className="p-1.5 rounded-tv-sm text-tv-text-secondary hover:text-tv-text-primary hover:bg-tv-bg-surface transition-colors"
           title={sidebarOpen ? '折叠侧栏 (Ctrl+B)' : '展开侧栏 (Ctrl+B)'}
         >
           <svg className="w-4 h-4" viewBox="0 0 15 15" fill="none">
             <path d="M2 4h11M2 7.5h11M2 11h11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
         </button>
-        <h1 className="text-tv-sm font-semibold text-tv-text-primary select-none">IPTV Player</h1>
+        <h1 className="text-tv-sm font-semibold text-tv-text-primary select-none font-display tracking-widest uppercase">IPTV Player</h1>
       </div>
 
       <div className="flex items-center gap-3 flex-1 max-w-[min(400px,35vw)] mx-2 sm:mx-4">
@@ -67,7 +67,7 @@ export default function TopBar({
             value={localSearch}
             onChange={handleSearchChange}
             placeholder="搜索频道 (Ctrl+F)..."
-            className="w-full pl-8 pr-3 py-1.5 bg-tv-bg border border-tv-border rounded-md text-tv-sm text-tv-text-primary placeholder-tv-text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+            className="w-full pl-8 pr-3 py-1.5 bg-tv-bg border border-tv-border rounded-tv-sm text-tv-sm text-tv-text-primary placeholder-tv-text-secondary"
           />
           {localSearch && (
             <button
@@ -88,7 +88,7 @@ export default function TopBar({
             await window.electronAPI.hidePlayerWindow()
             setStreamDialogOpen(true)
           }}
-          className="p-1.5 rounded-md text-tv-text-secondary hover:text-tv-accent hover:bg-tv-accent/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+          className="p-1.5 rounded-tv-sm text-tv-text-secondary hover:text-tv-accent hover:bg-tv-accent/10 transition-colors"
           title="打开网络流"
         >
           <svg className="w-4 h-4" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -97,7 +97,7 @@ export default function TopBar({
         </button>
         <button
           onClick={onOpenEpg}
-          className="p-1.5 rounded-md text-tv-text-secondary hover:text-tv-accent hover:bg-tv-accent/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+          className="p-1.5 rounded-tv-sm text-tv-text-secondary hover:text-tv-accent hover:bg-tv-accent/10 transition-colors"
           title="节目指南"
         >
           <svg className="w-4 h-4" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -107,7 +107,7 @@ export default function TopBar({
         <UpdateBadge onShowDialog={onOpenUpdate} />
         <button
           onClick={onOpenSettings}
-          className="p-1.5 rounded-md text-tv-text-secondary hover:text-tv-text-primary hover:bg-tv-bg-surface transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+          className="p-1.5 rounded-tv-sm text-tv-text-secondary hover:text-tv-text-primary hover:bg-tv-bg-surface transition-colors"
           title="设置 (Ctrl+,)"
         >
           <svg className="w-4 h-4" viewBox="0 0 15 15" fill="none">

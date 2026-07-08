@@ -41,7 +41,7 @@ export default function Sidebar({ collapsed }: { collapsed?: boolean }) {
             <button
               key={item.id}
               onClick={() => setNavTab(item.id as 'channels' | 'playlists' | 'favorites' | 'history')}
-              className={`p-2 rounded-md transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring ${
+               className={`p-2 rounded-tv-sm transition-colors ${
                 navTab === item.id ? 'text-tv-accent bg-tv-accent/10' : 'text-tv-text-secondary hover:text-tv-text-primary hover:bg-tv-bg-surface'
               }`}
               title={item.label}
@@ -52,7 +52,7 @@ export default function Sidebar({ collapsed }: { collapsed?: boolean }) {
           <div className="flex-1" />
           <button
             onClick={() => setDialogOpen(true)}
-            className="p-2 rounded-md text-tv-text-secondary hover:text-tv-accent hover:bg-tv-accent/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+            className="p-2 rounded-tv-sm text-tv-text-secondary hover:text-tv-accent hover:bg-tv-accent/10 transition-colors"
             title="导入 M3U (Ctrl+I)"
           >
             <svg className="w-4 h-4" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -73,7 +73,7 @@ export default function Sidebar({ collapsed }: { collapsed?: boolean }) {
             <button
               key={item.id}
               onClick={() => setNavTab(item.id as 'channels' | 'playlists' | 'favorites' | 'history')}
-              className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md text-tv-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring ${
+               className={`flex items-center gap-2 px-2.5 py-1.5 rounded-tv-sm text-tv-sm transition-colors ${
                 navTab === item.id ? 'text-tv-accent bg-tv-accent/10 font-medium' : 'text-tv-text-secondary hover:text-tv-text-primary hover:bg-tv-bg-surface'
               }`}
             >
@@ -86,7 +86,7 @@ export default function Sidebar({ collapsed }: { collapsed?: boolean }) {
         <div className="px-2 py-1.5 border-t border-tv-border mt-1">
           <button
             onClick={() => setDialogOpen(true)}
-            className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-tv-sm text-tv-text-secondary hover:text-tv-accent hover:bg-tv-accent/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+            className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-tv-sm text-tv-sm text-tv-text-secondary hover:text-tv-accent hover:bg-tv-accent/10 transition-colors"
           >
             <svg className="w-4 h-4" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
               <path d="M8 2v4h4M8 6l4-4M4 8h7M4 11h7" />

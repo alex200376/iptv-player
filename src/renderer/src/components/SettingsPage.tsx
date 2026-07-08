@@ -14,10 +14,10 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
   }
 
   const content = (
-    <div className={`flex flex-col h-full bg-tv-bg-surface ${variant === 'overlay' ? 'border border-tv-border rounded-xl shadow-2xl' : ''}`}>
+    <div className={`flex flex-col h-full bg-tv-bg-surface ${variant === 'overlay' ? 'border border-tv-border rounded-tv-md shadow-2xl' : ''}`}>
       <div className="flex items-center justify-between px-8 py-5 border-b border-tv-border">
         <h2 className="text-tv-lg font-bold text-tv-text-primary">设置</h2>
-        <button onClick={handleClose} className="text-tv-text-secondary hover:text-tv-text-primary p-2 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring">
+        <button onClick={handleClose} className="text-tv-text-secondary hover:text-tv-text-primary p-2 rounded-tv-sm">
           <svg className="w-6 h-6" viewBox="0 0 15 15" fill="none"><path d="M4 4l7 7M11 4l-7 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
         </button>
       </div>
@@ -33,7 +33,7 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
               <Tabs.Trigger
                 key={tab.value}
                 value={tab.value}
-                className="px-5 py-3 text-tv-sm text-tv-text-secondary data-[state=active]:text-tv-accent data-[state=active]:border-b-2 data-[state=active]:border-tv-accent transition-colors rounded-t-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+                className="px-5 py-3 text-tv-sm text-tv-text-secondary data-[state=active]:text-tv-accent data-[state=active]:border-b-2 data-[state=active]:border-tv-accent transition-colors rounded-tv-sm"
               >
                 {tab.label}
               </Tabs.Trigger>
@@ -49,7 +49,7 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                   await updateSettings({ hardwareAcceleration: e.target.value })
                   window.electronAPI.applyHwAccel()
                 }}
-                className="w-full px-4 py-3 bg-tv-bg border border-tv-border rounded-lg text-tv-sm text-tv-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+                className="w-full px-4 py-3 bg-tv-bg border border-tv-border rounded-tv-md text-tv-sm text-tv-text-primary"
               >
                 <option value="d3d11va">Direct3D11 VA (推荐)</option>
                 <option value="dxva2">DXVA2</option>
@@ -93,7 +93,7 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
               <select
                 value={settings.h264Threads}
                 onChange={(e) => updateSettings({ h264Threads: parseInt(e.target.value) })}
-                className="w-full px-4 py-3 bg-tv-bg border border-tv-border rounded-lg text-tv-sm text-tv-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+                className="w-full px-4 py-3 bg-tv-bg border border-tv-border rounded-tv-md text-tv-sm text-tv-text-primary"
               >
                 <option value={0}>自动（默认）</option>
                 <option value={1}>1 线程</option>
@@ -135,7 +135,7 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                   <select
                     value={settings.reconnectInterval}
                     onChange={(e) => updateSettings({ reconnectInterval: parseInt(e.target.value) })}
-                    className="px-3 py-1.5 bg-tv-bg border border-tv-border rounded-md text-tv-sm text-tv-text-primary"
+                    className="px-3 py-1.5 bg-tv-bg border border-tv-border rounded-tv-sm text-tv-sm text-tv-text-primary"
                   >
                     <option value={1000}>1 秒</option>
                     <option value={2000}>2 秒</option>
@@ -165,7 +165,7 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                 <select
                   value={settings.proxyResolution}
                   onChange={(e) => updateSettings({ proxyResolution: e.target.value })}
-                  className="w-full px-4 py-3 bg-tv-bg border border-tv-border rounded-lg text-tv-sm text-tv-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+                  className="w-full px-4 py-3 bg-tv-bg border border-tv-border rounded-tv-md text-tv-sm text-tv-text-primary"
                 >
                   <option value="original">原始分辨率（直接复制，不重新编码）</option>
                   <option value="2160p">4K (2160p)</option>
@@ -184,7 +184,7 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
               <select
                 value={settings.playlistRefreshInterval}
                 onChange={(e) => updateSettings({ playlistRefreshInterval: parseInt(e.target.value) })}
-                className="w-full px-4 py-3 bg-tv-bg border border-tv-border rounded-lg text-tv-sm text-tv-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+                className="w-full px-4 py-3 bg-tv-bg border border-tv-border rounded-tv-md text-tv-sm text-tv-text-primary"
               >
                 <option value={0}>关闭</option>
                 <option value={15}>每 15 分钟</option>
@@ -208,7 +208,7 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                       updateSettings({ theme: t.id as ThemeId })
                       applyTheme(t.id as ThemeId)
                     }}
-                    className={`flex items-center gap-3 px-4 py-4 rounded-lg border-2 text-tv-sm transition-colors ${
+                    className={`flex items-center gap-3 px-4 py-4 rounded-tv-md border-2 text-tv-sm transition-colors ${
                       settings.theme === t.id
                         ? 'border-tv-accent bg-tv-accent/10 text-tv-text-primary'
                         : 'border-tv-border bg-tv-bg text-tv-text-secondary hover:border-tv-text-secondary'
@@ -219,7 +219,7 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                       '--demo-accent': t.variables['--tv-accent'],
                     } as React.CSSProperties}
                   >
-                    <span className="w-8 h-8 rounded-full" style={{ background: 'var(--demo-bg)', border: '2px solid var(--demo-accent)' }} />
+                    <span className="w-8 h-8 rounded-tv-md" style={{ background: 'var(--demo-bg)', border: '2px solid var(--demo-accent)' }} />
                     <div className="text-left">
                       <div className="font-medium">{t.label}</div>
                       <div className="text-xs opacity-60" style={{ color: 'var(--demo-text)' }}>{t.id}</div>
@@ -240,7 +240,7 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                   <button
                     key={opt.value}
                     onClick={() => updateSettings({ fontSize: opt.value as 'small' | 'normal' | 'large' | 'xlarge' })}
-                    className={`flex-1 py-3 px-4 rounded-lg border-2 text-tv-sm transition-colors ${
+                    className={`flex-1 py-3 px-4 rounded-tv-md border-2 text-tv-sm transition-colors ${
                       settings.fontSize === opt.value
                         ? 'border-tv-accent bg-tv-accent/10 text-tv-text-primary'
                         : 'border-tv-border bg-tv-bg text-tv-text-secondary'
@@ -288,7 +288,7 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
               </div>
               <button
                 onClick={() => setShowUpdateDialog(true)}
-                className="w-full py-2.5 bg-tv-accent text-white text-tv-sm rounded-lg hover:bg-tv-accent-hover transition-colors"
+                className="w-full py-2.5 bg-tv-accent text-white text-tv-sm rounded-tv-md hover:bg-tv-accent-hover transition-colors"
               >
                 检查更新
               </button>
@@ -322,7 +322,7 @@ function PlaylistSettingsList() {
 
   if (playlists.length === 0) {
     return (
-      <div className="flex items-center justify-center h-32 border-2 border-dashed border-tv-border rounded-lg text-tv-sm text-tv-text-secondary">
+      <div className="flex items-center justify-center h-32 border-2 border-dashed border-tv-border rounded-tv-md text-tv-sm text-tv-text-secondary">
         暂无播放列表
       </div>
     )
@@ -331,7 +331,7 @@ function PlaylistSettingsList() {
   return (
     <div className="space-y-2">
       {playlists.map((pl) => (
-        <div key={pl.id} className="flex items-center justify-between px-4 py-3 bg-tv-bg border border-tv-border rounded-lg">
+        <div key={pl.id} className="flex items-center justify-between px-4 py-3 bg-tv-bg border border-tv-border rounded-tv-md">
           <div className="flex-1 min-w-0">
             <div className="text-tv-sm text-tv-text-primary truncate">{pl.name}</div>
             <div className="text-tv-xs text-tv-text-secondary">
@@ -341,7 +341,7 @@ function PlaylistSettingsList() {
           <div className="flex items-center gap-2 ml-4">
             <button
               onClick={() => { setActivePlaylistId(pl.id); setNavTab('channels') }}
-              className={`px-3 py-1 rounded text-tv-xs font-medium transition-colors ${
+              className={`px-3 py-1 rounded-tv-sm text-tv-xs font-medium transition-colors ${
                 activePlaylistId === pl.id
                   ? 'bg-tv-accent/20 text-tv-accent'
                   : 'bg-tv-bg-surface text-tv-text-secondary hover:text-tv-text-primary'
@@ -358,7 +358,7 @@ function PlaylistSettingsList() {
                   setConfirmDelete(pl.id)
                 }
               }}
-              className={`px-3 py-1 rounded text-tv-xs transition-colors ${
+              className={`px-3 py-1 rounded-tv-sm text-tv-xs transition-colors ${
                 confirmDelete === pl.id
                   ? 'bg-red-900/40 text-red-400 font-medium'
                   : 'bg-tv-bg-surface text-tv-text-secondary hover:text-red-400'
@@ -369,7 +369,7 @@ function PlaylistSettingsList() {
             {confirmDelete === pl.id && (
               <button
                 onClick={() => setConfirmDelete(null)}
-                className="px-3 py-1 rounded text-tv-xs bg-tv-bg-surface text-tv-text-secondary hover:text-tv-text-primary transition-colors"
+                className="px-3 py-1 rounded-tv-sm text-tv-xs bg-tv-bg-surface text-tv-text-secondary hover:text-tv-text-primary transition-colors"
               >
                 取消
               </button>
@@ -420,12 +420,12 @@ function EpgSourceSettings() {
           onKeyDown={(e) => e.key === 'Enter' && handleImport()}
           placeholder="输入 EPG (XMLTV) 链接..."
           disabled={importing}
-          className="flex-1 px-3 py-2 bg-tv-bg border border-tv-border rounded-lg text-tv-sm text-tv-text-primary placeholder-tv-text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+          className="flex-1 px-3 py-2 bg-tv-bg border border-tv-border rounded-tv-md text-tv-sm text-tv-text-primary placeholder-tv-text-secondary"
         />
         <button
           onClick={handleImport}
           disabled={importing}
-          className="px-4 py-2 bg-tv-accent text-white text-tv-sm rounded-lg hover:bg-tv-accent-hover transition-colors disabled:opacity-50"
+          className="px-4 py-2 bg-tv-accent text-white text-tv-sm rounded-tv-md hover:bg-tv-accent-hover transition-colors disabled:opacity-50"
         >
           {importing ? '导入中...' : '导入'}
         </button>
@@ -435,13 +435,13 @@ function EpgSourceSettings() {
       )}
 
       {epgSources.length === 0 ? (
-        <div className="flex items-center justify-center h-24 border-2 border-dashed border-tv-border rounded-lg text-tv-sm text-tv-text-secondary">
+        <div className="flex items-center justify-center h-24 border-2 border-dashed border-tv-border rounded-tv-md text-tv-sm text-tv-text-secondary">
           暂无 EPG 数据源
         </div>
       ) : (
         <div className="space-y-2">
           {epgSources.map((es) => (
-            <div key={es.url} className="flex items-center justify-between px-4 py-3 bg-tv-bg border border-tv-border rounded-lg">
+            <div key={es.url} className="flex items-center justify-between px-4 py-3 bg-tv-bg border border-tv-border rounded-tv-md">
               <div className="flex-1 min-w-0">
                 <div className="text-tv-sm text-tv-text-primary truncate">{es.url}</div>
                 <div className="text-tv-xs text-tv-text-secondary">
@@ -450,7 +450,7 @@ function EpgSourceSettings() {
               </div>
               <button
                 onClick={() => removeEpgSource(es.url)}
-                className="ml-4 px-3 py-1 rounded text-tv-xs bg-tv-bg-surface text-tv-text-secondary hover:text-red-400 transition-colors"
+                className="ml-4 px-3 py-1 rounded-tv-sm text-tv-xs bg-tv-bg-surface text-tv-text-secondary hover:text-red-400 transition-colors"
               >
                 删除
               </button>

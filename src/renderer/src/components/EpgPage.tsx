@@ -92,7 +92,7 @@ export default function EpgPage({ onClose }: { onClose: () => void }) {
         <h2 className="text-tv-lg font-bold text-tv-text-primary">节目指南</h2>
         <button
           onClick={onClose}
-          className="text-tv-text-secondary hover:text-tv-text-primary p-2 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+          className="text-tv-text-secondary hover:text-tv-text-primary p-2 rounded-tv-sm"
         >
           <svg className="w-6 h-6" viewBox="0 0 15 15" fill="none">
             <path d="M4 4l7 7M11 4l-7 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -109,12 +109,12 @@ export default function EpgPage({ onClose }: { onClose: () => void }) {
             onKeyDown={(e) => e.key === 'Enter' && handleImport()}
             placeholder="粘贴 EPG (XMLTV) 链接..."
             disabled={importing}
-            className="flex-1 px-3 py-2 bg-tv-bg border border-tv-border rounded-lg text-tv-sm text-tv-text-primary placeholder-tv-text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+            className="flex-1 px-3 py-2 bg-tv-bg border border-tv-border rounded-tv-md text-tv-sm text-tv-text-primary placeholder-tv-text-secondary"
           />
           <button
             onClick={handleImport}
             disabled={importing}
-            className="px-4 py-2 bg-tv-accent text-white text-tv-sm rounded-lg hover:bg-tv-accent-hover transition-colors disabled:opacity-50"
+            className="px-4 py-2 bg-tv-accent text-white text-tv-sm rounded-tv-md hover:bg-tv-accent-hover transition-colors disabled:opacity-50"
           >
             {importing ? '导入中...' : '导入'}
           </button>
@@ -129,7 +129,7 @@ export default function EpgPage({ onClose }: { onClose: () => void }) {
             {epgSources.map((es) => (
               <div
                 key={es.url}
-                className="flex items-center gap-1 px-2 py-0.5 bg-tv-bg border border-tv-border rounded text-tv-xs text-tv-text-secondary"
+                className="flex items-center gap-1 px-2 py-0.5 bg-tv-bg border border-tv-border rounded-tv-sm text-tv-xs text-tv-text-secondary"
               >
                 <span className="truncate max-w-[200px]">{es.url}</span>
                 <button
@@ -174,9 +174,9 @@ export default function EpgPage({ onClose }: { onClose: () => void }) {
                         : 'hover:bg-tv-bg-surface border-l-2 border-l-transparent'
                     }`}
                   >
-                    {ch.logo && (
-                      <img src={ch.logo} alt="" className="w-7 h-7 mt-0.5 rounded object-contain shrink-0" loading="lazy" />
-                    )}
+                      {ch.logo && (
+                        <img src={ch.logo} alt="" className="w-7 h-7 mt-0.5 rounded-tv-sm object-contain shrink-0" loading="lazy" />
+                      )}
                     <div className="flex-1 min-w-0">
                       <div className={`text-tv-sm ${isActive ? 'text-tv-accent font-medium' : 'text-tv-text-primary'}`}>
                         {ch.name}
@@ -184,12 +184,12 @@ export default function EpgPage({ onClose }: { onClose: () => void }) {
                       {current && (
                         <div className="mt-1">
                           <div className="text-tv-xs text-tv-accent/80 font-medium truncate">{current.title}</div>
-                          <div className="text-tv-xs text-tv-text-secondary">
+                          <div className="text-tv-xs text-tv-text-secondary font-mono">
                             {formatTime(current.start)} — {formatTime(current.stop)}
                           </div>
-                          <div className="mt-1 h-1 bg-tv-border rounded-full overflow-hidden">
+                          <div className="mt-1 h-1 bg-tv-border rounded-tv-sm overflow-hidden">
                             <div
-                              className="h-full bg-tv-accent/60 rounded-full transition-[width] duration-500"
+                              className="h-full bg-tv-accent/60 rounded-tv-sm transition-[width] duration-500"
                               style={{ width: `${programProgress(current)}%` }}
                             />
                           </div>
@@ -197,12 +197,12 @@ export default function EpgPage({ onClose }: { onClose: () => void }) {
                       )}
                       {next && (
                         <div className="mt-1.5 text-tv-xs text-tv-text-secondary/70">
-                          下一步: {next.title} — {formatTime(next.start)}
+                          下一步: {next.title} — <span className="font-mono">{formatTime(next.start)}</span>
                         </div>
                       )}
                     </div>
                     {current && (
-                      <span className="shrink-0 self-start mt-1.5 px-2 py-0.5 rounded text-tv-xs bg-tv-accent/10 text-tv-accent/80 font-medium">
+                      <span className="shrink-0 self-start mt-1.5 px-2 py-0.5 rounded-tv-sm text-tv-xs bg-tv-accent/10 text-tv-accent/80 font-medium">
                         直播中
                       </span>
                     )}

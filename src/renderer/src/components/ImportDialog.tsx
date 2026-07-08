@@ -105,7 +105,7 @@ export default function ImportDialog({
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/60" />
         <Dialog.Content
-          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-[480px] bg-tv-bg-surface rounded-lg border border-tv-border p-6 shadow-xl animate-[fadeIn_150ms_ease]"
+          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-[480px] bg-tv-bg-surface rounded-tv-md border border-tv-border p-6 shadow-xl animate-[fadeIn_150ms_ease]"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <Dialog.Title className="text-tv-base font-semibold text-tv-text-primary mb-4">导入 M3U 播放列表</Dialog.Title>
@@ -113,7 +113,7 @@ export default function ImportDialog({
             <button
               onClick={handleFile}
               disabled={loading}
-              className="w-full py-2.5 px-4 bg-tv-accent hover:bg-tv-accent-hover disabled:opacity-50 rounded-md text-tv-sm font-medium transition-colors flex items-center justify-center gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+              className="w-full py-2.5 px-4 bg-tv-accent hover:bg-tv-accent-hover disabled:opacity-50 rounded-tv-sm text-tv-sm font-medium transition-colors flex items-center justify-center gap-2"
             >
               <svg className="w-4 h-4" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                 <path d="M8 2v4h4M8 6l4-4M4 8h7M4 11h7" />
@@ -133,24 +133,24 @@ export default function ImportDialog({
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="粘贴 M3U 在线地址..."
-                className="w-full px-3 py-2 bg-tv-bg border border-tv-border rounded-md text-tv-sm text-tv-text-primary placeholder-tv-text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+                className="w-full px-3 py-2 bg-tv-bg border border-tv-border rounded-tv-sm text-tv-sm text-tv-text-primary placeholder-tv-text-secondary"
               />
               <button
                 onClick={handleUrl}
                 disabled={loading || !url.trim()}
-                className="w-full py-2 px-3 bg-tv-bg border border-tv-border hover:bg-tv-bg-surface disabled:opacity-50 rounded-md text-tv-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+                className="w-full py-2 px-3 bg-tv-bg border border-tv-border hover:bg-tv-bg-surface disabled:opacity-50 rounded-tv-sm text-tv-sm transition-colors"
               >
                 从 URL 导入
               </button>
             </div>
             {error && (
-              <div className="text-tv-xs text-red-400 bg-red-900/30 border border-red-800 rounded-md px-3 py-2">{error}</div>
+              <div className="text-tv-xs text-red-400 bg-red-900/30 border border-red-800 rounded-tv-sm px-3 py-2">{error}</div>
             )}
             {successMsg && (
-              <div className="text-tv-xs text-green-400 bg-green-900/30 border border-green-800 rounded-md px-3 py-2">{successMsg}</div>
+              <div className="text-tv-xs text-green-400 bg-green-900/30 border border-green-800 rounded-tv-sm px-3 py-2">{successMsg}</div>
             )}
           </div>
-          <Dialog.Close className="absolute top-4 right-4 text-tv-text-secondary hover:text-tv-text-primary p-0.5 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring">
+          <Dialog.Close className="absolute top-4 right-4 text-tv-text-secondary hover:text-tv-text-primary p-0.5 rounded-tv-sm">
             <svg className="w-4 h-4" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
               <path d="M4 4l7 7M11 4l-7 7" />
             </svg>

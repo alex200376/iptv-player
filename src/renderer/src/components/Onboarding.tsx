@@ -44,14 +44,14 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 animate-[fadeIn_300ms_ease]">
-      <div className="w-[90vw] max-w-[600px] bg-tv-bg-surface border border-tv-border rounded-2xl p-10 shadow-2xl text-center">
+      <div className="w-[90vw] max-w-[600px] bg-tv-bg-surface border border-tv-border p-10 shadow-2xl text-center">
         <div className="flex justify-center mb-6 text-tv-accent">{s.icon}</div>
         <h2 className="text-tv-xl font-bold text-tv-text-primary mb-2">{s.title}</h2>
         <p className="text-tv-sm text-tv-accent mb-4">{s.subtitle}</p>
         <p className="text-tv-sm text-tv-text-secondary mb-8 leading-relaxed">{s.description}</p>
         <div className="flex items-center justify-center gap-2 mb-8">
           {STEPS.map((_, i) => (
-            <div key={i} className={`w-3 h-3 rounded-full transition-colors ${i === step ? 'bg-tv-accent' : 'bg-tv-border'}`} />
+            <div key={i} className={`w-3 h-3 rounded-tv-sm transition-colors ${i === step ? 'bg-tv-accent' : 'bg-tv-border'}`} />
           ))}
         </div>
         <button
@@ -59,7 +59,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
             if (step < STEPS.length - 1) setStep(step + 1)
             else onDone()
           }}
-          className="px-10 py-3 bg-tv-accent hover:bg-tv-accent-hover text-white rounded-xl text-tv-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-tv-focus-ring"
+          className="px-10 py-3 bg-tv-accent hover:bg-tv-accent-hover text-white rounded-tv-md text-tv-sm font-medium transition-colors"
         >
           {step < STEPS.length - 1 ? '下一步' : '开始使用'}
         </button>

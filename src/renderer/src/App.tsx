@@ -159,7 +159,7 @@ export default function App() {
   }, [])
 
   return (
-    <div className="flex flex-col w-full h-full font-sans">
+    <div className="flex flex-col w-full h-full font-body">
       <TopBar
         sidebarOpen={sidebarOpen}
         onToggleSidebar={toggleSidebar}
@@ -211,14 +211,14 @@ function StatusBar() {
       {currentChannel ? (
         <>
           <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-green-500" />
+            <span className="live-dot" />
             正在播放 {currentChannel.name}
           </span>
           {pipActive && (
-            <span className="text-xs text-blue-400 ml-1">[画中画]</span>
+            <span className="text-xs text-tv-accent ml-1">[画中画]</span>
           )}
           {isProxied && (
-            <span className="text-xs text-yellow-400 ml-1">[代理]</span>
+            <span className="text-xs text-tv-accent ml-1">[代理]</span>
           )}
           <span className="text-tv-text-secondary">|</span>
         </>

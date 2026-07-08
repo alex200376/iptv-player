@@ -79,7 +79,7 @@ export default function PlaylistList() {
         </div>
         <button
           onClick={() => setDialogOpen(true)}
-          className="px-4 py-2 bg-tv-accent hover:bg-tv-accent-hover rounded-md text-tv-sm font-medium transition-colors"
+          className="px-4 py-2 bg-tv-accent hover:bg-tv-accent-hover rounded-tv-sm text-tv-sm font-medium transition-colors"
         >
           导入 M3U
         </button>
@@ -124,7 +124,7 @@ export default function PlaylistList() {
       <div className="px-2 py-1">
         <button
           onClick={handleShowAll}
-          className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-tv-sm text-left transition-colors ${
+               className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-tv-sm text-tv-sm text-left transition-colors ${
             activePlaylistId === null
               ? 'text-tv-accent bg-tv-accent/10 font-medium'
               : 'text-tv-text-secondary hover:text-tv-text-primary hover:bg-tv-bg-surface'
@@ -140,7 +140,7 @@ export default function PlaylistList() {
 
       {playlists.map((pl) => (
         <div key={pl.id} className="px-2 py-0.5">
-          <div className={`rounded-md transition-colors ${activePlaylistId === pl.id ? 'bg-tv-accent/5' : ''}`}>
+            <div className={`rounded-tv-sm transition-colors ${activePlaylistId === pl.id ? 'bg-tv-accent/5' : ''}`}>
             <button
               onClick={() => handleSwitch(pl.id)}
               className="w-full flex items-center gap-2 px-2.5 py-2 text-tv-sm text-left"
