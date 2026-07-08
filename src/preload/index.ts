@@ -43,6 +43,19 @@ interface UserData {
 
 const api = {
   switchChannel: (url: string) => ipcRenderer.invoke('switch-channel', url),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
+  downloadUpdate: () => ipcRenderer.invoke('download-update'),
+  installUpdate: () => ipcRenderer.invoke('install-update'),
+  onUpdateStatus: (callback: (text: string) => void) => {
+    ipcRenderer.on('update-status', (_event, text) => callback(text))
+  },
+  onUpdateDownloadProgress: (callback: (progress: { percent: number; bytesPerSecond: number; total: number; transferred: number }) => void) => {
+    ipcRenderer.on('update-download-progress', (_event, progress) => callback(progress))
+  },
+  onUpdateDownloaded: (callback: (info: { version: string }) => void) => {
+    ipcRenderer.on('update-downloaded', (_event, info) => callback(info))
+  },
   importM3U: () => ipcRenderer.invoke('import-m3u'),
   importM3UFromUrl: (url: string) => ipcRenderer.invoke('import-m3u-url', url),
   hidePlayer: () => ipcRenderer.invoke('hide-player'),

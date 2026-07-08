@@ -8,6 +8,8 @@ import { registerPlaylistIpc } from './ipc/playlist'
 import { registerPipIpc } from './ipc/pip'
 import { registerEpgIpc } from './ipc/epg'
 import { registerWindowIpc } from './ipc/window'
+import { registerUpdateIpc } from './ipc/update'
+import { autoUpdater } from 'electron-updater'
 import { destroyProxy } from './streamProxy'
 
 let mainWindow: BrowserWindow | null = null
@@ -62,11 +64,16 @@ function setupIPC() {
   registerPipIpc()
   registerEpgIpc()
   registerWindowIpc()
+  registerUpdateIpc()
 }
 
 app.whenReady().then(async () => {
   setupIPC()
   await createWindow()
+
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch(() => {})
+  }, 5000)
 
   app.on('activate', async () => {
     if (BrowserWindow.getAllWindows().length === 0) await createWindow()

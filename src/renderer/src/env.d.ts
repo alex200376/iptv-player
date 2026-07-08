@@ -120,6 +120,15 @@ interface ElectronAPI {
   onPlayerBuffering: (callback: () => void) => void
   onPlayerPlaying: (callback: () => void) => void
   onPlayerError: (callback: () => void) => void
+
+  // Update
+  getAppVersion: () => Promise<string>
+  checkForUpdate: () => Promise<{ available: boolean; info?: { version: string; releaseDate?: string; releaseNotes?: string }; error?: string; checking?: boolean }>
+  downloadUpdate: () => Promise<{ downloading: boolean; error?: string }>
+  installUpdate: () => Promise<boolean>
+  onUpdateStatus: (callback: (text: string) => void) => void
+  onUpdateDownloadProgress: (callback: (progress: { percent: number; bytesPerSecond: number; total: number; transferred: number }) => void) => void
+  onUpdateDownloaded: (callback: (info: { version: string }) => void) => void
 }
 
 interface Window {

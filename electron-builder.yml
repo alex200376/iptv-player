@@ -10,9 +10,16 @@ files:
   - node_modules/.pnpm/**/*
 win:
   target:
-    - nsis
+    - target: nsis
+      arch:
+        - x64
   icon: build/icon.png
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   shortcutName: IPTV Player
+publish:
+  provider: github
+  owner: alex200376
+  repo: iptv-player
+  releaseType: release

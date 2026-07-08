@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import * as Tabs from '@radix-ui/react-tabs'
 import { themes, applyTheme, type ThemeId } from '../themes'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useStore } from '../stores/useStore'
+import UpdateDialog from './UpdateDialog'
 
 export default function SettingsPage({ variant = 'page', onClose }: { variant?: 'page' | 'overlay'; onClose?: () => void }) {
   const { settings, updateSettings } = useSettingsStore()
+  const [showUpdateDialog, setShowUpdateDialog] = useState(false)
 
   const handleClose = () => {
     onClose?.()
@@ -265,13 +267,20 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
 
           <Tabs.Content value="about" className="flex-1 overflow-y-auto p-8 space-y-4">
             <div className="space-y-2 text-tv-sm text-tv-text-primary">
-              <p><strong>IPTV Player</strong> v1.0.0</p>
+              <p><strong>IPTV Player</strong></p>
               <p className="text-tv-text-secondary">基于 Electron + React + libVLC 构建</p>
-              <p className="text-tv-text-secondary">支持 RTMP / RTSP / HLS / M3U</p>
+              <p className="text-tv-text-secondary">支持 RTMP / RTSP / HLS / M3U / UDP</p>
             </div>
-            <div className="pt-4 border-t border-tv-border">
+            <div className="pt-4 border-t border-tv-border space-y-4">
               <p className="text-tv-sm text-tv-text-secondary">VLC 版本: 3.0.23</p>
+              <button
+                onClick={() => setShowUpdateDialog(true)}
+                className="w-full py-2.5 bg-tv-accent text-white text-tv-sm rounded-lg hover:bg-tv-accent-hover transition-colors"
+              >
+                检查更新
+              </button>
             </div>
+            {showUpdateDialog && <UpdateDialog onClose={() => setShowUpdateDialog(false)} />}
           </Tabs.Content>
         </Tabs.Root>
       </div>
