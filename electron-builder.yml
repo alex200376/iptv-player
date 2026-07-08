@@ -7,6 +7,8 @@ files:
   - out/**/*
   - "!node_modules/**/*"
   - node_modules/electron-vlc-player/**/*
+  - node_modules/electron-updater/**/*
+  - node_modules/builder-util-runtime/**/*
   - node_modules/.pnpm/**/*
 win:
   target:
