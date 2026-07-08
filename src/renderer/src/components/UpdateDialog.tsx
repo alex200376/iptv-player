@@ -9,7 +9,10 @@ type State =
   | { phase: 'downloaded'; version: string }
   | { phase: 'error'; message: string }
 
-function renderNotes(text: string): ReactNode[] {
+function renderNotes(text: string): ReactNode {
+  if (/<[a-z][\s\S]*>/i.test(text)) {
+    return <div className="text-tv-xs text-tv-text-secondary space-y-1 [&_h2]:text-tv-sm [&_h2]:font-bold [&_h2]:text-tv-text-primary [&_h2]:mt-4 [&_h2]:mb-1 [&_h3]:text-tv-sm [&_h3]:font-bold [&_h3]:text-tv-text-primary [&_h3]:mt-3 [&_h3]:mb-1 [&_ul]:list-disc [&_ul]:pl-4 [&_li]:ml-0 [&_p]:mb-1" dangerouslySetInnerHTML={{ __html: text }} />
+  }
   const elements: ReactNode[] = []
   let key = 0
   for (const line of text.split('\n')) {
