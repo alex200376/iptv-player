@@ -39,7 +39,8 @@ export async function fetchEpgForUrl(tvgUrl: string): Promise<EpgProgram[]> {
     if (!res.ok) return []
 
     const xml = await res.text()
-    const programs = parseXmltv(xml)
+    // parseXmltv is now async (chunked with setImmediate) — must await
+    const programs = await parseXmltv(xml)
 
     const entry: CacheEntry = { fetchedAt: Date.now(), programs }
     memoryCache.set(tvgUrl, entry)
@@ -79,7 +80,7 @@ export interface ImportEpgResult {
 export async function importEpgFromUrl(url: string): Promise<ImportEpgResult> {
   const programs = await fetchEpgForUrl(url)
   if (programs.length === 0) {
-    return { success: false, count: 0, tvgIds: [], error: '未获取到节目数据' }
+    return { success: false, count: 0, tvgIds: [], error: '\u672a\u83b7\u53d6\u5230\u8282\u76ee\u6570\u636e' }
   }
   const tvgIds = [...new Set(programs.map((p) => p.channelTvgId).filter(Boolean))]
   return { success: true, count: programs.length, tvgIds }
