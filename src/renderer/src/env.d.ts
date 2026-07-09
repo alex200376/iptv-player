@@ -115,6 +115,7 @@ interface ElectronAPI {
   onPlaylistsRefreshed: (callback: (channels: Channel[]) => void) => void
   checkChannelUrl: (url: string) => Promise<{ online: boolean; length?: number; lastCheckedAt: number; error?: string }>
   checkAllChannels: () => Promise<{ total: number }>
+  removeOfflineChannels: () => Promise<{ channels: Channel[]; removedCount: number }>
   onChannelsCheckProgress: (callback: (progress: { checked: number; total: number }) => void) => void
   onChannelsCheckDone: (callback: (channels: Channel[]) => void) => void
   togglePip: () => Promise<{ active: boolean }>
