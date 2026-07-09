@@ -7,29 +7,45 @@ import { needsProxy, getProxyUrl, stopProxy } from '../streamProxy'
 
 let _playId = 0
 
-async function doPlay(url: string, settings: ReturnType<typeof readSettings>, currentPlayId: number): Promise<{ success: boolean; error?: string }> {
+async function doPlay(
+  url: string,
+  settings: ReturnType<typeof readSettings>,
+  currentPlayId: number,
+): Promise<{ success: boolean; error?: string }> {
   const mediaOptions = buildMediaOptions(settings)
   const state = getState()
 
-  function onVlcError(...args: unknown[]) {
-    console.error('[vlc-error]', url.substring(0, 60), ...args)
-    try { console.error('[vlc-state]', state.player?.getState()) } catch {}
-    try { console.error('[vlc-hasVout]', state.player?.hasVout()) } catch {}
-    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
-      state.mainWindow.webContents.send('player-error')
-    }
-  }
-  function onVlcPlaying() {
-    console.log('[vlc-playing]', url.substring(0, 60))
-    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
-      state.mainWindow.webContents.send('player-playing')
-    }
-  }
-  function onVlcBuffering() {
-    console.log('[vlc-buffering]', url.substring(0, 60))
-    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
-      state.mainWindow.webContents.send('player-buffering')
-    }
+  // Attach event listeners only once per player instance and guard by playId
+  function attachListeners(player: InstanceType<typeof VlcPlayer>) {
+    // Remove any previous listeners to prevent accumulation
+    player.removeAllListeners('error')
+    player.removeAllListeners('playing')
+    player.removeAllListeners('buffering')
+
+    player.on('error', (...args: unknown[]) => {
+      // Only forward events if this play session is still active
+      if (currentPlayId !== _playId) return
+      console.error('[vlc-error]', url.substring(0, 60), ...args)
+      try { console.error('[vlc-state]', state.player?.getState()) } catch {}
+      try { console.error('[vlc-hasVout]', state.player?.hasVout()) } catch {}
+      if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+        state.mainWindow.webContents.send('player-error')
+      }
+    })
+    player.on('playing', () => {
+      if (currentPlayId !== _playId) return
+      console.log('[vlc-playing]', url.substring(0, 60))
+      if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+        state.mainWindow.webContents.send('player-playing')
+      }
+    })
+    player.on('buffering', () => {
+      if (currentPlayId !== _playId) return
+      console.log('[vlc-buffering]', url.substring(0, 60))
+      if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+        state.mainWindow.webContents.send('player-buffering')
+      }
+    })
   }
 
   try {
@@ -45,22 +61,31 @@ async function doPlay(url: string, settings: ReturnType<typeof readSettings>, cu
       await ensurePlayerEmbedded()
       if (currentPlayId !== _playId) return { success: false }
       state.player.showOverlay()
-      state.player.on('error', onVlcError)
-      state.player.on('playing', onVlcPlaying)
-      state.player.on('buffering', onVlcBuffering)
+      attachListeners(state.player)
       state.player.setSource(url, { mediaOptions })
       state.player.play()
       state.currentUrl = url
       return { success: true }
     }
 
+    // Reuse existing player — just swap source and re-attach guarded listeners
+    attachListeners(state.player)
     state.player.setSource(url, { mediaOptions })
     state.player.play()
     state.currentUrl = url
     return { success: true }
   } catch (e) {
-    console.error('[play]', url, (e as Error).message)
-    if (state.player) { try { state.player.destroy() } catch {}; state.player = null }
+    console.error('[play] error, rebuilding player:', url, (e as Error).message)
+
+    // Destroy stale player
+    if (state.player) {
+      try { state.player.destroy() } catch {}
+      state.player = null
+    }
+
+    // Guard: user may have already switched to another channel
+    if (currentPlayId !== _playId) return { success: false }
+
     try {
       state.player = new VlcPlayer({
         window: state.mainWindow!,
@@ -69,11 +94,13 @@ async function doPlay(url: string, settings: ReturnType<typeof readSettings>, cu
         locale: 'zh-CN',
         hardwareAcceleration: settings.hardwareAcceleration,
       })
+
+      // Guard again after async embed
       await ensurePlayerEmbedded()
+      if (currentPlayId !== _playId) return { success: false }
+
       state.player.showOverlay()
-      state.player.on('error', onVlcError)
-      state.player.on('playing', onVlcPlaying)
-      state.player.on('buffering', onVlcBuffering)
+      attachListeners(state.player)
       state.player.setSource(url, { mediaOptions })
       state.player.play()
       state.currentUrl = url
@@ -104,7 +131,10 @@ export function registerPlaybackIpc() {
       }
     }
 
-    state.originalUrl = (playUrl !== url) ? url : ''
+    // Guard: another switch may have come in while proxy was resolving
+    if (currentPlayId !== _playId) return { success: false }
+
+    state.originalUrl = playUrl !== url ? url : ''
     return doPlay(playUrl, settings, currentPlayId)
   })
 
@@ -158,6 +188,7 @@ export function registerPlaybackIpc() {
       state.pipWindow = null
     }
     if (state.player) {
+      try { state.player.removeAllListeners() } catch {}
       try { state.player.destroy() } catch {}
       state.player = null
     }
