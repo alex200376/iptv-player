@@ -5,10 +5,14 @@ import type { Channel, EpgProgram } from '../types'
 
 function getCurrentProgram(programs: EpgProgram[], channelTvgId?: string): EpgProgram | null {
   const now = new Date()
-  return programs.find((p) =>
-    (!channelTvgId || p.channelTvgId === channelTvgId) &&
-    new Date(p.start) <= now && new Date(p.stop) > now
-  ) || null
+  return (
+    programs.find(
+      (p) =>
+        (!channelTvgId || p.channelTvgId === channelTvgId) &&
+        new Date(p.start) <= now &&
+        new Date(p.stop) > now,
+    ) || null
+  )
 }
 
 export default function PlayerContainer() {
@@ -17,7 +21,6 @@ export default function PlayerContainer() {
   const [isBuffering, setIsBuffering] = useState(true)
   const [playerError, setPlayerError] = useState<string | null>(null)
   const currentChannel = useStore((s) => s.currentChannel)
-  const setCurrentChannel = useStore((s) => s.setCurrentChannel)
   const epgCache = useStore((s) => s.epgCache)
   const loadEpg = useStore((s) => s.loadEpg)
   const timerRef = useRef<ReturnType<typeof setTimeout>>()
@@ -28,15 +31,22 @@ export default function PlayerContainer() {
   const tvgUrl = currentChannel?.tvgUrl
   const cachedPrograms = useMemo(() => {
     if (!currentChannel) return undefined
-    if (currentChannel.tvgUrl && epgCache[currentChannel.tvgUrl]) return epgCache[currentChannel.tvgUrl] as EpgProgram[]
+    if (currentChannel.tvgUrl && epgCache[currentChannel.tvgUrl])
+      return epgCache[currentChannel.tvgUrl] as EpgProgram[]
     if (currentChannel.tvgId) {
       for (const programs of Object.values(epgCache)) {
-        if (programs.some((p) => p.channelTvgId === currentChannel.tvgId)) return programs as EpgProgram[]
+        if (programs.some((p) => p.channelTvgId === currentChannel.tvgId))
+          return programs as EpgProgram[]
       }
     }
     return undefined
   }, [currentChannel, epgCache])
-  const currentProgram = useMemo(() => cachedPrograms ? getCurrentProgram(cachedPrograms, currentChannel?.tvgId) : null, [cachedPrograms, currentChannel?.tvgId])
+
+  const currentProgram = useMemo(
+    () =>
+      cachedPrograms ? getCurrentProgram(cachedPrograms, currentChannel?.tvgId) : null,
+    [cachedPrograms, currentChannel?.tvgId],
+  )
 
   const handleReplay = useCallback(() => {
     if (!currentChannel) return
@@ -45,8 +55,10 @@ export default function PlayerContainer() {
     window.electronAPI.switchChannel(currentChannel.url)
   }, [currentChannel])
 
+  // Register IPC listeners ONCE on mount and clean them up on unmount.
+  // The preload now returns an unsubscribe function from each on* method.
   useEffect(() => {
-    window.electronAPI.onPlayerBuffering(() => {
+    const offBuffering = window.electronAPI.onPlayerBuffering(() => {
       setIsBuffering(true)
       setPlayerError(null)
       clearTimeout(bufferTimerRef.current)
@@ -56,24 +68,34 @@ export default function PlayerContainer() {
         setIsBuffering(false)
       }, 10000)
     })
-    window.electronAPI.onPlayerPlaying(() => {
+
+    const offPlaying = window.electronAPI.onPlayerPlaying(() => {
       clearTimeout(bufferTimerRef.current)
       clearTimeout(errorTimerRef.current)
       setPlayerError(null)
       bufferTimerRef.current = setTimeout(() => setIsBuffering(false), 600)
     })
-    window.electronAPI.onPlayerError(() => {
+
+    const offError = window.electronAPI.onPlayerError(() => {
       clearTimeout(bufferTimerRef.current)
       clearTimeout(errorTimerRef.current)
       setIsBuffering(false)
       setPlayerError('播放出错，点击重试')
     })
-    return () => { clearTimeout(bufferTimerRef.current); clearTimeout(errorTimerRef.current) }
+
+    return () => {
+      clearTimeout(bufferTimerRef.current)
+      clearTimeout(errorTimerRef.current)
+      offBuffering?.()
+      offPlaying?.()
+      offError?.()
+    }
   }, [])
 
   useEffect(() => {
     if (currentChannel) {
       setIsBuffering(true)
+      setPlayerError(null)
       setShowInfo(true)
       clearTimeout(timerRef.current)
       timerRef.current = setTimeout(() => setShowInfo(false), 3000)
@@ -83,7 +105,10 @@ export default function PlayerContainer() {
         epgTimerRef.current = setTimeout(() => loadEpg(currentChannel.tvgUrl), 500)
       }
     }
-    return () => { clearTimeout(timerRef.current); clearTimeout(epgTimerRef.current) }
+    return () => {
+      clearTimeout(timerRef.current)
+      clearTimeout(epgTimerRef.current)
+    }
   }, [currentChannel, loadEpg])
 
   useEffect(() => {
@@ -111,9 +136,15 @@ export default function PlayerContainer() {
         >
           <div className="flex items-center gap-2">
             {currentChannel.logo && (
-              <img src={currentChannel.logo} alt="" className="w-5 h-5 rounded-tv-sm object-contain" />
+              <img
+                src={currentChannel.logo}
+                alt=""
+                className="w-5 h-5 rounded-tv-sm object-contain"
+              />
             )}
-            <span className="text-tv-sm font-medium text-white drop-shadow">{currentChannel.name}</span>
+            <span className="text-tv-sm font-medium text-white drop-shadow">
+              {currentChannel.name}
+            </span>
             {currentProgram && (
               <span className="text-tv-xs text-white/60 ml-2 truncate">
                 {currentProgram.title}
@@ -136,7 +167,13 @@ export default function PlayerContainer() {
         <div id="player" className="w-full h-full" />
         {isBuffering && currentChannel && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
-            <svg className="w-10 h-10 text-white/60 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              className="w-10 h-10 text-white/60 animate-spin"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <circle cx="12" cy="12" r="10" strokeOpacity="0.3" />
               <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
             </svg>
@@ -148,7 +185,13 @@ export default function PlayerContainer() {
               onClick={handleReplay}
               className="flex items-center gap-2 px-5 py-2.5 bg-tv-accent/20 hover:bg-tv-accent/30 border border-tv-accent/40 rounded-tv-md text-tv-sm text-tv-accent transition-colors"
             >
-              <svg className="w-4 h-4" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <svg
+                className="w-4 h-4"
+                viewBox="0 0 15 15"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              >
                 <path d="M4 2.5v10l8-5z" />
               </svg>
               {playerError}
@@ -158,8 +201,15 @@ export default function PlayerContainer() {
         {!currentChannel && (
           <div className="absolute inset-0 flex items-center justify-center text-tv-text-secondary select-none pointer-events-none">
             <div className="text-center">
-              <svg className="w-16 h-16 mx-auto mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" />
+              <svg
+                className="w-16 h-16 mx-auto mb-3"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              >
+                <rect x="2" y="3" width="20" height="14" rx="2" />
+                <path d="M8 21h8M12 17v4" />
               </svg>
               <div className="text-tv-sm">导入 M3U 播放列表开始观看</div>
               <div className="text-tv-xs mt-1 opacity-60">Ctrl+I 导入 · Ctrl+B 切换频道列表</div>
@@ -172,4 +222,3 @@ export default function PlayerContainer() {
     </div>
   )
 }
-

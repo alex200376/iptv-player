@@ -131,15 +131,18 @@ const api = {
     ipcRenderer.on('pip-state-changed', (_event, active) => callback(active))
   },
 
-  // Player state
+  // Player state — expose removeListener so components can clean up
   onPlayerBuffering: (callback: () => void) => {
-    ipcRenderer.on('player-buffering', () => callback())
+    ipcRenderer.on('player-buffering', callback)
+    return () => ipcRenderer.removeListener('player-buffering', callback)
   },
   onPlayerPlaying: (callback: () => void) => {
-    ipcRenderer.on('player-playing', () => callback())
+    ipcRenderer.on('player-playing', callback)
+    return () => ipcRenderer.removeListener('player-playing', callback)
   },
   onPlayerError: (callback: () => void) => {
-    ipcRenderer.on('player-error', () => callback())
+    ipcRenderer.on('player-error', callback)
+    return () => ipcRenderer.removeListener('player-error', callback)
   },
 }
 
