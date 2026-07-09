@@ -105,6 +105,30 @@ function findFfmpeg(vlcDir?: string | null): string {
 }
 
 /**
+ * Check if ffmpeg is available on the system.
+ * On first call probes once and caches the result for the session.
+ */
+let _ffmpegAvailable: boolean | undefined = undefined
+
+export function isFfmpegAvailable(vlcDir?: string | null): boolean {
+  if (_ffmpegAvailable !== undefined) return _ffmpegAvailable
+  const ffmpegPath = findFfmpeg(vlcDir)
+  if (ffmpegPath === 'ffmpeg' && !ffmpegPath.includes('\\') && !ffmpegPath.includes('/')) {
+    // Bare command — probe PATH
+    try {
+      const { execFileSync } = require('child_process')
+      execFileSync(ffmpegPath, ['-version'], { encoding: 'utf8', timeout: 3000, stdio: 'ignore' })
+      _ffmpegAvailable = true
+    } catch {
+      _ffmpegAvailable = false
+    }
+  } else {
+    _ffmpegAvailable = existsSync(ffmpegPath)
+  }
+  return _ffmpegAvailable
+}
+
+/**
  * Kill a child process immediately.
  * SIGKILL is sent straight away instead of waiting 1.5 s for SIGTERM to take
  * effect — ffmpeg stuck on a dead stream ignores SIGTERM during TCP probe.

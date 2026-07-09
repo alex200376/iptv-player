@@ -3,7 +3,7 @@ import { VlcPlayer } from 'electron-vlc-player'
 import { readSettings } from '../settingsStore'
 import { getState, ensurePlayerEmbedded, ensureEmbedded, buildMediaOptions } from './shared'
 import { exitPipMode } from './pip'
-import { needsProxy, getProxyUrl, stopProxy } from '../streamProxy'
+import { needsProxy, getProxyUrl, stopProxy, isFfmpegAvailable } from '../streamProxy'
 
 let _playId = 0
 
@@ -117,15 +117,21 @@ export function registerPlaybackIpc() {
     if (currentPlayId !== _playId) return { success: false }
 
     let playUrl = url
-    // needsProxy() now also returns true for HTTP .ts streams (MPEG-TS over HTTP).
-    // Those streams are proxied through ffmpeg with -f mpegts input format and
-    // -reconnect flags so that Stalker portal session drops are handled gracefully.
-    if (settings.streamProxy && needsProxy(url)) {
-      try {
-        playUrl = await getProxyUrl(url, state.vlcDir, settings.proxyResolution)
-        console.log('[switch-channel] proxied:', url.substring(0, 60), '->', playUrl)
-      } catch (e) {
-        console.error('[switch-channel] proxy failed, falling back:', (e as Error).message)
+    // Non-HTTP streams (RTMP, RTSP, UDP, RTP) are always proxied through ffmpeg
+    // when available — VLC cannot reliably handle them natively.
+    // HTTP .ts streams are only proxied when the user has enabled streamProxy in
+    // settings (they use standard HTTP which VLC can handle directly).
+    const isNonHttp = /^rtmp[s]?:\/\/|^rtsp:\/\/|^udp:\/\/|^rtp:\/\//i.test(url)
+    if (needsProxy(url) && (isNonHttp || settings.streamProxy)) {
+      if (isNonHttp && !isFfmpegAvailable(state.vlcDir)) {
+        console.warn('[switch-channel] ffmpeg not found, passing RTMP/RTSP directly to VLC')
+      } else {
+        try {
+          playUrl = await getProxyUrl(url, state.vlcDir, settings.proxyResolution)
+          console.log('[switch-channel] proxied:', url.substring(0, 60), '->', playUrl)
+        } catch (e) {
+          console.error('[switch-channel] proxy failed, falling back:', (e as Error).message)
+        }
       }
     }
 
