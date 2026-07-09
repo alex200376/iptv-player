@@ -182,21 +182,26 @@ function ensureServer(vlcDir?: string | null): Promise<number> {
  * the format from the Content-Type header, which can cause it to bail early.
  */
 function buildInputArgs(streamUrl: string): string[] {
+  const isHttp = /^https?:\/\//i.test(streamUrl)
+  const isRtmp = /^rtmp[s]?:\/\//i.test(streamUrl)
   const isTs = isHttpTsStream(streamUrl)
   const base = [
     '-fflags', 'nobuffer+discardcorrupt',
     '-flags', 'low_delay',
     '-analyzeduration', '2000000',
     '-probesize', '1000000',
+  ]
+  if (isHttp) {
     // Reconnect on drop — critical for Stalker portal streams that have
     // short session timeouts; ffmpeg will re-request the URL automatically.
-    '-reconnect', '1',
-    '-reconnect_streamed', '1',
-    '-reconnect_delay_max', '5',
+    base.push('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5')
     // Use a browser-like User-Agent so the server doesn't block ffmpeg.
-    '-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36',
-    '-multiple_requests', '1',
-  ]
+    base.push('-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36')
+    base.push('-multiple_requests', '1')
+  }
+  if (isRtmp) {
+    base.push('-rtmp_live', 'live')
+  }
   if (isTs) {
     // Force mpegts demuxer for raw .ts streams so ffmpeg doesn't waste time
     // probing the format and doesn't give up when Content-Type is unusual.
@@ -246,7 +251,7 @@ function handleProxyRequest(
 
   if (gpuEnc) console.log('[stream-proxy] using GPU encoder:', gpuEnc)
 
-  console.log('[stream-proxy] ffmpeg start:', streamUrl.substring(0, 60))
+  console.log('[stream-proxy] ffmpeg cmd:', ffmpegPath, args.join(' '))
 
   const proc = spawn(ffmpegPath, args, {
     stdio: ['ignore', 'pipe', 'pipe'],
