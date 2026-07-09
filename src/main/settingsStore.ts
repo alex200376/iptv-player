@@ -22,11 +22,11 @@ export interface Settings {
 const DEFAULTS: Settings = {
   theme: 'dark',
   hardwareAcceleration: 'd3d11va',
-  // Reduced from 2000 ms → 800 ms default.
+  // Reduced from 2000 ms → 400 ms default.
   // 2000 ms meant VLC buffered 2 full seconds before first frame — causes noticeable freeze on channel switch.
-  // 800 ms is a good balance between startup latency and rebuffering on slow connections.
-  // Users on poor networks can raise this in Settings.
-  networkCache: 800,
+  // 400 ms balances startup latency with rebuffering protection.
+  // Proxied localhost streams override to 150 ms automatically.
+  networkCache: 400,
   fontSize: 'normal',
   compatibilityMode: false,
   autoReconnect: true,
@@ -52,9 +52,9 @@ export function readSettings(): Settings {
   try {
     const raw = readFileSync(getFilePath(), 'utf-8')
     const parsed = JSON.parse(raw)
-    // Clamp networkCache to sane range: 300 ms – 10 000 ms
+    // Clamp networkCache to sane range: 200 ms – 10 000 ms
     if (parsed.networkCache !== undefined) {
-      parsed.networkCache = Math.min(10000, Math.max(300, Number(parsed.networkCache) || 800))
+      parsed.networkCache = Math.min(10000, Math.max(200, Number(parsed.networkCache) || 400))
     }
     return { ...DEFAULTS, ...parsed }
   } catch {

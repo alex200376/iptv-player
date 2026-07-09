@@ -21,7 +21,7 @@ export default function PlayerContainer() {
   const [isBuffering, setIsBuffering] = useState(true)
   const [playerError, setPlayerError] = useState<string | null>(null)
   const currentChannel = useStore((s) => s.currentChannel)
-  const epgCache = useStore((s) => s.epgCache)
+  const epgCache = useStore((s) => currentChannel?.tvgUrl ? s.epgCache[currentChannel.tvgUrl] : undefined)
   const loadEpg = useStore((s) => s.loadEpg)
   const timerRef = useRef<ReturnType<typeof setTimeout>>()
   const epgTimerRef = useRef<ReturnType<typeof setTimeout>>()
@@ -30,16 +30,8 @@ export default function PlayerContainer() {
 
   const tvgUrl = currentChannel?.tvgUrl
   const cachedPrograms = useMemo(() => {
-    if (!currentChannel) return undefined
-    if (currentChannel.tvgUrl && epgCache[currentChannel.tvgUrl])
-      return epgCache[currentChannel.tvgUrl] as EpgProgram[]
-    if (currentChannel.tvgId) {
-      for (const programs of Object.values(epgCache)) {
-        if (programs.some((p) => p.channelTvgId === currentChannel.tvgId))
-          return programs as EpgProgram[]
-      }
-    }
-    return undefined
+    if (!currentChannel || !epgCache) return undefined
+    return epgCache as EpgProgram[]
   }, [currentChannel, epgCache])
 
   const currentProgram = useMemo(

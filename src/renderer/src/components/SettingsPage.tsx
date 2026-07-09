@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import * as Tabs from '@radix-ui/react-tabs'
 import { themes, applyTheme, type ThemeId } from '../themes'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -27,6 +27,7 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
               { value: 'playback', label: '播放' },
               { value: 'appearance', label: '外观' },
               { value: 'playlists', label: '播放列表' },
+              { value: 'verify', label: '检测' },
               { value: 'epg', label: 'EPG' },
               { value: 'about', label: '关于' },
             ].map((tab) => (
@@ -258,6 +259,10 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
             <PlaylistSettingsList />
           </Tabs.Content>
 
+          <Tabs.Content value="verify" className="flex-1 overflow-y-auto p-8 space-y-4">
+            <ChannelVerifier />
+          </Tabs.Content>
+
           <Tabs.Content value="epg" className="flex-1 overflow-y-auto p-8 space-y-4">
             <div className="flex items-center justify-between">
               <p className="text-tv-sm text-tv-text-secondary">已导入的 EPG 数据源</p>
@@ -310,6 +315,124 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
   }
 
   return <div className="w-full h-full overflow-hidden">{content}</div>
+}
+
+function ChannelVerifier() {
+  const [logs, setLogs] = useState<Array<{ name: string; url: string; protocol: string; result: string; checked: number; total: number }>>([])
+  const [running, setRunning] = useState(false)
+  const [totalCh, setTotalCh] = useState(0)
+  const logRef = useRef<HTMLDivElement>(null)
+  const cancelRef = useRef(false)
+
+  useEffect(() => {
+    const offLog = window.electronAPI.onChannelsCheckLog((log) => {
+      setLogs((prev) => [...prev, log])
+      setTotalCh(log.total)
+    })
+    const offDone = window.electronAPI.onChannelsCheckDone(() => {
+      setRunning(false)
+      cancelRef.current = false
+    })
+    return () => {
+      offLog?.()
+      offDone?.()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (logRef.current) {
+      logRef.current.scrollTop = logRef.current.scrollHeight
+    }
+  }, [logs])
+
+  const onlineCount = logs.filter((l) => l.result === 'online').length
+  const offlineCount = logs.filter((l) => l.result === 'offline').length
+  const skippedCount = logs.filter((l) => l.result === 'skipped').length
+
+  const remaining = totalCh - logs.length
+
+  const handleStart = async () => {
+    setLogs([])
+    setRunning(true)
+    cancelRef.current = false
+    await window.electronAPI.checkAllChannels()
+  }
+
+  const handleCancel = () => {
+    cancelRef.current = true
+    window.electronAPI.cancelCheckAll()
+  }
+
+  const resultIcon = (result: string) => {
+    switch (result) {
+      case 'online': return <span className="text-green-500">\u2714</span>
+      case 'offline': return <span className="text-red-500">\u2718</span>
+      case 'skipped': return <span className="text-gray-500">\u23ED</span>
+      default: return <span className="text-gray-500">\u2022</span>
+    }
+  }
+
+  const protocolLabel = (p: string) => {
+    switch (p) {
+      case 'hls': return 'HLS'
+      case 'http': return 'HTTP'
+      case 'm3u': return 'M3U'
+      case 'rtmp': return 'RTMP'
+      case 'rtsp': return 'RTSP'
+      case 'udp': return 'UDP'
+      default: return '??'
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        {!running ? (
+          <button
+            onClick={handleStart}
+            className="px-5 py-2 bg-tv-accent text-white text-tv-sm rounded-tv-md hover:bg-tv-accent-hover transition-colors"
+          >
+            {'\u5F00\u59CB\u68C0\u6D4B'}
+          </button>
+        ) : (
+          <button
+            onClick={handleCancel}
+            className="px-5 py-2 bg-red-700 text-white text-tv-sm rounded-tv-md hover:bg-red-600 transition-colors"
+          >
+            {'\u53D6\u6D88\u68C0\u6D4B'}
+          </button>
+        )}
+        {logs.length > 0 && (
+          <span className="text-tv-xs text-tv-text-secondary">
+            {onlineCount > 0 && <span className="text-green-500 mr-2">{'\u2714'} {onlineCount}</span>}
+            {offlineCount > 0 && <span className="text-red-500 mr-2">{'\u2718'} {offlineCount}</span>}
+            {skippedCount > 0 && <span className="text-gray-500 mr-2">{'\u23ED'} {skippedCount}</span>}
+            {remaining > 0 && <span className="text-gray-500">{'\u2022'} {remaining}</span>}
+          </span>
+        )}
+      </div>
+
+      <div
+        ref={logRef}
+        className="h-80 overflow-y-auto bg-black/40 border border-tv-border rounded-tv-md p-3 font-mono text-tv-xs leading-relaxed space-y-0.5"
+      >
+        {logs.length === 0 && !running && (
+          <div className="text-tv-text-secondary text-center py-8">{'\u70B9\u51FB\u201C\u5F00\u59CB\u68C0\u6D4B\u201D\u68C0\u67E5\u6240\u6709\u9891\u9053\u72B6\u6001'}</div>
+        )}
+        {logs.length === 0 && running && (
+          <div className="text-tv-text-secondary text-center py-8">{'\u68C0\u6D4B\u4E2D...'}</div>
+        )}
+        {logs.map((log, i) => (
+          <div key={i} className="flex items-center gap-2 text-tv-text-primary">
+            <span className="w-4 flex-shrink-0">{resultIcon(log.result)}</span>
+            <span className="text-tv-text-secondary w-10 flex-shrink-0">[{protocolLabel(log.protocol)}]</span>
+            <span className="truncate flex-1">{log.name}</span>
+            <span className="text-tv-text-secondary text-2xs flex-shrink-0">{log.checked}/{log.total}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function PlaylistSettingsList() {

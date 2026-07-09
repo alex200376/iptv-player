@@ -11,8 +11,10 @@ async function doPlay(
   url: string,
   settings: ReturnType<typeof readSettings>,
   currentPlayId: number,
+  cacheOverride?: number,
 ): Promise<{ success: boolean; error?: string }> {
-  const mediaOptions = buildMediaOptions(settings)
+  const effectiveCache = cacheOverride ?? settings.networkCache
+  const mediaOptions = buildMediaOptions({ ...settings, networkCache: effectiveCache })
   const state = getState()
 
   function attachListeners(player: InstanceType<typeof VlcPlayer>) {
@@ -45,59 +47,51 @@ async function doPlay(
     })
   }
 
-  try {
-    if (!state.player) {
-      state.player = new VlcPlayer({
-        window: state.mainWindow!,
-        container: '#player',
-        vlcDir: state.vlcDir!,
-        locale: 'zh-CN',
-        hardwareAcceleration: settings.hardwareAcceleration,
-      })
-      if (currentPlayId !== _playId) return { success: false }
-      await ensurePlayerEmbedded()
-      if (currentPlayId !== _playId) return { success: false }
-      state.player.showOverlay()
-      attachListeners(state.player)
-      state.player.setSource(url, { mediaOptions })
-      state.player.play()
-      state.currentUrl = url
-      return { success: true }
-    }
+  // Destroy existing player BEFORE creating a new one — reusing a VLC player
+  // hung on a dead stream with setSource() freezes the app because libVLC's
+  // I/O thread is still blocked. Always start fresh.
+  if (state.player) {
+    try {
+      state.player.removeAllListeners()
+      state.player.destroy()
+    } catch {}
+    state.player = null
+    // Yield event loop so libVLC can release GPU surfaces / threads before
+    // we allocate a new VlcPlayer (avoids race on Windows).
+    await new Promise<void>((r) => setImmediate(r))
+    if (currentPlayId !== _playId) return { success: false }
+  }
 
+  async function createPlayer(): Promise<{ success: boolean; error?: string }> {
+    state.player = new VlcPlayer({
+      window: state.mainWindow!,
+      container: '#player',
+      vlcDir: state.vlcDir!,
+      locale: 'zh-CN',
+      hardwareAcceleration: settings.hardwareAcceleration,
+    })
+    if (currentPlayId !== _playId) return { success: false }
+    await ensurePlayerEmbedded()
+    if (currentPlayId !== _playId) return { success: false }
+    state.player.showOverlay()
     attachListeners(state.player)
     state.player.setSource(url, { mediaOptions })
     state.player.play()
     state.currentUrl = url
     return { success: true }
+  }
+
+  try {
+    return await createPlayer()
   } catch (e) {
     console.error('[play] error, rebuilding player:', url, (e as Error).message)
-
     if (state.player) {
-      try { state.player.destroy() } catch {}
+      try { state.player.removeAllListeners(); state.player.destroy() } catch {}
       state.player = null
     }
-
     if (currentPlayId !== _playId) return { success: false }
-
     try {
-      state.player = new VlcPlayer({
-        window: state.mainWindow!,
-        container: '#player',
-        vlcDir: state.vlcDir!,
-        locale: 'zh-CN',
-        hardwareAcceleration: settings.hardwareAcceleration,
-      })
-
-      await ensurePlayerEmbedded()
-      if (currentPlayId !== _playId) return { success: false }
-
-      state.player.showOverlay()
-      attachListeners(state.player)
-      state.player.setSource(url, { mediaOptions })
-      state.player.play()
-      state.currentUrl = url
-      return { success: true }
+      return await createPlayer()
     } catch (e2) {
       return { success: false, error: (e2 as Error).message }
     }
@@ -134,8 +128,9 @@ export function registerPlaybackIpc() {
 
     if (currentPlayId !== _playId) return { success: false }
 
-    state.originalUrl = playUrl !== url ? url : ''
-    return doPlay(playUrl, settings, currentPlayId)
+    const isProxied = playUrl.startsWith('http://127.0.0.1')
+    state.originalUrl = isProxied ? url : ''
+    return doPlay(playUrl, settings, currentPlayId, isProxied ? 150 : undefined)
   })
 
   ipcMain.handle('toggle-play', async () => {

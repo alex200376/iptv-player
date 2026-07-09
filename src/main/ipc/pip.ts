@@ -21,6 +21,7 @@ async function enterPipMode() {
   const savedTime = state.player.getTime()
   const savedMuted = getBinding().getMute(state.player.playerId)
 
+  state.player.removeAllListeners()
   state.player.destroy()
   state.player = null
 
@@ -68,6 +69,7 @@ export async function exitPipMode() {
   const savedTime = state.player.getTime()
   const savedMuted = getBinding().getMute(state.player.playerId)
 
+  state.player.removeAllListeners()
   state.player.destroy()
   state.player = null
 

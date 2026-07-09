@@ -208,14 +208,23 @@ export const useStore = create<PlayerStore>((set) => ({
 
   checkAllChannels: async () => {
     set({ checkingAll: true })
-    await window.electronAPI.checkAllChannels()
+    try {
+      const result = await window.electronAPI.checkAllChannels()
+      if (result.channels?.length) set({ groups: groupChannels(result.channels) })
+    } finally {
+      set({ checkingAll: false })
+    }
   },
 
   updateChannelStatus: (id, status, lastCheckedAt) => set((s) => {
-    const allChannels = s.groups.flatMap((g) => g.channels)
-    const updated = allChannels.map((ch) =>
-      ch.id === id ? { ...ch, status, lastCheckedAt } : ch,
-    )
-    return { groups: groupChannels(updated) }
+    const groups = s.groups.map((g) => ({
+      ...g,
+      channels: g.channels.map((ch) =>
+        ch.id === id ? { ...ch, status, lastCheckedAt } : ch,
+      ),
+    }))
+    const allChannels = groups.flatMap((g) => g.channels)
+    debouncedSave(allChannels)
+    return { groups }
   }),
 }))

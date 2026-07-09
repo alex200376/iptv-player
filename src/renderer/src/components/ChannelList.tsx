@@ -27,8 +27,6 @@ function ChannelList() {
 
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; channel: any } | null>(null)
   const activeRef = useRef<HTMLButtonElement>(null)
-  const checkingAll = useStore((s) => s.checkingAll)
-  const checkAllChannels = useStore((s) => s.checkAllChannels)
   const setChannels = useStore((s) => s.setChannels)
 
   const offlineCount = useMemo(
@@ -107,7 +105,7 @@ function ChannelList() {
       <div className="flex items-center justify-between px-2 py-1 border-b border-tv-border gap-1">
         <span className="text-tv-xs text-tv-text-secondary shrink-0">{totalChannels} 频道</span>
         <div className="flex items-center gap-2 ml-auto">
-          {offlineCount > 0 && !checkingAll && (
+          {offlineCount > 0 && (
             <button
               onClick={handleRemoveOffline}
               disabled={removing}
@@ -117,13 +115,6 @@ function ChannelList() {
               {removing ? '删除中...' : `删除 ${offlineCount} 个离线`}
             </button>
           )}
-          <button
-            onClick={checkAllChannels}
-            disabled={checkingAll}
-            className="text-tv-xs text-tv-text-secondary hover:text-tv-accent transition-colors disabled:opacity-40 whitespace-nowrap"
-          >
-            {checkingAll ? '检测中...' : '检测全部'}
-          </button>
         </div>
       </div>
       <Accordion.Root type="multiple" className="flex flex-col" defaultValue={[]}>
@@ -225,7 +216,7 @@ function ChannelGroupChannels({
     overscan: 5,
   })
 
-  const needsVirtual = channels.length > 80
+  const needsVirtual = channels.length > 30
 
   if (!needsVirtual) {
     return (
@@ -375,6 +366,14 @@ const ChannelRow = memo(function ChannelRow({
       </span>
     </button>
   )
+}, (prev, next) => {
+  return prev.ch.id === next.ch.id
+    && prev.ch.status === next.ch.status
+    && prev.ch.name === next.ch.name
+    && prev.ch.logo === next.ch.logo
+    && prev.currentChannel?.id === next.currentChannel?.id
+    && prev.favoriteIds.length === next.favoriteIds.length
+    && prev.favoriteIds.every((id, i) => id === next.favoriteIds[i])
 })
 
 export default memo(ChannelList)

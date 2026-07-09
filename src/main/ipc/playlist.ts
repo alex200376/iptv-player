@@ -1,9 +1,9 @@
 import { ipcMain, dialog, net } from 'electron'
+import { createConnection } from 'net'
 import { readFileSync } from 'fs'
 import { parseM3U, urlToId } from '../m3uParser'
 import { saveChannels, loadChannels } from '../channelStore'
 import { saveUserData, loadUserData } from '../userDataStore'
-import { probeMedia } from 'electron-vlc-player'
 import type { Channel } from '../m3uParser'
 import { getState } from './shared'
 
@@ -108,25 +108,245 @@ export async function refreshAllUrlPlaylists(): Promise<{ total: number; errors:
   return { total, errors }
 }
 
-/**
- * Probe a single channel URL off the main thread using a Promise wrapper.
- * probeMedia is synchronous and blocking — we wrap it so batches can run
- * concurrently via Promise.allSettled without serialising on the JS thread.
- */
-function probeChannel(url: string, timeoutMs: number): Promise<'online' | 'offline'> {
-  return new Promise((resolve) => {
-    // setImmediate yields the event loop tick so multiple probes overlap I/O
-    setImmediate(() => {
-      try {
-        // First do a quick HTTP HEAD / TCP connect check for http(s) streams
-        // to avoid tying up VLC probe slots on clearly dead URLs.
-        const result = probeMedia(url, timeoutMs)
-        resolve(result.parsed ? 'online' : 'offline')
-      } catch {
-        resolve('offline')
+// ── Cancellation token ───────────────────────────────────────────────
+let _checkCancelToken = 0
+
+// ── Types ────────────────────────────────────────────────────────────
+type ProbeResult = 'online' | 'offline' | 'unknown'
+
+type ProtocolType = 'hls' | 'http' | 'm3u' | 'rtmp' | 'rtsp' | 'udp' | 'unknown'
+
+// ── Protocol detection ───────────────────────────────────────────────
+function detectProtocol(url: string): ProtocolType {
+  if (/m3u8/i.test(url)) return 'hls'
+  if (/^https?:\/\//i.test(url)) {
+    if (/\.m3u(?:[^8]|$)/i.test(url)) return 'm3u'
+    return 'http'
+  }
+  if (/^rtmp[s]?:\/\//i.test(url)) return 'rtmp'
+  if (/^rtsp:\/\//i.test(url)) return 'rtsp'
+  if (/^udp:\/\//i.test(url) || /^rtp:\/\//i.test(url)) return 'udp'
+  return 'unknown'
+}
+
+// ── URL helpers ──────────────────────────────────────────────────────
+function parseHostPort(url: string, defaultPort: number): { host: string; port: number } | null {
+  try {
+    const u = new URL(url)
+    const host = u.hostname
+    if (!host) return null
+    const port = u.port ? Number(u.port) : defaultPort
+    return { host, port }
+  } catch {
+    return null
+  }
+}
+
+// ── HLS probe ────────────────────────────────────────────────────────
+async function probeHls(url: string): Promise<ProbeResult> {
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 8000)
+    const res = await net.fetch(url, { signal: controller.signal })
+    clearTimeout(timer)
+
+    if (res.status === 403) return 'online'
+    if (res.status !== 200 && res.status !== 206) return 'offline'
+
+    const body = await res.text()
+    if (!body.includes('#EXTM3U') && !body.includes('#EXT-X')) return 'offline'
+
+    // Variant playlist — fetch first media segment
+    if (body.includes('#EXT-X-STREAM-INF')) {
+      const lines = body.split('\n')
+      let mediaUrl = ''
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (trimmed && !trimmed.startsWith('#')) {
+          mediaUrl = trimmed
+          break
+        }
       }
+      if (mediaUrl) {
+        const resolvedUrl = new URL(mediaUrl, url).href
+        const c2 = new AbortController()
+        const t2 = setTimeout(() => c2.abort(), 8000)
+        try {
+          const mediaRes = await net.fetch(resolvedUrl, { signal: c2.signal })
+          clearTimeout(t2)
+          if (mediaRes.status === 200 || mediaRes.status === 206 || mediaRes.status === 403) return 'online'
+        } catch {
+          clearTimeout(t2)
+        }
+        return 'offline'
+      }
+    }
+
+    return 'online'
+  } catch {
+    return 'offline'
+  }
+}
+
+// ── HTTP(S) stream probe ─────────────────────────────────────────────
+async function probeHttp(url: string): Promise<ProbeResult> {
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 10000)
+    const res = await net.fetch(url, {
+      method: 'GET',
+      headers: {
+        Range: 'bytes=0-65535',
+        'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18',
+        Accept: '*/*',
+        'Icy-MetaData': '1',
+      },
+      signal: controller.signal,
+    })
+
+    // Read first chunk (up to 64KB) for magic-byte analysis
+    let bodyChunk = ''
+    try {
+      const reader = res.body?.getReader()
+      if (reader) {
+        const { value } = await reader.read()
+        if (value) {
+          bodyChunk = new TextDecoder().decode(value.slice(0, 65536))
+        }
+        reader.cancel()
+      }
+    } catch {}
+
+    clearTimeout(timer)
+
+    if (res.status === 403) return 'online'
+    if (res.status !== 200 && res.status !== 206) return 'offline'
+
+    const ct = (res.headers.get('content-type') || '').toLowerCase()
+    if (
+      ct.includes('video/') ||
+      ct.includes('audio/') ||
+      ct.includes('application/octet-stream') ||
+      ct.includes('application/x-mpegurl') ||
+      ct.includes('application/vnd.apple.mpegurl')
+    ) return 'online'
+
+    // Magic-byte detection
+    if (bodyChunk) {
+      const encoder = new TextEncoder()
+      const bytes = encoder.encode(bodyChunk)
+      if (bytes[0] === 0x46 && bytes[1] === 0x4C && bytes[2] === 0x56) return 'online'   // FLV
+      if (bytes[0] === 0x47) return 'online'                                               // MPEG-TS sync byte
+      if (bytes.length >= 8) {
+        const tag = String.fromCharCode(bytes[4], bytes[5], bytes[6], bytes[7])
+        if (tag === 'ftyp' || tag === 'moov') return 'online'                              // MP4 / QuickTime
+      }
+      if (bytes[0] === 0x00 && bytes[1] === 0x00 && bytes[2] === 0x01 && bytes[3] === 0xBA) return 'online'  // MPEG-PS
+      if (bytes[0] === 0x1A && bytes[1] === 0x45 && bytes[2] === 0xDF && bytes[3] === 0xA3) return 'online'  // WebM / Matroska
+    }
+
+    return 'offline'
+  } catch {
+    return 'offline'
+  }
+}
+
+// ── TCP connect probe (RTMP / RTSP) ──────────────────────────────────
+async function probeTcp(host: string, port: number, timeoutMs: number): Promise<ProbeResult> {
+  return new Promise((resolve) => {
+    const socket = createConnection(port, host, () => {
+      socket.destroy()
+      resolve('online')
+    })
+    socket.setTimeout(timeoutMs, () => {
+      socket.destroy()
+      resolve('offline')
+    })
+    socket.on('error', () => {
+      socket.destroy()
+      resolve('offline')
     })
   })
+}
+
+// ── M3U playlist probe ───────────────────────────────────────────────
+async function probeM3u(url: string, depth: number = 0): Promise<ProbeResult> {
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 8000)
+    const res = await net.fetch(url, { signal: controller.signal })
+    clearTimeout(timer)
+
+    if (res.status !== 200 && res.status !== 206) return 'offline'
+
+    const body = await res.text()
+    if (!body.includes('#EXTM3U')) return 'offline'
+
+    // More than 5 data lines -> channel list, not a single stream playlist
+    const dataLines = body.split('\n').filter((l) => {
+      const t = l.trim()
+      return t && !t.startsWith('#')
+    })
+    if (dataLines.length > 5) return 'online'
+
+    // Recursive probe (max depth 1)
+    if (depth >= 1) return 'online'
+
+    const firstUrl = dataLines[0]
+    if (!firstUrl) return 'offline'
+
+    const resolvedUrl = new URL(firstUrl, url).href
+    const protocol = detectProtocol(resolvedUrl)
+
+    if (protocol === 'hls') return probeHls(resolvedUrl)
+    if (protocol === 'http') return probeHttp(resolvedUrl)
+    return 'offline'
+  } catch {
+    return 'offline'
+  }
+}
+
+// ── Multi-protocol channel probe ─────────────────────────────────────
+async function probeChannel(url: string): Promise<{ result: ProbeResult; skipped?: boolean }> {
+  const protocol = detectProtocol(url)
+
+  switch (protocol) {
+    case 'hls': {
+      const result = await probeHls(url)
+      console.log('[probe]', 'hls', url.slice(0, 60), result)
+      return { result }
+    }
+    case 'http': {
+      const result = await probeHttp(url)
+      console.log('[probe]', 'http', url.slice(0, 60), result)
+      return { result }
+    }
+    case 'm3u': {
+      const result = await probeM3u(url)
+      console.log('[probe]', 'm3u', url.slice(0, 60), result)
+      return { result }
+    }
+    case 'rtmp': {
+      const parsed = parseHostPort(url, 1935)
+      if (!parsed) return { result: 'offline' }
+      const result = await probeTcp(parsed.host, parsed.port, 4000)
+      console.log('[probe]', 'rtmp', url.slice(0, 60), result)
+      return { result }
+    }
+    case 'rtsp': {
+      const parsed = parseHostPort(url, 554)
+      if (!parsed) return { result: 'offline' }
+      const result = await probeTcp(parsed.host, parsed.port, 4000)
+      console.log('[probe]', 'rtsp', url.slice(0, 60), result)
+      return { result }
+    }
+    case 'udp':
+      console.log('[probe]', 'udp', url.slice(0, 60), 'skipped')
+      return { result: 'unknown', skipped: true }
+    default:
+      console.log('[probe]', 'unknown', url.slice(0, 60), 'offline')
+      return { result: 'offline' }
+  }
 }
 
 export function registerPlaylistIpc() {
@@ -138,12 +358,16 @@ export function registerPlaylistIpc() {
     return await loadChannels()
   })
 
+  ipcMain.handle('cancel-check-all', () => {
+    _checkCancelToken++
+  })
+
   ipcMain.handle('check-channel-url', async (_event, url: string) => {
     const now = Date.now()
     try {
-      // Use a tighter 8s timeout for single-channel checks
-      const status = await probeChannel(url, 8000)
-      return { online: status === 'online', lastCheckedAt: now }
+      const { result, skipped } = await probeChannel(url)
+      if (skipped) return { online: false, lastCheckedAt: now, skipped: true }
+      return { online: result === 'online', lastCheckedAt: now }
     } catch (e) {
       return { online: false, lastCheckedAt: now, error: (e as Error).message }
     }
@@ -153,40 +377,63 @@ export function registerPlaylistIpc() {
     const channels: Channel[] = await loadChannels()
     const now = Date.now()
     let checked = 0
-    // Smaller batch to avoid overwhelming probeMedia (which uses VLC internally)
-    const batchSize = 8
+    const batchSize = 5
     const state = getState()
+    const myToken = ++_checkCancelToken
 
     for (let i = 0; i < channels.length; i += batchSize) {
+      if (myToken !== _checkCancelToken) break
+
       const batch = channels.slice(i, i + batchSize)
 
-      // Run batch probes concurrently — each probe yields via setImmediate
       const results = await Promise.allSettled(
-        batch.map((ch) => probeChannel(ch.url, 8000)),
+        batch.map((ch) => probeChannel(ch.url)),
       )
+
+      if (myToken !== _checkCancelToken) break
 
       for (let j = 0; j < batch.length; j++) {
         const r = results[j]
-        batch[j].status = r.status === 'fulfilled' ? r.value : 'offline'
+        let result: ProbeResult = 'offline'
+        let skipped = false
+        if (r.status === 'fulfilled') {
+          result = r.value.result
+          skipped = r.value.skipped || false
+        }
+        if (!skipped && result !== 'unknown') {
+          batch[j].status = result
+        }
         batch[j].lastCheckedAt = now
         checked++
+
+        if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+          state.mainWindow.webContents.send('channels-check-log', {
+            name: batch[j].name,
+            url: batch[j].url,
+            protocol: detectProtocol(batch[j].url),
+            result: skipped ? 'skipped' : result,
+            checked,
+            total: channels.length,
+          })
+        }
       }
+
+      await saveChannels(channels)
 
       if (state.mainWindow && !state.mainWindow.isDestroyed()) {
         state.mainWindow.webContents.send('channels-check-progress', {
           checked,
           total: channels.length,
+          currentName: batch[batch.length - 1]?.name || '',
         })
       }
     }
-
-    await saveChannels(channels)
 
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
       state.mainWindow.webContents.send('channels-check-done', channels)
     }
 
-    return { total: channels.length }
+    return { total: channels.length, channels }
   })
 
   /**

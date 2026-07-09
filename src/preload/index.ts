@@ -115,6 +115,7 @@ const api = {
 
   checkChannelUrl: (url: string) => ipcRenderer.invoke('check-channel-url', url),
   checkAllChannels: () => ipcRenderer.invoke('check-all-channels'),
+  cancelCheckAll: () => ipcRenderer.invoke('cancel-check-all'),
   removeOfflineChannels: () =>
     ipcRenderer.invoke('remove-offline-channels') as Promise<{
       channels: Channel[]
@@ -123,6 +124,10 @@ const api = {
   onChannelsCheckProgress: (
     callback: (progress: { checked: number; total: number }) => void,
   ) => on('channels-check-progress', callback),
+
+  onChannelsCheckLog: (
+    callback: (log: { name: string; url: string; protocol: string; result: string; checked: number; total: number }) => void,
+  ) => on('channels-check-log', callback),
 
   onChannelsCheckDone: (callback: (channels: unknown[]) => void) =>
     on<unknown[]>('channels-check-done', callback),

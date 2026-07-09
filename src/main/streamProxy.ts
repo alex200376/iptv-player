@@ -16,6 +16,48 @@ const SCALE_MAP: Record<string, string | null> = {
   '360p': 'scale=-2:360',
 }
 
+/** Cached GPU encoder name, null if none available, undefined = not probed yet. */
+let _gpuEncoder: string | null | undefined = undefined
+
+/**
+ * Test whether a GPU encoder actually works by encoding a single null frame.
+ * Only tests once per session and caches the result.
+ */
+function detectGpuEncoder(ffmpegPath: string): string | null {
+  if (_gpuEncoder !== undefined) return _gpuEncoder
+
+  for (const enc of ['h264_nvenc', 'h264_amf']) {
+    try {
+      const { execFileSync } = require('child_process')
+      execFileSync(ffmpegPath, [
+        '-f', 'lavfi', '-i', 'nullsrc=s=1280x720:duration=0.1',
+        '-frames:v', '1',
+        '-c:v', enc,
+        '-f', 'null', '-',
+      ], { encoding: 'utf8', timeout: 5000, stdio: 'ignore' })
+      _gpuEncoder = enc
+      console.log('[stream-proxy] GPU encoder available:', enc)
+      return enc
+    } catch {
+      console.log('[stream-proxy] GPU encoder not available:', enc)
+    }
+  }
+
+  _gpuEncoder = null
+  return null
+}
+
+function encoderArgs(enc: string): string[] {
+  switch (enc) {
+    case 'h264_nvenc':
+      return ['-preset', 'p1', '-tune', 'll', '-rc', 'vbr', '-cq', '28', '-b:v', '2M', '-maxrate', '2M']
+    case 'h264_amf':
+      return ['-usage', 'lowlatency', '-quality', 'speed', '-rc', 'cbr', '-b:v', '2M']
+    default:
+      return ['-preset', 'ultrafast', '-tune', 'zerolatency', '-crf', '28']
+  }
+}
+
 let httpServer: ReturnType<typeof createServer> | null = null
 let serverPort = 0
 let currentProcess: ChildProcess | null = null
@@ -101,21 +143,32 @@ function handleProxyRequest(
   currentStreamUrl = streamUrl
   const ffmpegPath = findFfmpeg(vlcDir)
 
+  // Low-latency ffmpeg args for live RTMP/RTSP/UDP → HTTP-FLV
   const useScale = currentScale && SCALE_MAP[currentScale]
+  const gpuEnc = useScale ? detectGpuEncoder(ffmpegPath) : null
   const args = [
     '-fflags', 'nobuffer+discardcorrupt',
     '-flags', 'low_delay',
-    '-analyzeduration', '500000',
-    '-probesize', '500000',
+    '-analyzeduration', '100000',
+    '-probesize', '50000',
     '-i', streamUrl,
     ...(useScale
-      ? ['-vf', useScale, '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-crf', '28', '-c:a', 'aac']
-      : ['-c', 'copy', '-tune', 'zerolatency']),
+      ? [
+          '-vf', useScale,
+          '-c:v', gpuEnc || 'libx264',
+          ...encoderArgs(gpuEnc || 'libx264'),
+          '-c:a', 'aac',
+          '-flags', 'low_delay',
+        ]
+      : ['-c', 'copy']),
     '-f', 'flv',
-    '-flvflags', 'no_duration_filesize',
+    '-flvflags', 'no_duration_filesize+no_sequence_end',
+    '-flush_packets', '1',
     '-loglevel', 'warning',
     'pipe:1',
   ]
+
+  if (gpuEnc) console.log('[stream-proxy] using GPU encoder:', gpuEnc)
 
   console.log('[stream-proxy] ffmpeg start:', streamUrl.substring(0, 60))
 

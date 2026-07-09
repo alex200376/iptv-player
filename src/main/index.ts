@@ -12,7 +12,6 @@ import { registerUpdateIpc, backgroundCheck } from './ipc/update'
 import { destroyProxy } from './streamProxy'
 
 let mainWindow: BrowserWindow | null = null
-let player: VlcPlayer | null = null
 
 async function createWindow() {
   const iconPath = join(__dirname, '../../build/icon.png')
@@ -36,6 +35,10 @@ async function createWindow() {
     },
   })
 
+  // electron-vlc-player registers window-level listeners (close/resize/minimize/etc.)
+  // on every new VlcPlayer() and never removes them. Suppress the MaxListeners warning.
+  mainWindow.setMaxListeners(0)
+
   // Ask Chromium to prefer hardware compositing
   app.commandLine.appendSwitch('enable-gpu-rasterization')
   app.commandLine.appendSwitch('enable-zero-copy')
@@ -58,10 +61,14 @@ async function createWindow() {
     if (resizeTimer) clearTimeout(resizeTimer)
     resizeTimer = setTimeout(() => {
       resizeTimer = null
-      if (player && !player.destroyed) {
-        try { player.notifyLayoutChange() } catch {}
+      const p = getState().player
+      if (p && !p.destroyed) {
+        try { p.notifyLayoutChange() } catch {}
       }
     }, 150)
+  })
+  mainWindow.on('closed', () => {
+    if (resizeTimer) { clearTimeout(resizeTimer); resizeTimer = null }
   })
 
   const vlcDir = probeDefaultVlcDir()
