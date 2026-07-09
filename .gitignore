@@ -2,8 +2,10 @@ node_modules/
 out/
 release/
 dist/
+build/
 *.log
 .DS_Store
 Thumbs.db
 .vite/
 .env.local
+*.tsbuildinfo

@@ -10,6 +10,7 @@ files:
   - "node_modules/**/*"
   - "!**/*.{md,map}"
   - "!**/{test,tests,__tests__,spec,__specs__}/**"
+asar: true
 asarUnpack:
   - node_modules/electron-vlc-player/**/*
 win:
