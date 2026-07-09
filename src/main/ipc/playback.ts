@@ -117,6 +117,9 @@ export function registerPlaybackIpc() {
     if (currentPlayId !== _playId) return { success: false }
 
     let playUrl = url
+    // needsProxy() now also returns true for HTTP .ts streams (MPEG-TS over HTTP).
+    // Those streams are proxied through ffmpeg with -f mpegts input format and
+    // -reconnect flags so that Stalker portal session drops are handled gracefully.
     if (settings.streamProxy && needsProxy(url)) {
       try {
         playUrl = await getProxyUrl(url, state.vlcDir, settings.proxyResolution)
@@ -128,6 +131,9 @@ export function registerPlaybackIpc() {
 
     if (currentPlayId !== _playId) return { success: false }
 
+    // Proxied streams (RTMP, RTSP, UDP, and HTTP .ts) all feed through
+    // the local ffmpeg→FLV pipeline — use a low VLC network cache so the
+    // player doesn’t add an extra buffer on top of ffmpeg’s own buffer.
     const isProxied = playUrl.startsWith('http://127.0.0.1')
     state.originalUrl = isProxied ? url : ''
     return doPlay(playUrl, settings, currentPlayId, isProxied ? 150 : undefined)
