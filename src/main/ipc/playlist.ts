@@ -117,17 +117,64 @@ type ProbeResult = 'online' | 'offline' | 'unknown'
 type ProtocolType = 'hls' | 'http' | 'm3u' | 'ts' | 'rtmp' | 'rtsp' | 'udp' | 'unknown'
 
 // ── Protocol detection ───────────────────────────────────────────────
+/**
+ * Detect whether an HTTP(S) URL is a raw MPEG-TS stream.
+ * Must stay in sync with isHttpTsStream() in streamProxy.ts.
+ */
+function isHttpTsUrl(url: string): boolean {
+  if (!/^https?:\/\//i.test(url)) return false
+  try {
+    const u = new URL(url)
+    const path = u.pathname.toLowerCase()
+    if (/\.ts$/.test(path)) return true
+    if (/\/(live|stream|play|channel|video)\.ts/.test(path)) return true
+    if (u.searchParams.has('channelId')) return true
+  } catch {
+    // malformed URL — fall through
+  }
+  return false
+}
+
 function detectProtocol(url: string): ProtocolType {
   if (/m3u8/i.test(url)) return 'hls'
   if (/^https?:\/\//i.test(url)) {
     if (/\.m3u(?:[^8]|$)/i.test(url)) return 'm3u'
-    if (/\.ts(?:\?|#|$)/i.test(url)) return 'ts'
+    // Use the same TS detection logic as streamProxy so probe and playback
+    // agree on whether a URL is a raw MPEG-TS stream.
+    if (isHttpTsUrl(url)) return 'ts'
     return 'http'
   }
   if (/^rtmp[s]?:\/\//i.test(url)) return 'rtmp'
   if (/^rtsp:\/\//i.test(url)) return 'rtsp'
   if (/^udp:\/\//i.test(url) || /^rtp:\/\//i.test(url)) return 'udp'
   return 'unknown'
+}
+
+// ── Retry helper ─────────────────────────────────────────────────────
+/**
+ * Run `fn` up to `maxAttempts` times.
+ * Returns on the first 'online' result.
+ * If all attempts return 'offline', returns 'offline'.
+ * 'unknown' results short-circuit immediately (UDP/RTP — no point retrying).
+ *
+ * A short delay between retries gives slow-starting or Stalker portal
+ * streams time to recover from a transient session reset.
+ */
+async function withRetry(
+  fn: () => Promise<ProbeResult>,
+  maxAttempts: number = 3,
+  delayMs: number = 1500,
+): Promise<ProbeResult> {
+  let lastResult: ProbeResult = 'offline'
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    lastResult = await fn()
+    if (lastResult === 'online' || lastResult === 'unknown') return lastResult
+    if (attempt < maxAttempts) {
+      console.log(`[probe] attempt ${attempt}/${maxAttempts} offline — retrying in ${delayMs}ms`)
+      await new Promise<void>((r) => setTimeout(r, delayMs))
+    }
+  }
+  return lastResult
 }
 
 // ── URL helpers ──────────────────────────────────────────────────────
@@ -237,7 +284,7 @@ async function probeHttp(url: string): Promise<ProbeResult> {
       method: 'GET',
       headers: {
         Range: 'bytes=0-131071',
-        'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36',
         Accept: '*/*',
         'Icy-MetaData': '1',
       },
@@ -337,53 +384,68 @@ async function probeM3u(url: string, depth: number = 0): Promise<ProbeResult> {
     const protocol = detectProtocol(resolvedUrl)
 
     if (protocol === 'hls') return probeHls(resolvedUrl)
-    if (protocol === 'http') return probeHttp(resolvedUrl)
+    if (protocol === 'http' || protocol === 'ts') return probeHttp(resolvedUrl)
     return 'offline'
   } catch {
     return 'offline'
   }
 }
 
-// ── Multi-protocol channel probe ─────────────────────────────────────
+// ── Multi-protocol channel probe (with retry) ─────────────────────────
+/**
+ * Probe a single channel URL.
+ * Each protocol-specific probe is retried up to 3 times (with a 1.5s gap
+ * between attempts) before the channel is marked offline.
+ *
+ * Retry rationale:
+ *  - HTTP .ts / Stalker portal streams may reject the first request while
+ *    a session is being negotiated by the server.
+ *  - HLS CDNs occasionally return transient 5xx errors.
+ *  - TCP probes can timeout on the first try for slow WAN links.
+ * UDP streams are never retried (they cannot be probed meaningfully).
+ */
 async function probeChannel(url: string): Promise<{ result: ProbeResult; skipped?: boolean }> {
   const protocol = detectProtocol(url)
 
   switch (protocol) {
     case 'hls': {
-      const result = await probeHls(url)
+      const result = await withRetry(() => probeHls(url))
       console.log('[probe]', 'hls', url.slice(0, 60), result)
       return { result }
     }
     case 'http': {
-      const result = await probeHttp(url)
+      const result = await withRetry(() => probeHttp(url))
       console.log('[probe]', 'http', url.slice(0, 60), result)
       return { result }
     }
-    case 'm3u': {
-      const result = await probeM3u(url)
-      console.log('[probe]', 'm3u', url.slice(0, 60), result)
+    case 'ts': {
+      // .ts streams use a browser UA and benefit most from retry —
+      // Stalker portal servers often need a moment before accepting a probe.
+      const result = await withRetry(() => probeHttp(url), 3, 2000)
+      console.log('[probe]', 'ts', url.slice(0, 60), result)
       return { result }
     }
-    case 'ts': {
-      const result = await probeHttp(url)
-      console.log('[probe]', 'ts', url.slice(0, 60), result)
+    case 'm3u': {
+      const result = await withRetry(() => probeM3u(url))
+      console.log('[probe]', 'm3u', url.slice(0, 60), result)
       return { result }
     }
     case 'rtmp': {
       const parsed = parseHostPort(url, 1935)
       if (!parsed) return { result: 'offline' }
-      const result = await probeTcp(parsed.host, parsed.port, 4000)
+      const result = await withRetry(() => probeTcp(parsed.host, parsed.port, 4000))
       console.log('[probe]', 'rtmp', url.slice(0, 60), result)
       return { result }
     }
     case 'rtsp': {
       const parsed = parseHostPort(url, 554)
       if (!parsed) return { result: 'offline' }
-      const result = await probeTcp(parsed.host, parsed.port, 4000)
+      const result = await withRetry(() => probeTcp(parsed.host, parsed.port, 4000))
       console.log('[probe]', 'rtsp', url.slice(0, 60), result)
       return { result }
     }
     case 'udp':
+      // UDP/RTP multicast cannot be probed — skip without retry.
       console.log('[probe]', 'udp', url.slice(0, 60), 'skipped')
       return { result: 'unknown', skipped: true }
     default:
@@ -539,7 +601,7 @@ export function registerPlaylistIpc() {
           id: urlToId(url),
           name,
           url,
-          group: '未分组',
+          group: '\u672a\u5206\u7ec4',
           playlistId,
         })
       }
