@@ -4,7 +4,33 @@ import { spawn, ChildProcess } from 'child_process'
 import { existsSync } from 'fs'
 import { join } from 'path'
 
-const NEEDS_PROXY_RE = /^rtmp[s]?:\/\/|^rtsp:\/\/|^udp:\/\//
+// RTMP/RTSP/UDP always need proxy.
+// HTTP .ts streams (MPEG-TS over HTTP) also need proxy — VLC cannot reliably
+// play raw MPEG-TS over HTTP without ffmpeg demuxing it first.
+const NEEDS_PROXY_RE = /^rtmp[s]?:\/\/|^rtsp:\/\/|^udp:\/\/|^rtp:\/\//
+
+/**
+ * Returns true when the URL is an HTTP/HTTPS MPEG-TS stream that needs the
+ * ffmpeg proxy even though the scheme is http(s).
+ * Matches:
+ *  - paths ending in .ts (with optional query string / fragment)
+ *  - paths containing /live.ts, /stream.ts, /play.ts
+ *  - query strings containing "channelId=" (Stalker portal pattern)
+ */
+function isHttpTsStream(url: string): boolean {
+  if (!/^https?:\/\//i.test(url)) return false
+  try {
+    const u = new URL(url)
+    const path = u.pathname.toLowerCase()
+    if (/\.ts$/.test(path)) return true
+    if (/\/(live|stream|play|channel|video)\.ts/.test(path)) return true
+    if (u.searchParams.has('channelId')) return true
+  } catch {
+    // malformed URL — fall through
+  }
+  return false
+}
+
 const SCALE_MAP: Record<string, string | null> = {
   original: null,
   '2160p': 'scale=-2:2160',
@@ -126,6 +152,36 @@ function ensureServer(vlcDir?: string | null): Promise<number> {
   })
 }
 
+/**
+ * Build ffmpeg input args for a given URL.
+ * HTTP MPEG-TS streams need explicit -f mpegts to avoid ffmpeg mis-detecting
+ * the format from the Content-Type header, which can cause it to bail early.
+ */
+function buildInputArgs(streamUrl: string): string[] {
+  const isTs = isHttpTsStream(streamUrl)
+  const base = [
+    '-fflags', 'nobuffer+discardcorrupt',
+    '-flags', 'low_delay',
+    '-analyzeduration', '2000000',
+    '-probesize', '1000000',
+    // Reconnect on drop — critical for Stalker portal streams that have
+    // short session timeouts; ffmpeg will re-request the URL automatically.
+    '-reconnect', '1',
+    '-reconnect_streamed', '1',
+    '-reconnect_delay_max', '5',
+    // Use a browser-like User-Agent so the server doesn't block ffmpeg.
+    '-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36',
+    '-multiple_requests', '1',
+  ]
+  if (isTs) {
+    // Force mpegts demuxer for raw .ts streams so ffmpeg doesn't waste time
+    // probing the format and doesn't give up when Content-Type is unusual.
+    base.push('-f', 'mpegts')
+  }
+  base.push('-i', streamUrl)
+  return base
+}
+
 function handleProxyRequest(
   streamUrl: string,
   req: IncomingMessage,
@@ -143,15 +199,11 @@ function handleProxyRequest(
   currentStreamUrl = streamUrl
   const ffmpegPath = findFfmpeg(vlcDir)
 
-  // Low-latency ffmpeg args for live RTMP/RTSP/UDP → HTTP-FLV
+  // Low-latency ffmpeg args for live streams → HTTP-FLV
   const useScale = currentScale && SCALE_MAP[currentScale]
   const gpuEnc = useScale ? detectGpuEncoder(ffmpegPath) : null
   const args = [
-    '-fflags', 'nobuffer+discardcorrupt',
-    '-flags', 'low_delay',
-    '-analyzeduration', '100000',
-    '-probesize', '50000',
-    '-i', streamUrl,
+    ...buildInputArgs(streamUrl),
     ...(useScale
       ? [
           '-vf', useScale,
@@ -221,7 +273,7 @@ function handleProxyRequest(
 }
 
 export function needsProxy(url: string): boolean {
-  return NEEDS_PROXY_RE.test(url)
+  return NEEDS_PROXY_RE.test(url) || isHttpTsStream(url)
 }
 
 /**
