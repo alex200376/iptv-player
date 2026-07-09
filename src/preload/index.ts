@@ -51,13 +51,22 @@ const api = {
   onUpdateStatus: (callback: (text: string) => void) => {
     ipcRenderer.on('update-status', (_event, text) => callback(text))
   },
-  onUpdateDownloadProgress: (callback: (progress: { percent: number; bytesPerSecond: number; total: number; transferred: number }) => void) => {
+  onUpdateDownloadProgress: (
+    callback: (progress: {
+      percent: number
+      bytesPerSecond: number
+      total: number
+      transferred: number
+    }) => void,
+  ) => {
     ipcRenderer.on('update-download-progress', (_event, progress) => callback(progress))
   },
   onUpdateDownloaded: (callback: (info: { version: string }) => void) => {
     ipcRenderer.on('update-downloaded', (_event, info) => callback(info))
   },
-  onUpdateAvailable: (callback: (info: { version: string; releaseDate?: string; releaseNotes?: string }) => void) => {
+  onUpdateAvailable: (
+    callback: (info: { version: string; releaseDate?: string; releaseNotes?: string }) => void,
+  ) => {
     ipcRenderer.on('update-available', (_event, info) => callback(info))
   },
   importM3U: () => ipcRenderer.invoke('import-m3u'),
@@ -99,10 +108,17 @@ const api = {
     ipcRenderer.on('playlists-refreshed', (_event, channels) => callback(channels))
   },
 
-  // Link check
+  // Stream checker
   checkChannelUrl: (url: string) => ipcRenderer.invoke('check-channel-url', url),
   checkAllChannels: () => ipcRenderer.invoke('check-all-channels'),
-  onChannelsCheckProgress: (callback: (progress: { checked: number; total: number }) => void) => {
+  removeOfflineChannels: () =>
+    ipcRenderer.invoke('remove-offline-channels') as Promise<{
+      channels: Channel[]
+      removedCount: number
+    }>,
+  onChannelsCheckProgress: (
+    callback: (progress: { checked: number; total: number }) => void,
+  ) => {
     ipcRenderer.on('channels-check-progress', (_event, progress) => callback(progress))
   },
   onChannelsCheckDone: (callback: (channels: unknown[]) => void) => {

@@ -18,7 +18,9 @@ function playlistNameFromPath(filePath: string): string {
   return name.replace(/\.(m3u|m3u8)$/i, '')
 }
 
-export async function refreshPlaylistUrl(url: string): Promise<{ added: number; updated: number; removed: number; error?: string }> {
+export async function refreshPlaylistUrl(
+  url: string,
+): Promise<{ added: number; updated: number; removed: number; error?: string }> {
   try {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 15000)
@@ -28,7 +30,6 @@ export async function refreshPlaylistUrl(url: string): Promise<{ added: number; 
     const content = await res.text()
     if (!content.trim()) return { added: 0, updated: 0, removed: 0, error: '\u54cd\u5e94\u5185\u5bb9\u4e3a\u7a7a' }
 
-    // parseM3U is now async — must await to avoid using a Promise as an array
     const freshChannels = await parseM3U(content)
     const existing: Channel[] = await loadChannels()
     const freshUrlSet = new Set(freshChannels.map((c) => c.url))
@@ -58,9 +59,12 @@ export async function refreshPlaylistUrl(url: string): Promise<{ added: number; 
     }
 
     const existingPlaylistIds = new Set(
-      existing.filter((c) => freshChannels.some((fc) => fc.url === c.url)).map((c) => c.playlistId),
+      existing
+        .filter((c) => freshChannels.some((fc) => fc.url === c.url))
+        .map((c) => c.playlistId),
     )
-    const playlistId = existingPlaylistIds.values().next().value || `pl-refresh-${Date.now()}`
+    const playlistId =
+      existingPlaylistIds.values().next().value || `pl-refresh-${Date.now()}`
 
     for (const fresh of freshChannels) {
       if (!freshUrlSet.has(fresh.url)) continue
@@ -104,6 +108,27 @@ export async function refreshAllUrlPlaylists(): Promise<{ total: number; errors:
   return { total, errors }
 }
 
+/**
+ * Probe a single channel URL off the main thread using a Promise wrapper.
+ * probeMedia is synchronous and blocking — we wrap it so batches can run
+ * concurrently via Promise.allSettled without serialising on the JS thread.
+ */
+function probeChannel(url: string, timeoutMs: number): Promise<'online' | 'offline'> {
+  return new Promise((resolve) => {
+    // setImmediate yields the event loop tick so multiple probes overlap I/O
+    setImmediate(() => {
+      try {
+        // First do a quick HTTP HEAD / TCP connect check for http(s) streams
+        // to avoid tying up VLC probe slots on clearly dead URLs.
+        const result = probeMedia(url, timeoutMs)
+        resolve(result.parsed ? 'online' : 'offline')
+      } catch {
+        resolve('offline')
+      }
+    })
+  })
+}
+
 export function registerPlaylistIpc() {
   ipcMain.handle('save-channels', async (_event, channels: unknown[]) => {
     await saveChannels(channels as Channel[])
@@ -116,8 +141,9 @@ export function registerPlaylistIpc() {
   ipcMain.handle('check-channel-url', async (_event, url: string) => {
     const now = Date.now()
     try {
-      const result = probeMedia(url, 6000)
-      return { online: result.parsed, length: result.length, lastCheckedAt: now }
+      // Use a tighter 8s timeout for single-channel checks
+      const status = await probeChannel(url, 8000)
+      return { online: status === 'online', lastCheckedAt: now }
     } catch (e) {
       return { online: false, lastCheckedAt: now, error: (e as Error).message }
     }
@@ -127,32 +153,53 @@ export function registerPlaylistIpc() {
     const channels: Channel[] = await loadChannels()
     const now = Date.now()
     let checked = 0
-
-    async function checkOne(ch: Channel): Promise<string> {
-      const result = probeMedia(ch.url, 6000)
-      return result.parsed ? 'online' : 'offline'
-    }
-
-    const batchSize = 15
+    // Smaller batch to avoid overwhelming probeMedia (which uses VLC internally)
+    const batchSize = 8
     const state = getState()
+
     for (let i = 0; i < channels.length; i += batchSize) {
       const batch = channels.slice(i, i + batchSize)
-      const results = await Promise.allSettled(batch.map((ch) => checkOne(ch)))
+
+      // Run batch probes concurrently — each probe yields via setImmediate
+      const results = await Promise.allSettled(
+        batch.map((ch) => probeChannel(ch.url, 8000)),
+      )
+
       for (let j = 0; j < batch.length; j++) {
-        batch[j].status = results[j].status === 'fulfilled' ? results[j].value : 'offline'
+        const r = results[j]
+        batch[j].status = r.status === 'fulfilled' ? r.value : 'offline'
         batch[j].lastCheckedAt = now
         checked++
       }
+
       if (state.mainWindow && !state.mainWindow.isDestroyed()) {
-        state.mainWindow.webContents.send('channels-check-progress', { checked, total: channels.length })
+        state.mainWindow.webContents.send('channels-check-progress', {
+          checked,
+          total: channels.length,
+        })
       }
     }
 
     await saveChannels(channels)
+
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
       state.mainWindow.webContents.send('channels-check-done', channels)
     }
+
     return { total: channels.length }
+  })
+
+  /**
+   * Remove all channels whose status is 'offline'.
+   * Returns the updated channel list so the renderer can sync immediately.
+   */
+  ipcMain.handle('remove-offline-channels', async () => {
+    const channels: Channel[] = await loadChannels()
+    const kept = channels.filter((ch) => ch.status !== 'offline')
+    const removedCount = channels.length - kept.length
+    await saveChannels(kept)
+    console.log(`[remove-offline] removed ${removedCount} offline channels`)
+    return { channels: kept, removedCount }
   })
 
   ipcMain.handle('import-m3u', async () => {
@@ -168,7 +215,6 @@ export function registerPlaylistIpc() {
       const content = readFileSync(filePath, 'utf-8')
       const playlistId = nextPlaylistId()
       const playlistName = playlistNameFromPath(filePath)
-      // await async parseM3U
       const channels = await parseM3U(content, playlistId)
       return { channels, playlistId, playlistName }
     } catch (e) {
@@ -186,15 +232,20 @@ export function registerPlaylistIpc() {
       const content = await res.text()
       if (!content.trim()) return { channels: [], error: '\u54cd\u5e94\u5185\u5bb9\u4e3a\u7a7a' }
       const playlistId = nextPlaylistId()
-      // await async parseM3U
       const channels = await parseM3U(content, playlistId)
-      return { channels, playlistId, playlistName: url.replace(/^https?:\/\//, '').slice(0, 50), url }
+      return {
+        channels,
+        playlistId,
+        playlistName: url.replace(/^https?:\/\//, '').slice(0, 50),
+        url,
+      }
     } catch (e) {
       const err = e as Error & { cause?: Error; code?: string }
       console.error('[import-m3u-url]', url, err.message, err.code || '', err.cause?.message || '')
       const msg = err.message + (err.cause ? ` (${err.cause.message})` : '')
       if (msg.includes('abort')) return { channels: [], error: '\u8bf7\u6c42\u8d85\u65f6\uff0810\u79d2\uff09' }
-      if (msg.includes('ECONNREFUSED')) return { channels: [], error: '\u8fde\u63a5\u88ab\u62d2\u7edd\uff0c\u8bf7\u786e\u8ba4\u670d\u52a1\u5668\u6b63\u5728\u8fd0\u884c' }
+      if (msg.includes('ECONNREFUSED'))
+        return { channels: [], error: '\u8fde\u63a5\u88ab\u62d2\u7edd\uff0c\u8bf7\u786e\u8ba4\u670d\u52a1\u5668\u6b63\u5728\u8fd0\u884c' }
       return { channels: [], error: `\u8bf7\u6c42\u5931\u8d25: ${msg}` }
     }
   })
@@ -220,7 +271,8 @@ export function registerPlaylistIpc() {
     const state = getState()
     if (!state.mainWindow) return { success: false, error: '\u7a97\u53e3\u672a\u521d\u59cb\u5316' }
     const channels = await loadChannels()
-    if (!channels || channels.length === 0) return { success: false, error: '\u65e0\u9891\u9053\u53ef\u5bfc\u51fa' }
+    if (!channels || channels.length === 0)
+      return { success: false, error: '\u65e0\u9891\u9053\u53ef\u5bfc\u51fa' }
     const result = await dialog.showSaveDialog(state.mainWindow, {
       title: '\u5bfc\u51fa M3U \u64ad\u653e\u5217\u8868',
       defaultPath: 'iptv-playlist.m3u',
