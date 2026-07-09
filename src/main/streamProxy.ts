@@ -6,7 +6,7 @@ import { join } from 'path'
 
 const NEEDS_PROXY_RE = /^rtmp[s]?:\/\/|^rtsp:\/\/|^udp:\/\//
 const SCALE_MAP: Record<string, string | null> = {
-  'original': null,
+  original: null,
   '2160p': 'scale=-2:2160',
   '1440p': 'scale=-2:1440',
   '1080p': 'scale=-2:1080',
@@ -36,13 +36,26 @@ function findFfmpeg(vlcDir?: string | null): string {
   return 'ffmpeg'
 }
 
+/**
+ * Kill a child process immediately.
+ * SIGKILL is sent straight away instead of waiting 1.5 s for SIGTERM to take
+ * effect — ffmpeg stuck on a dead stream ignores SIGTERM during TCP probe.
+ */
 function safeKill(proc: ChildProcess): void {
   if (proc.killed) return
-  proc.kill('SIGTERM')
-  const timer = setTimeout(() => {
-    if (!proc.killed) proc.kill('SIGKILL')
-  }, 1500)
-  if (timer.unref) timer.unref()
+  try {
+    // On Windows `SIGKILL` is not supported; `taskkill /F` is the equivalent.
+    if (process.platform === 'win32') {
+      spawn('taskkill', ['/pid', String(proc.pid), '/f', '/t'], {
+        windowsHide: true,
+        stdio: 'ignore',
+      })
+    } else {
+      proc.kill('SIGKILL')
+    }
+  } catch {
+    // Process may have already exited
+  }
 }
 
 function ensureServer(vlcDir?: string | null): Promise<number> {
@@ -75,19 +88,10 @@ function handleProxyRequest(
   streamUrl: string,
   req: IncomingMessage,
   res: ServerResponse,
-  vlcDir?: string | null
+  vlcDir?: string | null,
 ) {
-  if (currentProcess && currentStreamUrl === streamUrl && !currentProcess.killed) {
-    res.writeHead(200, {
-      'Content-Type': 'video/x-flv',
-      'Cache-Control': 'no-cache, no-store',
-      'Pragma': 'no-cache',
-      'Access-Control-Allow-Origin': '*',
-    })
-    res.end()
-    return
-  }
-
+  // Always kill any running ffmpeg before starting a new one,
+  // even if the URL looks the same (the old stream may be dead).
   if (currentProcess) {
     const oldProc = currentProcess
     currentProcess = null
@@ -99,23 +103,21 @@ function handleProxyRequest(
 
   const useScale = currentScale && SCALE_MAP[currentScale]
   const args = [
-    // --- faster stream open ---
     '-fflags', 'nobuffer+discardcorrupt',
     '-flags', 'low_delay',
-    // Reduced from 5 000 000 → 500 000 µs (0.5 s) — cuts channel-switch delay by ~4 s
     '-analyzeduration', '500000',
     '-probesize', '500000',
     '-i', streamUrl,
     ...(useScale
       ? ['-vf', useScale, '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-crf', '28', '-c:a', 'aac']
-      : ['-c', 'copy']),
+      : ['-c', 'copy', '-tune', 'zerolatency']),
     '-f', 'flv',
     '-flvflags', 'no_duration_filesize',
     '-loglevel', 'warning',
     'pipe:1',
   ]
 
-  console.log('[stream-proxy] ffmpeg', ffmpegPath, args.slice(0, 3).join(' '), '...', args.slice(-1))
+  console.log('[stream-proxy] ffmpeg start:', streamUrl.substring(0, 60))
 
   const proc = spawn(ffmpegPath, args, {
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -126,7 +128,7 @@ function handleProxyRequest(
   res.writeHead(200, {
     'Content-Type': 'video/x-flv',
     'Cache-Control': 'no-cache, no-store',
-    'Pragma': 'no-cache',
+    Pragma: 'no-cache',
     'Access-Control-Allow-Origin': '*',
   })
 
@@ -136,14 +138,7 @@ function handleProxyRequest(
     const text = data.toString()
     for (const line of text.split('\n')) {
       const t = line.trim()
-      if (
-        t &&
-        (t.includes('Error') ||
-          t.includes('error') ||
-          t.includes('Invalid') ||
-          t.includes('frame=') ||
-          t.includes('Stream'))
-      ) {
+      if (t && (t.includes('Error') || t.includes('error') || t.includes('Invalid') || t.includes('frame=') || t.includes('Stream'))) {
         console.debug('[ffmpeg]', t)
       }
     }
@@ -161,8 +156,10 @@ function handleProxyRequest(
     if (!res.writableEnded) res.end()
   })
 
+  // When VLC closes the HTTP connection (e.g. user switched channel),
+  // kill ffmpeg immediately so it doesn't keep probing a dead stream.
   req.on('close', () => {
-    if (currentProcess === proc && !proc.killed) {
+    if (currentProcess === proc) {
       const p = proc
       currentProcess = null
       safeKill(p)
@@ -174,11 +171,26 @@ export function needsProxy(url: string): boolean {
   return NEEDS_PROXY_RE.test(url)
 }
 
+/**
+ * Kill any running ffmpeg proxy process right now.
+ * Call this BEFORE setSource so the old process is dead before the new one
+ * starts, preventing resource contention on dead streams.
+ */
+export function stopProxy() {
+  if (currentProcess) {
+    const p = currentProcess
+    currentProcess = null
+    safeKill(p)
+  }
+  currentStreamUrl = ''
+}
+
 export function getProxyUrl(
   streamUrl: string,
   vlcDir?: string | null,
-  scale?: string
+  scale?: string,
 ): Promise<string> {
+  // Cancel any pending debounced switch
   if (switchTimer !== null) {
     clearTimeout(switchTimer)
     switchTimer = null
@@ -206,15 +218,6 @@ export function getProxyUrl(
       }
     }, 200)
   })
-}
-
-export function stopProxy() {
-  if (currentProcess) {
-    const p = currentProcess
-    currentProcess = null
-    safeKill(p)
-  }
-  currentStreamUrl = ''
 }
 
 export function destroyProxy() {

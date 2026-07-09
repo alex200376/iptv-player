@@ -15,15 +15,12 @@ async function doPlay(
   const mediaOptions = buildMediaOptions(settings)
   const state = getState()
 
-  // Attach event listeners only once per player instance and guard by playId
   function attachListeners(player: InstanceType<typeof VlcPlayer>) {
-    // Remove any previous listeners to prevent accumulation
     player.removeAllListeners('error')
     player.removeAllListeners('playing')
     player.removeAllListeners('buffering')
 
     player.on('error', (...args: unknown[]) => {
-      // Only forward events if this play session is still active
       if (currentPlayId !== _playId) return
       console.error('[vlc-error]', url.substring(0, 60), ...args)
       try { console.error('[vlc-state]', state.player?.getState()) } catch {}
@@ -68,7 +65,6 @@ async function doPlay(
       return { success: true }
     }
 
-    // Reuse existing player — just swap source and re-attach guarded listeners
     attachListeners(state.player)
     state.player.setSource(url, { mediaOptions })
     state.player.play()
@@ -77,13 +73,11 @@ async function doPlay(
   } catch (e) {
     console.error('[play] error, rebuilding player:', url, (e as Error).message)
 
-    // Destroy stale player
     if (state.player) {
       try { state.player.destroy() } catch {}
       state.player = null
     }
 
-    // Guard: user may have already switched to another channel
     if (currentPlayId !== _playId) return { success: false }
 
     try {
@@ -95,7 +89,6 @@ async function doPlay(
         hardwareAcceleration: settings.hardwareAcceleration,
       })
 
-      // Guard again after async embed
       await ensurePlayerEmbedded()
       if (currentPlayId !== _playId) return { success: false }
 
@@ -117,8 +110,16 @@ export function registerPlaybackIpc() {
     if (state.pipWindow) {
       await exitPipMode()
     }
+
     const currentPlayId = ++_playId
     const settings = readSettings()
+
+    // Kill any running proxy/ffmpeg IMMEDIATELY before starting the new stream.
+    // This is the key fix: a dead stream's ffmpeg stays alive during its TCP
+    // probe timeout unless we force-kill it here, causing the next stream to
+    // contend for the same pipe and VLC to lag/freeze.
+    stopProxy()
+
     if (currentPlayId !== _playId) return { success: false }
 
     let playUrl = url
@@ -127,11 +128,10 @@ export function registerPlaybackIpc() {
         playUrl = await getProxyUrl(url, state.vlcDir, settings.proxyResolution)
         console.log('[switch-channel] proxied:', url.substring(0, 60), '->', playUrl)
       } catch (e) {
-        console.error('[switch-channel] proxy failed, falling back to original URL:', (e as Error).message)
+        console.error('[switch-channel] proxy failed, falling back:', (e as Error).message)
       }
     }
 
-    // Guard: another switch may have come in while proxy was resolving
     if (currentPlayId !== _playId) return { success: false }
 
     state.originalUrl = playUrl !== url ? url : ''
