@@ -27,6 +27,10 @@ export function urlToId(url: string): string {
  * with a setImmediate yield between each chunk so IPC calls can
  * still be serviced during parsing.
  */
+function looksLikeUrl(text: string): boolean {
+  return /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(text)
+}
+
 export function parseM3U(content: string, playlistId?: string): Promise<Channel[]> {
   return new Promise((resolve) => {
     const lines = content.split('\n')
@@ -39,7 +43,7 @@ export function parseM3U(content: string, playlistId?: string): Promise<Channel[
       const end = Math.min(i + CHUNK, lines.length)
       for (; i < end; i++) {
         const line = lines[i].trim()
-        if (!line || line.startsWith('#EXTM3U')) continue
+        if (!line || line === '#EXTM3U') continue
 
         if (line.startsWith('#EXTINF:')) {
           const group = line.match(/group-title="([^"]*)"/)?.[1]
@@ -54,17 +58,19 @@ export function parseM3U(content: string, playlistId?: string): Promise<Channel[
             tvgUrl,
             name: name || '未知频道',
           }
-        } else if (line.startsWith('#')) {
+        } else if (line.startsWith('#') || line.startsWith('//')) {
           continue
-        } else if (current) {
+        } else if (looksLikeUrl(line)) {
+          const name = line.split('/').pop()?.split('?')[0] || line.slice(0, 40)
+          const ch = current || {}
           channels.push({
             id: urlToId(line),
-            name: current.name || '未知频道',
+            name: ch.name || name,
             url: line,
-            logo: current.logo,
-            group: current.group || '未分组',
-            tvgId: current.tvgId,
-            tvgUrl: current.tvgUrl,
+            logo: ch.logo,
+            group: ch.group || '未分组',
+            tvgId: ch.tvgId,
+            tvgUrl: ch.tvgUrl,
             playlistId,
           })
           current = null

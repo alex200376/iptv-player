@@ -318,26 +318,11 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
 }
 
 function ChannelVerifier() {
-  const [logs, setLogs] = useState<Array<{ name: string; url: string; protocol: string; result: string; checked: number; total: number }>>([])
-  const [running, setRunning] = useState(false)
-  const [totalCh, setTotalCh] = useState(0)
+  const logs = useStore((s) => s.checkLogs)
+  const running = useStore((s) => s.checkRunning)
+  const totalCh = useStore((s) => s.checkTotal)
+  const resetCheck = useStore((s) => s.resetCheck)
   const logRef = useRef<HTMLDivElement>(null)
-  const cancelRef = useRef(false)
-
-  useEffect(() => {
-    const offLog = window.electronAPI.onChannelsCheckLog((log) => {
-      setLogs((prev) => [...prev, log])
-      setTotalCh(log.total)
-    })
-    const offDone = window.electronAPI.onChannelsCheckDone(() => {
-      setRunning(false)
-      cancelRef.current = false
-    })
-    return () => {
-      offLog?.()
-      offDone?.()
-    }
-  }, [])
 
   useEffect(() => {
     if (logRef.current) {
@@ -348,88 +333,96 @@ function ChannelVerifier() {
   const onlineCount = logs.filter((l) => l.result === 'online').length
   const offlineCount = logs.filter((l) => l.result === 'offline').length
   const skippedCount = logs.filter((l) => l.result === 'skipped').length
-
   const remaining = totalCh - logs.length
 
   const handleStart = async () => {
-    setLogs([])
-    setRunning(true)
-    cancelRef.current = false
+    resetCheck()
+    useStore.setState({ checkRunning: true })
     await window.electronAPI.checkAllChannels()
   }
 
   const handleCancel = () => {
-    cancelRef.current = true
     window.electronAPI.cancelCheckAll()
-  }
-
-  const resultIcon = (result: string) => {
-    switch (result) {
-      case 'online': return <span className="text-green-500">\u2714</span>
-      case 'offline': return <span className="text-red-500">\u2718</span>
-      case 'skipped': return <span className="text-gray-500">\u23ED</span>
-      default: return <span className="text-gray-500">\u2022</span>
-    }
-  }
-
-  const protocolLabel = (p: string) => {
-    switch (p) {
-      case 'hls': return 'HLS'
-      case 'http': return 'HTTP'
-      case 'm3u': return 'M3U'
-      case 'rtmp': return 'RTMP'
-      case 'rtsp': return 'RTSP'
-      case 'udp': return 'UDP'
-      default: return '??'
-    }
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         {!running ? (
           <button
             onClick={handleStart}
             className="px-5 py-2 bg-tv-accent text-white text-tv-sm rounded-tv-md hover:bg-tv-accent-hover transition-colors"
           >
-            {'\u5F00\u59CB\u68C0\u6D4B'}
+            开始检测
           </button>
         ) : (
           <button
             onClick={handleCancel}
             className="px-5 py-2 bg-red-700 text-white text-tv-sm rounded-tv-md hover:bg-red-600 transition-colors"
           >
-            {'\u53D6\u6D88\u68C0\u6D4B'}
+            取消检测
           </button>
         )}
-        {logs.length > 0 && (
-          <span className="text-tv-xs text-tv-text-secondary">
-            {onlineCount > 0 && <span className="text-green-500 mr-2">{'\u2714'} {onlineCount}</span>}
-            {offlineCount > 0 && <span className="text-red-500 mr-2">{'\u2718'} {offlineCount}</span>}
-            {skippedCount > 0 && <span className="text-gray-500 mr-2">{'\u23ED'} {skippedCount}</span>}
-            {remaining > 0 && <span className="text-gray-500">{'\u2022'} {remaining}</span>}
+        {logs.length > 0 && running && (
+          <span className="text-tv-xs text-tv-text-secondary ml-1">
+            检测中 {logs.length}/{totalCh}
           </span>
         )}
       </div>
 
+      {logs.length > 0 && (
+        <div className="flex items-center gap-4 text-tv-xs">
+          <span className="text-green-500">可用 {onlineCount}</span>
+          <span className="text-red-500">离线 {offlineCount}</span>
+          {skippedCount > 0 && <span className="text-gray-500">跳过 {skippedCount}</span>}
+          {remaining > 0 && <span className="text-gray-500">剩余 {remaining}</span>}
+          <span className="text-tv-text-secondary">| 共 {totalCh} 频道</span>
+          <span className="ml-auto text-tv-text-secondary">
+            {running ? '检测完成后自动更新频道状态' : '检测完成'}
+          </span>
+        </div>
+      )}
+
       <div
         ref={logRef}
-        className="h-80 overflow-y-auto bg-black/40 border border-tv-border rounded-tv-md p-3 font-mono text-tv-xs leading-relaxed space-y-0.5"
+        className="h-80 overflow-y-auto bg-[#0d0e12] border border-tv-border rounded-tv-md font-mono text-tv-xs leading-relaxed"
       >
         {logs.length === 0 && !running && (
-          <div className="text-tv-text-secondary text-center py-8">{'\u70B9\u51FB\u201C\u5F00\u59CB\u68C0\u6D4B\u201D\u68C0\u67E5\u6240\u6709\u9891\u9053\u72B6\u6001'}</div>
+          <div className="flex items-center justify-center h-full text-tv-text-secondary">
+            点击「开始检测」检查所有频道状态
+          </div>
         )}
         {logs.length === 0 && running && (
-          <div className="text-tv-text-secondary text-center py-8">{'\u68C0\u6D4B\u4E2D...'}</div>
-        )}
-        {logs.map((log, i) => (
-          <div key={i} className="flex items-center gap-2 text-tv-text-primary">
-            <span className="w-4 flex-shrink-0">{resultIcon(log.result)}</span>
-            <span className="text-tv-text-secondary w-10 flex-shrink-0">[{protocolLabel(log.protocol)}]</span>
-            <span className="truncate flex-1">{log.name}</span>
-            <span className="text-tv-text-secondary text-2xs flex-shrink-0">{log.checked}/{log.total}</span>
+          <div className="flex items-center justify-center h-full text-tv-text-secondary">
+            正在检测...
           </div>
-        ))}
+        )}
+        {logs.map((log, i) => {
+          let color = ''
+          let icon = ''
+          if (log.result === 'online') { color = 'text-green-400'; icon = 'OK' }
+          else if (log.result === 'offline') { color = 'text-red-400'; icon = 'XX' }
+          else if (log.result === 'skipped') { color = 'text-gray-500'; icon = '--' }
+          else { color = 'text-gray-500'; icon = '??' }
+
+          const protoColor =
+            log.protocol === 'hls' ? 'text-blue-400' :
+            log.protocol === 'http' ? 'text-cyan-400' :
+            log.protocol === 'ts' ? 'text-emerald-400' :
+            log.protocol === 'rtmp' ? 'text-yellow-400' :
+            log.protocol === 'rtsp' ? 'text-purple-400' :
+            log.protocol === 'm3u' ? 'text-orange-400' :
+            log.protocol === 'udp' ? 'text-gray-600' : 'text-gray-500'
+
+          return (
+            <div key={i} className={`flex items-center gap-2 px-3 py-0.5 ${i % 2 === 0 ? 'bg-black/20' : ''}`}>
+              <span className={`w-6 text-center font-bold flex-shrink-0 ${color}`}>{icon}</span>
+              <span className={`w-12 flex-shrink-0 ${protoColor}`}>{log.protocol.toUpperCase()}</span>
+              <span className="truncate flex-1 text-tv-text-primary">{log.name}</span>
+              <span className="text-tv-text-secondary flex-shrink-0 w-16 text-right">{log.checked}/{log.total}</span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

@@ -27,10 +27,15 @@ export function getState(): SharedState {
 }
 
 export function buildMediaOptions(settings: Settings): string[] {
+  const cache = Math.max(settings.networkCache, 600)
   const options = [
-    `:network-caching=${settings.networkCache}`,
-    `:live-caching=${settings.networkCache}`,
+    `:network-caching=${cache}`,
+    `:live-caching=${cache}`,
+    `:file-caching=${cache}`,
     `:h264-threads=${settings.h264Threads}`,
+    ':no-drop-late-frames',
+    ':no-skip-frames',
+    ':clock-synchro=0',
   ]
   if (settings.avcodecHwDisabled) {
     options.push(':avcodec-hw=disabled')

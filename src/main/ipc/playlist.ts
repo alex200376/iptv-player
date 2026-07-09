@@ -114,13 +114,14 @@ let _checkCancelToken = 0
 // ── Types ────────────────────────────────────────────────────────────
 type ProbeResult = 'online' | 'offline' | 'unknown'
 
-type ProtocolType = 'hls' | 'http' | 'm3u' | 'rtmp' | 'rtsp' | 'udp' | 'unknown'
+type ProtocolType = 'hls' | 'http' | 'm3u' | 'ts' | 'rtmp' | 'rtsp' | 'udp' | 'unknown'
 
 // ── Protocol detection ───────────────────────────────────────────────
 function detectProtocol(url: string): ProtocolType {
   if (/m3u8/i.test(url)) return 'hls'
   if (/^https?:\/\//i.test(url)) {
     if (/\.m3u(?:[^8]|$)/i.test(url)) return 'm3u'
+    if (/\.ts(?:\?|#|$)/i.test(url)) return 'ts'
     return 'http'
   }
   if (/^rtmp[s]?:\/\//i.test(url)) return 'rtmp'
@@ -188,6 +189,45 @@ async function probeHls(url: string): Promise<ProbeResult> {
   }
 }
 
+// ── Magic-byte helpers ───────────────────────────────────────────────
+function validateTs(bytes: Uint8Array): boolean {
+  if (bytes[0] !== 0x47) return false
+  const TS_PACKET = 188
+  let syncCount = 1
+  for (let k = 1; k < 5; k++) {
+    const off = k * TS_PACKET
+    if (off < bytes.length && bytes[off] === 0x47) syncCount++
+  }
+  if (syncCount < 3) return false
+  // Check for PAT (PID 0x0000) or PMT (PID 0x1000) in first 5 packets
+  for (let p = 0; p < 5; p++) {
+    const off = p * TS_PACKET + 1
+    if (off + 1 >= bytes.length) break
+    const pid = ((bytes[off] & 0x1F) << 8) | bytes[off + 1]
+    if (pid === 0x0000 || pid === 0x1000) return true
+  }
+  // No PAT/PMT found but sync is consistent — likely valid
+  return syncCount >= 4
+}
+
+function validateMp4(bytes: Uint8Array): boolean {
+  if (bytes.length < 12) return false
+  const tag = String.fromCharCode(bytes[4], bytes[5], bytes[6], bytes[7])
+  if (tag !== 'ftyp' && tag !== 'moov') return false
+  // Check for 'moov' (movie box) or 'mdat' (media data) within first 64KB
+  const sample = String.fromCharCode(...Array.from(bytes.slice(0, Math.min(bytes.length, 65536))))
+  return sample.includes('moov') || sample.includes('mdat')
+}
+
+function validateFlv(bytes: Uint8Array): boolean {
+  if (bytes[0] !== 0x46 || bytes[1] !== 0x4C || bytes[2] !== 0x56) return false
+  if (bytes.length < 13) return false
+  // FLV header: "FLV" + version(1) + flags(1) + headerSize(4)
+  const hasAudio = !!(bytes[4] & 4)
+  const hasVideo = !!(bytes[4] & 1)
+  return hasAudio || hasVideo
+}
+
 // ── HTTP(S) stream probe ─────────────────────────────────────────────
 async function probeHttp(url: string): Promise<ProbeResult> {
   try {
@@ -196,7 +236,7 @@ async function probeHttp(url: string): Promise<ProbeResult> {
     const res = await net.fetch(url, {
       method: 'GET',
       headers: {
-        Range: 'bytes=0-65535',
+        Range: 'bytes=0-131071',
         'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18',
         Accept: '*/*',
         'Icy-MetaData': '1',
@@ -204,15 +244,14 @@ async function probeHttp(url: string): Promise<ProbeResult> {
       signal: controller.signal,
     })
 
-    // Read first chunk (up to 64KB) for magic-byte analysis
-    let bodyChunk = ''
+    // Read first available chunk for magic-byte analysis.
+    // Do NOT loop — live streams trickle data slowly and would block.
+    let bytes = new Uint8Array(0)
     try {
       const reader = res.body?.getReader()
       if (reader) {
-        const { value } = await reader.read()
-        if (value) {
-          bodyChunk = new TextDecoder().decode(value.slice(0, 65536))
-        }
+        const { done, value } = await reader.read()
+        if (!done && value) bytes = value
         reader.cancel()
       }
     } catch {}
@@ -231,19 +270,18 @@ async function probeHttp(url: string): Promise<ProbeResult> {
       ct.includes('application/vnd.apple.mpegurl')
     ) return 'online'
 
-    // Magic-byte detection
-    if (bodyChunk) {
-      const encoder = new TextEncoder()
-      const bytes = encoder.encode(bodyChunk)
-      if (bytes[0] === 0x46 && bytes[1] === 0x4C && bytes[2] === 0x56) return 'online'   // FLV
-      if (bytes[0] === 0x47) return 'online'                                               // MPEG-TS sync byte
-      if (bytes.length >= 8) {
-        const tag = String.fromCharCode(bytes[4], bytes[5], bytes[6], bytes[7])
-        if (tag === 'ftyp' || tag === 'moov') return 'online'                              // MP4 / QuickTime
-      }
-      if (bytes[0] === 0x00 && bytes[1] === 0x00 && bytes[2] === 0x01 && bytes[3] === 0xBA) return 'online'  // MPEG-PS
-      if (bytes[0] === 0x1A && bytes[1] === 0x45 && bytes[2] === 0xDF && bytes[3] === 0xA3) return 'online'  // WebM / Matroska
-    }
+    if (bytes.length < 4) return 'offline'
+
+    // FLV
+    if (validateFlv(bytes)) return 'online'
+    // MPEG-TS — validate sync byte structure
+    if (validateTs(bytes)) return 'online'
+    // MP4 / QuickTime
+    if (bytes.length >= 8 && validateMp4(bytes)) return 'online'
+    // MPEG-PS / VOB
+    if (bytes[0] === 0x00 && bytes[1] === 0x00 && bytes[2] === 0x01 && bytes[3] === 0xBA) return 'online'
+    // WebM / Matroska
+    if (bytes[0] === 0x1A && bytes[1] === 0x45 && bytes[2] === 0xDF && bytes[3] === 0xA3) return 'online'
 
     return 'offline'
   } catch {
@@ -324,6 +362,11 @@ async function probeChannel(url: string): Promise<{ result: ProbeResult; skipped
     case 'm3u': {
       const result = await probeM3u(url)
       console.log('[probe]', 'm3u', url.slice(0, 60), result)
+      return { result }
+    }
+    case 'ts': {
+      const result = await probeHttp(url)
+      console.log('[probe]', 'ts', url.slice(0, 60), result)
       return { result }
     }
     case 'rtmp': {
@@ -472,14 +515,35 @@ export function registerPlaylistIpc() {
   ipcMain.handle('import-m3u-url', async (_event, url: string) => {
     try {
       const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 10000)
-      const res = await net.fetch(url, { signal: controller.signal })
+      const timeout = setTimeout(() => controller.abort(), 15000)
+      const res = await net.fetch(url, {
+        headers: {
+          'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18',
+          Accept: '*/*',
+        },
+        signal: controller.signal,
+      })
       clearTimeout(timeout)
       if (!res.ok) return { channels: [], error: `HTTP ${res.status}: ${res.statusText}` }
       const content = await res.text()
       if (!content.trim()) return { channels: [], error: '\u54cd\u5e94\u5185\u5bb9\u4e3a\u7a7a' }
       const playlistId = nextPlaylistId()
       const channels = await parseM3U(content, playlistId)
+
+      // If no channels were parsed, the response is not an IPTV M3U
+      // playlist. Treat the URL as a single playable stream — this
+      // covers direct .ts streams, HLS manifests, and other URLs.
+      if (channels.length === 0) {
+        const name = url.split('/').pop()?.split('?')[0] || url.slice(0, 40)
+        channels.push({
+          id: urlToId(url),
+          name,
+          url,
+          group: '未分组',
+          playlistId,
+        })
+      }
+
       return {
         channels,
         playlistId,

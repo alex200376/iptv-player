@@ -89,10 +89,14 @@ export default function ImportDialog({
       const result = await window.electronAPI.importM3UFromUrl(url.trim())
       if (result.error) {
         setError(result.error)
-      } else if (result.channels.length > 0 && result.playlistId) {
-        mergeChannels(result.channels, result.playlistId, result.playlistName || url.trim().slice(0, 50), 'url', result.url)
-        if (!error) {
-          setTimeout(() => { onOpenChange(false); setUrl('') }, 1200)
+      } else if (result.playlistId) {
+        if (result.channels.length > 0) {
+          mergeChannels(result.channels, result.playlistId, result.playlistName || url.trim().slice(0, 50), 'url', result.url)
+          if (!error) {
+            setTimeout(() => { onOpenChange(false); setUrl('') }, 1200)
+          }
+        } else {
+          setError('未找到频道，请确认链接为有效 M3U/M3U8 播放列表')
         }
       }
     } finally {

@@ -60,12 +60,16 @@ export default function App() {
     })
     const offCheckDone = window.electronAPI.onChannelsCheckDone((channels) => {
       if (channels.length > 0) setChannels(channels as any)
-      useStore.setState({ checkingAll: false })
+      useStore.setState({ checkRunning: false })
+    })
+    const offCheckLog = window.electronAPI.onChannelsCheckLog((log) => {
+      useStore.getState().appendCheckLog(log)
     })
 
     return () => {
       offRefreshed?.()
       offCheckDone?.()
+      offCheckLog?.()
     }
   }, [setChannels, loadUserData])
 

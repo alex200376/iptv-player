@@ -58,8 +58,12 @@ interface PlayerStore {
   importEpgFromUrl: (url: string) => Promise<{ success: boolean; count: number; error?: string }>
   removeEpgSource: (url: string) => void
 
-  checkingAll: boolean
-  checkAllChannels: () => Promise<void>
+  checkLogs: Array<{ name: string; url: string; protocol: string; result: string; checked: number; total: number }>
+  checkRunning: boolean
+  checkTotal: number
+  appendCheckLog: (log: { name: string; url: string; protocol: string; result: string; checked: number; total: number }) => void
+  setCheckRunning: (v: boolean) => void
+  resetCheck: () => void
   updateChannelStatus: (id: string, status: 'online' | 'offline', lastCheckedAt: number) => void
 }
 
@@ -87,7 +91,9 @@ export const useStore = create<PlayerStore>((set) => ({
   historyEntries: [],
   playlists: [],
   epgSources: [],
-  checkingAll: false,
+  checkLogs: [],
+  checkRunning: false,
+  checkTotal: 0,
 
   setChannels: (channels) => set({ groups: groupChannels(channels) }),
   setCurrentChannel: (channel) => set({ currentChannel: channel }),
@@ -206,15 +212,9 @@ export const useStore = create<PlayerStore>((set) => ({
     return { epgSources, epgCache }
   }),
 
-  checkAllChannels: async () => {
-    set({ checkingAll: true })
-    try {
-      const result = await window.electronAPI.checkAllChannels()
-      if (result.channels?.length) set({ groups: groupChannels(result.channels) })
-    } finally {
-      set({ checkingAll: false })
-    }
-  },
+  appendCheckLog: (log) => set((s) => ({ checkLogs: [...s.checkLogs, log], checkTotal: log.total })),
+  setCheckRunning: (v) => set({ checkRunning: v }),
+  resetCheck: () => set({ checkLogs: [], checkRunning: false, checkTotal: 0 }),
 
   updateChannelStatus: (id, status, lastCheckedAt) => set((s) => {
     const groups = s.groups.map((g) => ({
