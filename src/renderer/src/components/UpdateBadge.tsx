@@ -3,13 +3,20 @@ import { useState, useEffect } from 'react'
 export default function UpdateBadge({ onShowDialog }: { onShowDialog: () => void }) {
   const [available, setAvailable] = useState<{ version: string } | null>(null)
 
+  // BUG FIX: both listeners had no removeListener. TopBar (and therefore
+  // UpdateBadge) is always mounted, so with StrictMode double-mount these
+  // accumulated once per dev session reload.
   useEffect(() => {
-    window.electronAPI.onUpdateAvailable((info) => {
+    const offAvailable = window.electronAPI.onUpdateAvailable((info) => {
       setAvailable(info)
     })
-    window.electronAPI.onUpdateDownloaded(() => {
+    const offDownloaded = window.electronAPI.onUpdateDownloaded(() => {
       setAvailable(null)
     })
+    return () => {
+      offAvailable?.()
+      offDownloaded?.()
+    }
   }, [])
 
   if (!available) return null

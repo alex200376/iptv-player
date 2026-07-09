@@ -41,6 +41,13 @@ interface UserData {
   epgSources?: EpgSource[]
 }
 
+// Helper: register a listener and return a cleanup function.
+function on<T>(channel: string, cb: (payload: T) => void): () => void {
+  const wrapper = (_event: Electron.IpcRendererEvent, payload: T) => cb(payload)
+  ipcRenderer.on(channel, wrapper)
+  return () => ipcRenderer.removeListener(channel, wrapper)
+}
+
 const api = {
   switchChannel: (url: string) => ipcRenderer.invoke('switch-channel', url),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
@@ -48,9 +55,12 @@ const api = {
   checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
   downloadUpdate: () => ipcRenderer.invoke('download-update'),
   installUpdate: () => ipcRenderer.invoke('install-update'),
-  onUpdateStatus: (callback: (text: string) => void) => {
-    ipcRenderer.on('update-status', (_event, text) => callback(text))
-  },
+
+  // All on* methods now return an unsubscribe () => void so components can
+  // call it from their useEffect cleanup and avoid listener accumulation.
+  onUpdateStatus: (callback: (text: string) => void) =>
+    on<string>('update-status', callback),
+
   onUpdateDownloadProgress: (
     callback: (progress: {
       percent: number
@@ -58,17 +68,15 @@ const api = {
       total: number
       transferred: number
     }) => void,
-  ) => {
-    ipcRenderer.on('update-download-progress', (_event, progress) => callback(progress))
-  },
-  onUpdateDownloaded: (callback: (info: { version: string }) => void) => {
-    ipcRenderer.on('update-downloaded', (_event, info) => callback(info))
-  },
+  ) => on('update-download-progress', callback),
+
+  onUpdateDownloaded: (callback: (info: { version: string }) => void) =>
+    on<{ version: string }>('update-downloaded', callback),
+
   onUpdateAvailable: (
     callback: (info: { version: string; releaseDate?: string; releaseNotes?: string }) => void,
-  ) => {
-    ipcRenderer.on('update-available', (_event, info) => callback(info))
-  },
+  ) => on('update-available', callback),
+
   importM3U: () => ipcRenderer.invoke('import-m3u'),
   importM3UFromUrl: (url: string) => ipcRenderer.invoke('import-m3u-url', url),
   hidePlayer: () => ipcRenderer.invoke('hide-player'),
@@ -86,7 +94,6 @@ const api = {
   saveUserData: (data: UserData) => ipcRenderer.invoke('save-user-data', data),
   loadUserData: () => ipcRenderer.invoke('load-user-data'),
 
-  // Playback controls
   togglePlay: () => ipcRenderer.invoke('toggle-play'),
   setVolume: (vol: number) => ipcRenderer.invoke('set-volume', vol),
   toggleMute: () => ipcRenderer.invoke('toggle-mute'),
@@ -101,14 +108,11 @@ const api = {
   fetchEpg: (tvgUrl: string) => ipcRenderer.invoke('fetch-epg', tvgUrl),
   importEpgFromUrl: (url: string) => ipcRenderer.invoke('import-epg-url', url),
 
-  // Playlist refresh
   refreshPlaylists: () => ipcRenderer.invoke('refresh-playlists'),
   refreshPlaylistUrl: (url: string) => ipcRenderer.invoke('refresh-playlist-url', url),
-  onPlaylistsRefreshed: (callback: (channels: unknown[]) => void) => {
-    ipcRenderer.on('playlists-refreshed', (_event, channels) => callback(channels))
-  },
+  onPlaylistsRefreshed: (callback: (channels: unknown[]) => void) =>
+    on<unknown[]>('playlists-refreshed', callback),
 
-  // Stream checker
   checkChannelUrl: (url: string) => ipcRenderer.invoke('check-channel-url', url),
   checkAllChannels: () => ipcRenderer.invoke('check-all-channels'),
   removeOfflineChannels: () =>
@@ -118,31 +122,30 @@ const api = {
     }>,
   onChannelsCheckProgress: (
     callback: (progress: { checked: number; total: number }) => void,
-  ) => {
-    ipcRenderer.on('channels-check-progress', (_event, progress) => callback(progress))
-  },
-  onChannelsCheckDone: (callback: (channels: unknown[]) => void) => {
-    ipcRenderer.on('channels-check-done', (_event, channels) => callback(channels))
-  },
+  ) => on('channels-check-progress', callback),
 
-  // Picture-in-Picture
+  onChannelsCheckDone: (callback: (channels: unknown[]) => void) =>
+    on<unknown[]>('channels-check-done', callback),
+
   togglePip: () => ipcRenderer.invoke('toggle-pip'),
-  onPipStateChange: (callback: (active: boolean) => void) => {
-    ipcRenderer.on('pip-state-changed', (_event, active) => callback(active))
-  },
+  onPipStateChange: (callback: (active: boolean) => void) =>
+    on<boolean>('pip-state-changed', callback),
 
-  // Player state — expose removeListener so components can clean up
-  onPlayerBuffering: (callback: () => void) => {
-    ipcRenderer.on('player-buffering', callback)
-    return () => ipcRenderer.removeListener('player-buffering', callback)
+  // Player state events — all return unsubscribe functions.
+  onPlayerBuffering: (callback: () => void): (() => void) => {
+    const wrapper = () => callback()
+    ipcRenderer.on('player-buffering', wrapper)
+    return () => ipcRenderer.removeListener('player-buffering', wrapper)
   },
-  onPlayerPlaying: (callback: () => void) => {
-    ipcRenderer.on('player-playing', callback)
-    return () => ipcRenderer.removeListener('player-playing', callback)
+  onPlayerPlaying: (callback: () => void): (() => void) => {
+    const wrapper = () => callback()
+    ipcRenderer.on('player-playing', wrapper)
+    return () => ipcRenderer.removeListener('player-playing', wrapper)
   },
-  onPlayerError: (callback: () => void) => {
-    ipcRenderer.on('player-error', callback)
-    return () => ipcRenderer.removeListener('player-error', callback)
+  onPlayerError: (callback: () => void): (() => void) => {
+    const wrapper = () => callback()
+    ipcRenderer.on('player-error', wrapper)
+    return () => ipcRenderer.removeListener('player-error', wrapper)
   },
 }
 

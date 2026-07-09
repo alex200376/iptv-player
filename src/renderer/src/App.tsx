@@ -24,7 +24,6 @@ export default function App() {
   const loadUserData = useStore((s) => s.loadUserData)
   const epgSources = useStore((s) => s.epgSources)
   const loadEpg = useStore((s) => s.loadEpg)
-  const checkAllChannels = useStore((s) => s.checkAllChannels)
   const { loadSettings, settings } = useSettingsStore()
 
   useEffect(() => {
@@ -39,10 +38,15 @@ export default function App() {
   }, [])
 
   useEffect(() => { loadSettings() }, [loadSettings])
+
   useEffect(() => {
     if (settings.theme) applyTheme(settings.theme as import('./themes').ThemeId)
     document.documentElement.setAttribute('data-font-size', settings.fontSize)
   }, [settings.theme, settings.fontSize])
+
+  // BUG FIX: onPlaylistsRefreshed / onChannelsCheckDone registered ipcRenderer.on()
+  // listeners with no removeListener — accumulated on every StrictMode remount.
+  // Now using the unsubscribe-returning wrappers exposed from preload.
   useEffect(() => {
     window.electronAPI.loadChannels().then((channels) => {
       if (channels.length > 0) setChannels(channels)
@@ -50,15 +54,27 @@ export default function App() {
     window.electronAPI.loadUserData().then((data) => {
       loadUserData(data)
     })
-    window.electronAPI.onPlaylistsRefreshed((channels) => {
-      if (channels.length > 0) setChannels(channels)
+
+    const offRefreshed = window.electronAPI.onPlaylistsRefreshed((channels) => {
+      if (channels.length > 0) setChannels(channels as any)
     })
-    window.electronAPI.onChannelsCheckDone((channels) => {
-      if (channels.length > 0) setChannels(channels)
+    const offCheckDone = window.electronAPI.onChannelsCheckDone((channels) => {
+      if (channels.length > 0) setChannels(channels as any)
       useStore.setState({ checkingAll: false })
     })
+
+    return () => {
+      offRefreshed?.()
+      offCheckDone?.()
+    }
   }, [setChannels, loadUserData])
-  useEffect(() => { document.title = currentChannel ? `${currentChannel.name} - IPTV Player` : 'IPTV Player' }, [currentChannel])
+
+  useEffect(() => {
+    document.title = currentChannel
+      ? `${currentChannel.name} - IPTV Player`
+      : 'IPTV Player'
+  }, [currentChannel])
+
   useEffect(() => {
     for (const source of epgSources) {
       loadEpg(source.url)
@@ -87,7 +103,6 @@ export default function App() {
     }
   }, [])
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName
@@ -108,11 +123,15 @@ export default function App() {
           break
         case 'ArrowUp':
           e.preventDefault()
-          window.electronAPI.setVolume(Math.min(100, (parseInt(localStorage.getItem('volume') || '80')) + 5))
+          window.electronAPI.setVolume(
+            Math.min(100, parseInt(localStorage.getItem('volume') || '80') + 5),
+          )
           break
         case 'ArrowDown':
           e.preventDefault()
-          window.electronAPI.setVolume(Math.max(0, (parseInt(localStorage.getItem('volume') || '80')) - 5))
+          window.electronAPI.setVolume(
+            Math.max(0, parseInt(localStorage.getItem('volume') || '80') - 5),
+          )
           break
         case 'f':
         case 'F':
@@ -136,16 +155,29 @@ export default function App() {
           }
           break
         case 'Escape':
-          if (settingsOpen) { closeSettings(); return }
+          if (settingsOpen) {
+            closeSettings()
+            return
+          }
           window.electronAPI.exitFullscreen()
           break
       }
 
       if (e.ctrlKey || e.metaKey) {
         switch (e.key) {
-          case 'b': e.preventDefault(); toggleSidebar(); break
-          case ',': e.preventDefault(); if (settingsOpen) closeSettings(); else openSettings(); break
-          case 'i': e.preventDefault(); setShowOnboarding(true); break
+          case 'b':
+            e.preventDefault()
+            toggleSidebar()
+            break
+          case ',':
+            e.preventDefault()
+            if (settingsOpen) closeSettings()
+            else openSettings()
+            break
+          case 'i':
+            e.preventDefault()
+            setShowOnboarding(true)
+            break
         }
       }
     }
@@ -200,11 +232,17 @@ function StatusBar() {
   const [pipActive, setPipActive] = useState(false)
   const { settings } = useSettingsStore()
 
+  // BUG FIX: onPipStateChange had no cleanup — listener accumulated on remounts.
   useEffect(() => {
-    window.electronAPI.onPipStateChange((active) => setPipActive(active))
+    const off = window.electronAPI.onPipStateChange((active) => setPipActive(active))
+    return () => off?.()
   }, [])
 
-  const isProxied = settings.streamProxy && (currentChannel?.url?.startsWith('rtmp') || currentChannel?.url?.startsWith('rtsp') || currentChannel?.url?.startsWith('udp:'))
+  const isProxied =
+    settings.streamProxy &&
+    (currentChannel?.url?.startsWith('rtmp') ||
+      currentChannel?.url?.startsWith('rtsp') ||
+      currentChannel?.url?.startsWith('udp:'))
 
   return (
     <div className="status-bar">
@@ -214,12 +252,8 @@ function StatusBar() {
             <span className="live-dot" />
             正在播放 {currentChannel.name}
           </span>
-          {pipActive && (
-            <span className="text-xs text-tv-accent ml-1">[画中画]</span>
-          )}
-          {isProxied && (
-            <span className="text-xs text-tv-accent ml-1">[代理]</span>
-          )}
+          {pipActive && <span className="text-xs text-tv-accent ml-1">[画中画]</span>}
+          {isProxied && <span className="text-xs text-tv-accent ml-1">[代理]</span>}
           <span className="text-tv-text-secondary">|</span>
         </>
       ) : (

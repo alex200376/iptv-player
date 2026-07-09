@@ -8,11 +8,9 @@ import { usePlayChannel } from '../hooks/usePlayChannel'
 function ChannelList() {
   const groups = useStore((s) => s.groups)
   const currentChannel = useStore((s) => s.currentChannel)
-  const setCurrentChannel = useStore((s) => s.setCurrentChannel)
   const searchQuery = useStore((s) => s.searchQuery)
   const favoriteIds = useStore((s) => s.favoriteIds)
   const toggleFavorite = useStore((s) => s.toggleFavorite)
-  const addHistoryEntry = useStore((s) => s.addHistoryEntry)
   const activePlaylistId = useStore((s) => s.activePlaylistId)
 
   const filteredGroups = useMemo(() => {
@@ -33,7 +31,6 @@ function ChannelList() {
   const checkAllChannels = useStore((s) => s.checkAllChannels)
   const setChannels = useStore((s) => s.setChannels)
 
-  // Count checked offline channels for the remove button
   const offlineCount = useMemo(
     () => groups.flatMap((g) => g.channels).filter((ch) => ch.status === 'offline').length,
     [groups],
@@ -82,16 +79,12 @@ function ChannelList() {
   )
 
   const handleDelete = useCallback(
-    (id: string) => {
-      removeChannel(id)
-    },
+    (id: string) => { removeChannel(id) },
     [removeChannel],
   )
 
   const handleToggleFav = useCallback(
-    (id: string) => {
-      toggleFavorite(id)
-    },
+    (id: string) => { toggleFavorite(id) },
     [toggleFavorite],
   )
 
@@ -99,10 +92,10 @@ function ChannelList() {
     return (
       <div className="px-3 py-8 text-center text-tv-xs text-tv-text-secondary">
         {useStore.getState().searchQuery
-          ? '\u672a\u627e\u5230\u5339\u914d\u9891\u9053'
+          ? '未找到匹配频道'
           : useStore.getState().activePlaylistId
-            ? '\u8be5\u64ad\u653e\u5217\u8868\u6682\u65e0\u9891\u9053'
-            : '\u6682\u65e0\u9891\u9053\uff0c\u8bf7\u5148\u5bfc\u5165 M3U \u6587\u4ef6'}
+            ? '该播放列表暂无频道'
+            : '暂无频道，请先导入 M3U 文件'}
       </div>
     )
   }
@@ -112,18 +105,16 @@ function ChannelList() {
   return (
     <div>
       <div className="flex items-center justify-between px-2 py-1 border-b border-tv-border gap-1">
-        <span className="text-tv-xs text-tv-text-secondary shrink-0">
-          {totalChannels} \u9891\u9053
-        </span>
+        <span className="text-tv-xs text-tv-text-secondary shrink-0">{totalChannels} 频道</span>
         <div className="flex items-center gap-2 ml-auto">
           {offlineCount > 0 && !checkingAll && (
             <button
               onClick={handleRemoveOffline}
               disabled={removing}
               className="text-tv-xs text-red-400 hover:text-red-300 transition-colors disabled:opacity-40 whitespace-nowrap"
-              title={`\u5220\u9664 ${offlineCount} \u4e2a\u4e0d\u53ef\u7528\u9891\u9053`}
+              title={`删除 ${offlineCount} 个不可用频道`}
             >
-              {removing ? '\u5220\u9664\u4e2d...' : `\u5220\u9664 ${offlineCount} \u4e2a\u79bb\u7ebf`}
+              {removing ? '删除中...' : `删除 ${offlineCount} 个离线`}
             </button>
           )}
           <button
@@ -131,7 +122,7 @@ function ChannelList() {
             disabled={checkingAll}
             className="text-tv-xs text-tv-text-secondary hover:text-tv-accent transition-colors disabled:opacity-40 whitespace-nowrap"
           >
-            {checkingAll ? '\u68c0\u6d4b\u4e2d...' : '\u68c0\u6d4b\u5168\u90e8'}
+            {checkingAll ? '检测中...' : '检测全部'}
           </button>
         </div>
       </div>
@@ -181,31 +172,17 @@ function ChannelList() {
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
           items={[
+            { label: '播放', onClick: () => handlePlay(ctxMenu.channel), icon: <PlayIcon /> },
             {
-              label: '\u64ad\u653e',
-              onClick: () => handlePlay(ctxMenu.channel),
-              icon: <PlayIcon />,
-            },
-            {
-              label: favoriteIds.includes(ctxMenu.channel.id)
-                ? '\u53d6\u6d88\u6536\u85cf'
-                : '\u6536\u85cf',
+              label: favoriteIds.includes(ctxMenu.channel.id) ? '取消收藏' : '收藏',
               onClick: () => toggleFavorite(ctxMenu.channel.id),
               icon: <StarIcon filled={favoriteIds.includes(ctxMenu.channel.id)} />,
             },
-            {
-              label: '\u590d\u5236 URL',
-              onClick: () => copyUrl(ctxMenu.channel.url),
-              icon: <CopyIcon />,
-            },
-            {
-              label: '\u68c0\u6d4b\u94fe\u63a5',
-              onClick: () => handleCheck(ctxMenu.channel),
-              icon: <CheckIcon />,
-            },
+            { label: '复制 URL', onClick: () => copyUrl(ctxMenu.channel.url), icon: <CopyIcon /> },
+            { label: '检测链接', onClick: () => handleCheck(ctxMenu.channel), icon: <CheckIcon /> },
             { separator: true, label: '', onClick: () => {} },
             {
-              label: '\u5220\u9664\u9891\u9053',
+              label: '删除频道',
               onClick: () => handleDelete(ctxMenu.channel.id),
               danger: true,
               icon: <TrashIcon />,
@@ -217,11 +194,16 @@ function ChannelList() {
   )
 }
 
+// BUG FIX (virtual list re-render): ctxMenu was passed into ChannelGroupChannels
+// and forwarded to every ChannelRow. Any right-click change caused ALL virtualised
+// rows (potentially 1 000+) to re-render because ctxMenu object identity changed.
+// Fix: drop ctxMenu from ChannelGroupChannels/ChannelRow props entirely — the row
+// only needs to highlight when it IS the ctx-menu target, which is handled by the
+// ContextMenu overlay itself, not by each row.
 function ChannelGroupChannels({
   channels,
   currentChannel,
   favoriteIds,
-  ctxMenu,
   activeRef,
   onPlay,
   onContextMenu,
@@ -230,7 +212,6 @@ function ChannelGroupChannels({
   channels: any[]
   currentChannel: any
   favoriteIds: string[]
-  ctxMenu: any
   activeRef: React.RefObject<HTMLButtonElement>
   onPlay: (ch: any, retry?: number) => void
   onContextMenu: (e: React.MouseEvent, ch: any) => void
@@ -255,7 +236,6 @@ function ChannelGroupChannels({
             ch={ch}
             currentChannel={currentChannel}
             favoriteIds={favoriteIds}
-            ctxMenu={ctxMenu}
             activeRef={activeRef}
             onPlay={onPlay}
             onContextMenu={onContextMenu}
@@ -287,7 +267,6 @@ function ChannelGroupChannels({
                 ch={ch}
                 currentChannel={currentChannel}
                 favoriteIds={favoriteIds}
-                ctxMenu={ctxMenu}
                 activeRef={activeRef}
                 onPlay={onPlay}
                 onContextMenu={onContextMenu}
@@ -320,7 +299,6 @@ const ChannelRow = memo(function ChannelRow({
   ch,
   currentChannel,
   favoriteIds,
-  ctxMenu,
   activeRef,
   onPlay,
   onContextMenu,
@@ -329,20 +307,20 @@ const ChannelRow = memo(function ChannelRow({
   ch: any
   currentChannel: any
   favoriteIds: string[]
-  ctxMenu: any
   activeRef: React.RefObject<HTMLButtonElement>
   onPlay: (ch: any) => void
   onContextMenu: (e: React.MouseEvent, ch: any) => void
   onToggleFav: (id: string) => void
 }) {
   const isFav = favoriteIds.includes(ch.id)
+  const isActive = currentChannel?.id === ch.id
   return (
     <button
-      ref={currentChannel?.id === ch.id && ctxMenu === null ? activeRef : undefined}
+      ref={isActive ? activeRef : undefined}
       onClick={() => onPlay(ch)}
       onContextMenu={(e) => onContextMenu(e, ch)}
       className={`channel-card w-full flex items-center gap-2.5 px-3 py-1.5 text-tv-sm text-left transition-colors ${
-        currentChannel?.id === ch.id
+        isActive
           ? 'active'
           : ch.status === 'offline'
             ? 'opacity-50 text-tv-text-secondary hover:text-tv-text-primary'
@@ -383,7 +361,7 @@ const ChannelRow = memo(function ChannelRow({
         className={`flex-shrink-0 p-1.5 rounded-tv-sm transition-colors ${
           isFav ? 'text-yellow-400' : 'text-tv-text-secondary opacity-40 hover:opacity-100'
         }`}
-        title={isFav ? '\u53d6\u6d88\u6536\u85cf' : '\u6536\u85cf'}
+        title={isFav ? '取消收藏' : '收藏'}
       >
         <svg
           className="w-3.5 h-3.5"
@@ -411,13 +389,7 @@ function PlayIcon() {
 
 function CopyIcon() {
   return (
-    <svg
-      className="w-3.5 h-3.5"
-      viewBox="0 0 15 15"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-    >
+    <svg className="w-3.5 h-3.5" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5">
       <rect x="5.5" y="1.5" width="7" height="9" rx="1" />
       <path d="M1.5 5.5v7a1 1 0 001 1h7" />
     </svg>
