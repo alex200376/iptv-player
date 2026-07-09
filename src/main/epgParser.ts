@@ -15,38 +15,56 @@ function parseXmltvTime(timeStr: string): Date {
   return new Date(Number(y), Number(m) - 1, Number(d), Number(h), Number(min), Number(s))
 }
 
-export function parseXmltv(xml: string): EpgProgram[] {
-  const programs: EpgProgram[] = []
+/**
+ * Parse XMLTV content in chunks to avoid blocking the main-process event loop.
+ * Large EPG files (>10 MB) can contain tens of thousands of <programme> nodes;
+ * without yielding, IPC calls freeze for several seconds.
+ */
+export function parseXmltv(xml: string): Promise<EpgProgram[]> {
+  return new Promise((resolve) => {
+    const programs: EpgProgram[] = []
+    const programmeRegex = /<programme\s+([^>]*)>([\s\S]*?)<\/programme>/gi
+    const CHUNK = 200
 
-  const programmeRegex = /<programme\s+([^>]*)>([\s\S]*?)<\/programme>/gi
-  let progMatch: RegExpExecArray | null
+    function processChunk() {
+      let count = 0
+      let progMatch: RegExpExecArray | null
 
-  while ((progMatch = programmeRegex.exec(xml)) !== null) {
-    const attrs = progMatch[1]
-    const body = progMatch[2]
+      while (count < CHUNK && (progMatch = programmeRegex.exec(xml)) !== null) {
+        count++
+        const attrs = progMatch[1]
+        const body = progMatch[2]
 
-    const channelMatch = attrs.match(/channel="([^"]*)"/)
-    const startMatch = attrs.match(/start="([^"]*)"/)
-    const stopMatch = attrs.match(/stop="([^"]*)"/)
-    if (!channelMatch || !startMatch) continue
+        const channelMatch = attrs.match(/channel="([^"]*)"/)
+        const startMatch = attrs.match(/start="([^"]*)"/)
+        const stopMatch = attrs.match(/stop="([^"]*)"/)
+        if (!channelMatch || !startMatch) continue
 
-    const title = extractTag(body, 'title')
-    const desc = extractTag(body, 'desc')
-    const category = extractTag(body, 'category')
-    const iconMatch = body.match(/<icon\s+src="([^"]*)"/)
+        const title = extractTag(body, 'title')
+        const desc = extractTag(body, 'desc')
+        const category = extractTag(body, 'category')
+        const iconMatch = body.match(/<icon\s+src="([^"]*)"/)
 
-    programs.push({
-      channelTvgId: channelMatch[1],
-      start: parseXmltvTime(startMatch[1]),
-      stop: stopMatch ? parseXmltvTime(stopMatch[1]) : new Date(Date.now() + 86400000),
-      title: title || '未知节目',
-      description: desc,
-      category,
-      icon: iconMatch?.[1],
-    })
-  }
+        programs.push({
+          channelTvgId: channelMatch[1],
+          start: parseXmltvTime(startMatch[1]),
+          stop: stopMatch ? parseXmltvTime(stopMatch[1]) : new Date(Date.now() + 86400000),
+          title: title || '未知节目',
+          description: desc,
+          category,
+          icon: iconMatch?.[1],
+        })
+      }
 
-  return programs
+      if (programmeRegex.lastIndex > 0) {
+        setImmediate(processChunk)
+      } else {
+        resolve(programs)
+      }
+    }
+
+    processChunk()
+  })
 }
 
 function extractTag(xml: string, tag: string): string | undefined {

@@ -21,45 +21,63 @@ export function urlToId(url: string): string {
   return `ch-${Math.abs(hash).toString(36)}`
 }
 
-export function parseM3U(content: string, playlistId?: string): Channel[] {
-  const lines = content.split('\n')
-  const channels: Channel[] = []
-  let current: Partial<Channel> | null = null
+/**
+ * Parse M3U content without blocking the event loop.
+ * Large playlists (10 000+ channels) are processed in 500-line chunks
+ * with a setImmediate yield between each chunk so IPC calls can
+ * still be serviced during parsing.
+ */
+export function parseM3U(content: string, playlistId?: string): Promise<Channel[]> {
+  return new Promise((resolve) => {
+    const lines = content.split('\n')
+    const channels: Channel[] = []
+    let current: Partial<Channel> | null = null
+    let i = 0
+    const CHUNK = 500
 
-  for (let rawLine of lines) {
-    const line = rawLine.trim()
-    if (!line || line.startsWith('#EXTM3U')) continue
+    function processChunk() {
+      const end = Math.min(i + CHUNK, lines.length)
+      for (; i < end; i++) {
+        const line = lines[i].trim()
+        if (!line || line.startsWith('#EXTM3U')) continue
 
-    if (line.startsWith('#EXTINF:')) {
-      const group = line.match(/group-title="([^"]*)"/)?.[1]
-      const logo = line.match(/tvg-logo="([^"]*)"/)?.[1]
-      const tvgId = line.match(/tvg-id="([^"]*)"/)?.[1]
-      const tvgUrl = line.match(/tvg-url="([^"]*)"/)?.[1]
-      const name = line.split(',').pop()?.trim()
-
-      current = {
-        group: group || '未分组',
-        logo,
-        tvgId,
-        tvgUrl,
-        name: name || '未知频道',
+        if (line.startsWith('#EXTINF:')) {
+          const group = line.match(/group-title="([^"]*)"/)?.[1]
+          const logo = line.match(/tvg-logo="([^"]*)"/)?.[1]
+          const tvgId = line.match(/tvg-id="([^"]*)"/)?.[1]
+          const tvgUrl = line.match(/tvg-url="([^"]*)"/)?.[1]
+          const name = line.split(',').pop()?.trim()
+          current = {
+            group: group || '未分组',
+            logo,
+            tvgId,
+            tvgUrl,
+            name: name || '未知频道',
+          }
+        } else if (line.startsWith('#')) {
+          continue
+        } else if (current) {
+          channels.push({
+            id: urlToId(line),
+            name: current.name || '未知频道',
+            url: line,
+            logo: current.logo,
+            group: current.group || '未分组',
+            tvgId: current.tvgId,
+            tvgUrl: current.tvgUrl,
+            playlistId,
+          })
+          current = null
+        }
       }
-    } else if (line.startsWith('#')) {
-      continue
-    } else if (current) {
-      channels.push({
-        id: urlToId(line),
-        name: current.name || '未知频道',
-        url: line,
-        logo: current.logo,
-        group: current.group || '未分组',
-        tvgId: current.tvgId,
-        tvgUrl: current.tvgUrl,
-        playlistId,
-      })
-      current = null
-    }
-  }
 
-  return channels
+      if (i < lines.length) {
+        setImmediate(processChunk)
+      } else {
+        resolve(channels)
+      }
+    }
+
+    processChunk()
+  })
 }

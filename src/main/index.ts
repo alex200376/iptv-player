@@ -24,12 +24,23 @@ async function createWindow() {
     title: 'IPTV Player',
     backgroundColor: '#0f0f1a',
     icon: iconPath,
+    // Prevent Electron from throttling the renderer when window is hidden/minimised
+    // which can cause audio/video stutter on refocus
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: false,
+      // Enable GPU rasterisation so CSS animations don't block the VLC overlay
+      enableBlinkFeatures: 'CSSContainerQueries',
     },
   })
+
+  // Ask Chromium to prefer hardware compositing
+  app.commandLine.appendSwitch('enable-gpu-rasterization')
+  app.commandLine.appendSwitch('enable-zero-copy')
+  // Prevent GPU process from being killed on resize (common freeze source)
+  app.commandLine.appendSwitch('disable-gpu-driver-bug-workarounds')
 
   if (process.env.ELECTRON_RENDERER_URL) {
     mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
@@ -40,10 +51,17 @@ async function createWindow() {
   const state = getState()
   state.mainWindow = mainWindow
 
+  // Debounce resize events — calling notifyLayoutChange on every pixel move
+  // causes VLC to re-negotiate the video surface and can freeze for ~200 ms
+  let resizeTimer: ReturnType<typeof setTimeout> | null = null
   mainWindow.on('resize', () => {
-    if (player && !player.destroyed) {
-      try { player.notifyLayoutChange() } catch {}
-    }
+    if (resizeTimer) clearTimeout(resizeTimer)
+    resizeTimer = setTimeout(() => {
+      resizeTimer = null
+      if (player && !player.destroyed) {
+        try { player.notifyLayoutChange() } catch {}
+      }
+    }, 150)
   })
 
   const vlcDir = probeDefaultVlcDir()

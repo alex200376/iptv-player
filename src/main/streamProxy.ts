@@ -22,7 +22,6 @@ let currentProcess: ChildProcess | null = null
 let currentStreamUrl = ''
 let currentScale: string | null = null
 
-// Debounce state for rapid stream switching
 let switchTimer: ReturnType<typeof setTimeout> | null = null
 let switchResolve: ((url: string) => void) | null = null
 let switchReject: ((err: Error) => void) | null = null
@@ -37,17 +36,12 @@ function findFfmpeg(vlcDir?: string | null): string {
   return 'ffmpeg'
 }
 
-/**
- * Safely kill a process using a captured local reference.
- * Avoids targeting the wrong process if currentProcess is reassigned.
- */
 function safeKill(proc: ChildProcess): void {
   if (proc.killed) return
   proc.kill('SIGTERM')
   const timer = setTimeout(() => {
     if (!proc.killed) proc.kill('SIGKILL')
   }, 1500)
-  // Unref so the timer doesn't keep the Node event loop alive
   if (timer.unref) timer.unref()
 }
 
@@ -83,7 +77,6 @@ function handleProxyRequest(
   res: ServerResponse,
   vlcDir?: string | null
 ) {
-  // Same stream already running — just respond
   if (currentProcess && currentStreamUrl === streamUrl && !currentProcess.killed) {
     res.writeHead(200, {
       'Content-Type': 'video/x-flv',
@@ -95,7 +88,6 @@ function handleProxyRequest(
     return
   }
 
-  // Kill old process — capture reference BEFORE nulling currentProcess
   if (currentProcess) {
     const oldProc = currentProcess
     currentProcess = null
@@ -107,16 +99,18 @@ function handleProxyRequest(
 
   const useScale = currentScale && SCALE_MAP[currentScale]
   const args = [
+    // --- faster stream open ---
+    '-fflags', 'nobuffer+discardcorrupt',
+    '-flags', 'low_delay',
+    // Reduced from 5 000 000 → 500 000 µs (0.5 s) — cuts channel-switch delay by ~4 s
+    '-analyzeduration', '500000',
+    '-probesize', '500000',
     '-i', streamUrl,
     ...(useScale
-      ? ['-vf', useScale, '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-c:a', 'aac']
+      ? ['-vf', useScale, '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-crf', '28', '-c:a', 'aac']
       : ['-c', 'copy']),
     '-f', 'flv',
     '-flvflags', 'no_duration_filesize',
-    '-fflags', 'nobuffer',
-    '-flags', 'low_delay',
-    '-analyzeduration', '5000000',
-    '-probesize', '5000000',
     '-loglevel', 'warning',
     'pipe:1',
   ]
@@ -168,7 +162,6 @@ function handleProxyRequest(
   })
 
   req.on('close', () => {
-    // Only kill if this is still the active process
     if (currentProcess === proc && !proc.killed) {
       const p = proc
       currentProcess = null
@@ -181,21 +174,14 @@ export function needsProxy(url: string): boolean {
   return NEEDS_PROXY_RE.test(url)
 }
 
-/**
- * Returns a proxy URL for the given stream.
- * Includes a 200 ms debounce to prevent spawning multiple ffmpeg processes
- * when the user rapidly switches channels.
- */
 export function getProxyUrl(
   streamUrl: string,
   vlcDir?: string | null,
   scale?: string
 ): Promise<string> {
-  // Cancel any pending debounced switch
   if (switchTimer !== null) {
     clearTimeout(switchTimer)
     switchTimer = null
-    // Reject the previous pending promise so callers don't hang
     switchReject?.(new Error('Stream switch superseded'))
     switchResolve = null
     switchReject = null
