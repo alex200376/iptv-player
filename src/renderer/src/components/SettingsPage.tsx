@@ -434,7 +434,20 @@ function PlaylistSettingsList() {
   const setActivePlaylistId = useStore((s) => s.setActivePlaylistId)
   const activePlaylistId = useStore((s) => s.activePlaylistId)
   const setNavTab = useStore((s) => s.setNavTab)
+  const setChannels = useStore((s) => s.setChannels)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [refreshingUrl, setRefreshingUrl] = useState<string | null>(null)
+
+  const handleRefreshUrl = async (url: string) => {
+    setRefreshingUrl(url)
+    const result = await window.electronAPI.refreshPlaylistUrl(url)
+    setRefreshingUrl(null)
+    if (result.error) {
+      console.error('[refresh]', url, result.error)
+    }
+    const channels = await window.electronAPI.loadChannels()
+    setChannels(channels)
+  }
 
   if (playlists.length === 0) {
     return (
@@ -455,6 +468,15 @@ function PlaylistSettingsList() {
             </div>
           </div>
           <div className="flex items-center gap-2 ml-4">
+            {pl.source === 'url' && pl.url && (
+              <button
+                onClick={() => handleRefreshUrl(pl.url!)}
+                disabled={refreshingUrl === pl.url}
+                className="px-3 py-1 rounded-tv-sm text-tv-xs bg-tv-bg-surface text-tv-text-secondary hover:text-tv-accent transition-colors disabled:opacity-40"
+              >
+                {refreshingUrl === pl.url ? '更新中...' : '更新'}
+              </button>
+            )}
             <button
               onClick={() => { setActivePlaylistId(pl.id); setNavTab('channels') }}
               className={`px-3 py-1 rounded-tv-sm text-tv-xs font-medium transition-colors ${
@@ -507,9 +529,17 @@ function EpgSourceSettings() {
   const epgSources = useStore((s) => s.epgSources)
   const importEpgFromUrl = useStore((s) => s.importEpgFromUrl)
   const removeEpgSource = useStore((s) => s.removeEpgSource)
+  const loadEpg = useStore((s) => s.loadEpg)
   const [url, setUrl] = useState('')
   const [importing, setImporting] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [refreshingEpgUrl, setRefreshingEpgUrl] = useState<string | null>(null)
+
+  const handleRefreshEpg = async (epgUrl: string) => {
+    setRefreshingEpgUrl(epgUrl)
+    await loadEpg(epgUrl)
+    setRefreshingEpgUrl(null)
+  }
 
   const handleImport = async () => {
     const trimmed = url.trim()
@@ -564,12 +594,21 @@ function EpgSourceSettings() {
                   {es.programCount} 条节目数据 · {es.tvgIds.length} 个频道
                 </div>
               </div>
-              <button
-                onClick={() => removeEpgSource(es.url)}
-                className="ml-4 px-3 py-1 rounded-tv-sm text-tv-xs bg-tv-bg-surface text-tv-text-secondary hover:text-red-400 transition-colors"
-              >
-                删除
-              </button>
+              <div className="flex items-center gap-2 ml-4">
+                <button
+                  onClick={() => handleRefreshEpg(es.url)}
+                  disabled={refreshingEpgUrl === es.url}
+                  className="px-3 py-1 rounded-tv-sm text-tv-xs bg-tv-bg-surface text-tv-text-secondary hover:text-tv-accent transition-colors disabled:opacity-40"
+                >
+                  {refreshingEpgUrl === es.url ? '更新中...' : '更新'}
+                </button>
+                <button
+                  onClick={() => removeEpgSource(es.url)}
+                  className="px-3 py-1 rounded-tv-sm text-tv-xs bg-tv-bg-surface text-tv-text-secondary hover:text-red-400 transition-colors"
+                >
+                  删除
+                </button>
+              </div>
             </div>
           ))}
         </div>

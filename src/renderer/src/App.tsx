@@ -85,6 +85,15 @@ export default function App() {
     }
   }, [epgSources, loadEpg])
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      for (const source of epgSources) {
+        loadEpg(source.url)
+      }
+    }, 30 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [epgSources, loadEpg])
+
   const toggleSidebar = useCallback(() => setSidebarOpen((v) => !v), [])
 
   useEffect(() => {
@@ -104,6 +113,19 @@ export default function App() {
       requestAnimationFrame(() => {
         window.electronAPI.switchChannel(state.currentChannel!.url)
       })
+    }
+  }, [])
+
+  const openEpgPage = useCallback(async () => {
+    await window.electronAPI.hidePlayer()
+    setEpgPageOpen(true)
+  }, [])
+
+  const closeEpgPage = useCallback(() => {
+    setEpgPageOpen(false)
+    const state = useStore.getState()
+    if (state.currentChannel) {
+      window.electronAPI.switchChannel(state.currentChannel!.url)
     }
   }, [])
 
@@ -200,7 +222,7 @@ export default function App() {
         sidebarOpen={sidebarOpen}
         onToggleSidebar={toggleSidebar}
         onOpenSettings={openSettings}
-        onOpenEpg={() => setEpgPageOpen(true)}
+          onOpenEpg={openEpgPage}
         onOpenUpdate={() => setShowUpdateDialog(true)}
       />
       <div className="flex-1 flex overflow-hidden">
@@ -214,7 +236,7 @@ export default function App() {
           {settingsOpen ? (
             <SettingsPage variant="page" onClose={closeSettings} />
           ) : epgPageOpen ? (
-            <EpgPage onClose={() => setEpgPageOpen(false)} />
+            <EpgPage onClose={closeEpgPage} />
           ) : (
             <>
               <PlayerContainer />
