@@ -21,7 +21,7 @@ async function backgroundCheck() {
   if (settings.snoozeUpdateUntil > Date.now()) return
   try {
     const result = await autoUpdater.checkForUpdates()
-    if (result && result.updateInfo.version > autoUpdater.currentVersion) {
+    if (result) {
       _updateAvailable = result.updateInfo
       sendToRenderer('update-available', {
         version: result.updateInfo.version,
@@ -47,7 +47,7 @@ export function registerUpdateIpc() {
     try {
       const result = await autoUpdater.checkForUpdates()
       checkInProgress = false
-      if (result && result.updateInfo.version > autoUpdater.currentVersion) {
+      if (result) {
         _updateAvailable = result.updateInfo
         return { available: true, info: result.updateInfo }
       }
