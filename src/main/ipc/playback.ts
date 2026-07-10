@@ -6,6 +6,7 @@ import { exitPipMode } from './pip'
 import { needsProxy, getProxyUrl, stopProxy, isFfmpegAvailable } from '../streamProxy'
 
 let _playId = 0
+let _lastSwitchTime = 0
 
 async function doPlay(
   url: string,
@@ -50,20 +51,15 @@ async function doPlay(
   // Destroy existing player BEFORE creating a new one — reusing a VLC player
   // hung on a dead stream with setSource() freezes the app because libVLC's
   // I/O thread is still blocked. Always start fresh.
-  //
-  // IMPORTANT: Never call stop() or destroy() normally on a stuck player —
-  // libVLC's native libvlc_media_player_stop() blocks the main process when
-  // its I/O thread is hung on a dead stream's TCP probe (and DestroyPlayer
-  // in the native binding holds g_mutex while calling stop).  Instead we
-  // clear the playerId so VlcPlayer.destroy() skips the native calls, then
-  // let the native resources leak — acceptable since the player was already
-  // broken, and the new player's HWND is placed on top in Z-order.
   if (state.player) {
-    const oldPlayer = state.player
+    try {
+      state.player.removeAllListeners()
+      state.player.destroy()
+    } catch {}
     state.player = null
-    ;(oldPlayer as any).playerId = -1
-    try { oldPlayer.removeAllListeners(); oldPlayer.destroy() } catch {}
-    await new Promise<void>((r) => setTimeout(r, 50))
+    // Give libVLC extra time to release GPU surfaces / threads before
+    // allocating a new VlcPlayer (avoids race on Windows / dead-stream freeze).
+    await new Promise<void>((r) => setTimeout(r, 80))
     if (currentPlayId !== _playId) return { success: false }
   }
 
@@ -102,10 +98,8 @@ async function doPlay(
   } catch (e) {
     console.error('[play] error, rebuilding player:', url, (e as Error).message)
     if (state.player) {
-      const old = state.player
+      try { state.player.removeAllListeners(); state.player.destroy() } catch {}
       state.player = null
-      ;(old as any).playerId = -1
-      try { old.removeAllListeners(); old.destroy() } catch {}
     }
     if (currentPlayId !== _playId) return { success: false }
     try {
@@ -118,11 +112,15 @@ async function doPlay(
 
 export function registerPlaybackIpc() {
   ipcMain.handle('switch-channel', async (_event, url: string) => {
-    // No hard debounce — a rapid second click cancels the previous in-flight
-    // switch by incrementing _playId (all long-running steps guard against it).
-    // The old 300ms rejection caused permanent spinner when switching between
-    // two dead streams: the second click was dropped and only auto-reconnect
-    // (2-4s) would retry.
+    // Debounce rapid channel switches (e.g. clicking two dead streams quickly)
+    // to prevent concurrent VlcPlayer allocations that race on GPU surfaces.
+    const now = Date.now()
+    if (now - _lastSwitchTime < 300) {
+      console.log('[switch-channel] debounced, ignoring rapid switch')
+      return { success: false }
+    }
+    _lastSwitchTime = now
+
     const state = getState()
     if (state.pipWindow) {
       await exitPipMode()
@@ -213,20 +211,14 @@ export function registerPlaybackIpc() {
     _playId++
     const state = getState()
     if (state.pipWindow) {
-      if (state.player) {
-        const old = state.player
-        state.player = null
-        ;(old as any).playerId = -1
-        try { old.removeAllListeners(); old.destroy() } catch {}
-      }
+      if (state.player) { try { state.player.destroy() } catch {}; state.player = null }
       if (!state.pipWindow.isDestroyed()) state.pipWindow.close()
       state.pipWindow = null
     }
     if (state.player) {
-      const old = state.player
+      try { state.player.removeAllListeners() } catch {}
+      try { state.player.destroy() } catch {}
       state.player = null
-      ;(old as any).playerId = -1
-      try { old.removeAllListeners(); old.destroy() } catch {}
     }
     stopProxy()
   })

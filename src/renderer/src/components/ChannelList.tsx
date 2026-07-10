@@ -372,7 +372,8 @@ const ChannelRow = memo(function ChannelRow({
     && prev.ch.name === next.ch.name
     && prev.ch.logo === next.ch.logo
     && prev.currentChannel?.id === next.currentChannel?.id
-    && prev.favoriteIds === next.favoriteIds
+    && prev.favoriteIds.length === next.favoriteIds.length
+    && prev.favoriteIds.every((id, i) => id === next.favoriteIds[i])
 })
 
 export default memo(ChannelList)

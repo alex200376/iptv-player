@@ -1,6 +1,6 @@
 {
   "name": "iptv-player",
-  "version": "1.0.14",
+  "version": "1.0.13",
   "description": "IPTV 全能播放器 - 支持 RTMP/M3U 等格式",
   "main": "./out/main/index.js",
   "scripts": {
@@ -11,9 +11,7 @@
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "verify-asar": "node scripts/verify-asar.mjs",
-    "dist:check": "npm run dist && npm run verify-asar",
-    "typecheck": "tsc --noEmit",
-    "lint": "tsc --noEmit"
+    "dist:check": "npm run dist && npm run verify-asar"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.0",

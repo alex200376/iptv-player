@@ -6,6 +6,7 @@ directories:
 files:
   - out/**/*
   - package.json
+  - "!node_modules/**/*"
   - "node_modules/**/*"
   - "!**/*.{md,map}"
   - "!**/{test,tests,__tests__,spec,__specs__}/**"
