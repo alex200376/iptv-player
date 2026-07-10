@@ -107,6 +107,19 @@ export default function App() {
     }
   }, [])
 
+  const openEpgPage = useCallback(async () => {
+    await window.electronAPI.hidePlayer()
+    setEpgPageOpen(true)
+  }, [])
+
+  const closeEpgPage = useCallback(() => {
+    setEpgPageOpen(false)
+    const state = useStore.getState()
+    if (state.currentChannel) {
+      window.electronAPI.switchChannel(state.currentChannel!.url)
+    }
+  }, [])
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName
@@ -200,7 +213,7 @@ export default function App() {
         sidebarOpen={sidebarOpen}
         onToggleSidebar={toggleSidebar}
         onOpenSettings={openSettings}
-        onOpenEpg={() => setEpgPageOpen(true)}
+          onOpenEpg={openEpgPage}
         onOpenUpdate={() => setShowUpdateDialog(true)}
       />
       <div className="flex-1 flex overflow-hidden">
@@ -214,7 +227,7 @@ export default function App() {
           {settingsOpen ? (
             <SettingsPage variant="page" onClose={closeSettings} />
           ) : epgPageOpen ? (
-            <EpgPage onClose={() => setEpgPageOpen(false)} />
+            <EpgPage onClose={closeEpgPage} />
           ) : (
             <>
               <PlayerContainer />

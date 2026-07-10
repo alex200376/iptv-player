@@ -85,7 +85,7 @@ export default function TopBar({
       <div className="flex items-center gap-1">
         <button
           onClick={async () => {
-            await window.electronAPI.hidePlayerWindow()
+            await window.electronAPI.hidePlayer()
             setStreamDialogOpen(true)
           }}
           className="p-1.5 rounded-tv-sm text-tv-text-secondary hover:text-tv-accent hover:bg-tv-accent/10 transition-colors"
@@ -116,7 +116,7 @@ export default function TopBar({
           </svg>
         </button>
       </div>
-      {streamDialogOpen && <OpenStreamDialog onClose={() => { setStreamDialogOpen(false); window.electronAPI.showPlayerWindow() }} />}
+      {streamDialogOpen && <OpenStreamDialog onClose={() => { setStreamDialogOpen(false); const ch = useStore.getState().currentChannel; if (ch) window.electronAPI.switchChannel(ch.url) }} />}
     </header>
   )
 }
