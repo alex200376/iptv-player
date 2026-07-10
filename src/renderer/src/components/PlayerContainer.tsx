@@ -56,7 +56,7 @@ export default function PlayerContainer() {
       clearTimeout(bufferTimerRef.current)
       clearTimeout(errorTimerRef.current)
       errorTimerRef.current = setTimeout(() => {
-        setPlayerError('连接超时，播放无响应')
+        setPlayerError('連接超時，播放無響應')
         setIsBuffering(false)
       }, 10000)
     })
@@ -72,7 +72,7 @@ export default function PlayerContainer() {
       clearTimeout(bufferTimerRef.current)
       clearTimeout(errorTimerRef.current)
       setIsBuffering(false)
-      setPlayerError('播放出错，点击重试')
+      setPlayerError('播放出錯，點擊重試')
     })
 
     return () => {
@@ -86,10 +86,15 @@ export default function PlayerContainer() {
 
   useEffect(() => {
     if (currentChannel) {
+      // Clear all pending timers FIRST so a stale error/buffer timeout from
+      // the previous dead stream cannot race against the new stream's state.
+      clearTimeout(bufferTimerRef.current)
+      clearTimeout(errorTimerRef.current)
+      clearTimeout(timerRef.current)
+
       setIsBuffering(true)
       setPlayerError(null)
       setShowInfo(true)
-      clearTimeout(timerRef.current)
       timerRef.current = setTimeout(() => setShowInfo(false), 3000)
 
       clearTimeout(epgTimerRef.current)
@@ -146,7 +151,7 @@ export default function PlayerContainer() {
               <button
                 onClick={() => setShowEpg(true)}
                 className="ml-auto text-tv-xs text-white/50 hover:text-white/90 transition-colors px-1.5 py-0.5 rounded-tv-sm"
-                title="节目表 (G)"
+                title="節目表 (G)"
               >
                 EPG
               </button>
@@ -203,8 +208,8 @@ export default function PlayerContainer() {
                 <rect x="2" y="3" width="20" height="14" rx="2" />
                 <path d="M8 21h8M12 17v4" />
               </svg>
-              <div className="text-tv-sm">导入 M3U 播放列表开始观看</div>
-              <div className="text-tv-xs mt-1 opacity-60">Ctrl+I 导入 · Ctrl+B 切换频道列表</div>
+              <div className="text-tv-sm">導入 M3U 播放列表開始觀看</div>
+              <div className="text-tv-xs mt-1 opacity-60">Ctrl+I 導入 · Ctrl+B 切換頻道列表</div>
             </div>
           </div>
         )}

@@ -6,6 +6,7 @@ import { exitPipMode } from './pip'
 import { needsProxy, getProxyUrl, stopProxy, isFfmpegAvailable } from '../streamProxy'
 
 let _playId = 0
+let _lastSwitchTime = 0
 
 async function doPlay(
   url: string,
@@ -56,9 +57,9 @@ async function doPlay(
       state.player.destroy()
     } catch {}
     state.player = null
-    // Yield event loop so libVLC can release GPU surfaces / threads before
-    // we allocate a new VlcPlayer (avoids race on Windows).
-    await new Promise<void>((r) => setImmediate(r))
+    // Give libVLC extra time to release GPU surfaces / threads before
+    // allocating a new VlcPlayer (avoids race on Windows / dead-stream freeze).
+    await new Promise<void>((r) => setTimeout(r, 80))
     if (currentPlayId !== _playId) return { success: false }
   }
 
@@ -71,7 +72,18 @@ async function doPlay(
       hardwareAcceleration: settings.hardwareAcceleration,
     })
     if (currentPlayId !== _playId) return { success: false }
-    await ensurePlayerEmbedded()
+
+    // Wrap embed() in a timeout so a hung libVLC surface negotiation can
+    // never block the Electron main process indefinitely.
+    await Promise.race([
+      Promise.resolve(ensurePlayerEmbedded()),
+      new Promise<void>((_res, reject) =>
+        setTimeout(() => reject(new Error('embed timeout')), 5000)
+      ),
+    ]).catch((e) => {
+      console.warn('[play] embed timed out or failed:', e?.message)
+    })
+
     if (currentPlayId !== _playId) return { success: false }
     state.player.showOverlay()
     attachListeners(state.player)
@@ -100,6 +112,15 @@ async function doPlay(
 
 export function registerPlaybackIpc() {
   ipcMain.handle('switch-channel', async (_event, url: string) => {
+    // Debounce rapid channel switches (e.g. clicking two dead streams quickly)
+    // to prevent concurrent VlcPlayer allocations that race on GPU surfaces.
+    const now = Date.now()
+    if (now - _lastSwitchTime < 300) {
+      console.log('[switch-channel] debounced, ignoring rapid switch')
+      return { success: false }
+    }
+    _lastSwitchTime = now
+
     const state = getState()
     if (state.pipWindow) {
       await exitPipMode()
@@ -139,7 +160,7 @@ export function registerPlaybackIpc() {
 
     // Proxied streams (RTMP, RTSP, UDP, and HTTP .ts) all feed through
     // the local ffmpeg→FLV pipeline — use a low VLC network cache so the
-    // player doesn’t add an extra buffer on top of ffmpeg’s own buffer.
+    // player doesn't add an extra buffer on top of ffmpeg's own buffer.
     const isProxied = playUrl.startsWith('http://127.0.0.1')
     state.originalUrl = isProxied ? url : ''
     return doPlay(playUrl, settings, currentPlayId, isProxied ? 150 : undefined)
