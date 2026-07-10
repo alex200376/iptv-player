@@ -20,6 +20,11 @@ function debouncedSaveUserData(data: { favoriteIds: string[]; historyEntries: Hi
   }, 500)
 }
 
+export function cancelPendingSaves() {
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
+  if (userDataTimer) { clearTimeout(userDataTimer); userDataTimer = null }
+}
+
 interface PlayerStore {
   groups: ChannelGroup[]
   currentChannel: Channel | null

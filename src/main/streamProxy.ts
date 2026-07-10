@@ -87,6 +87,7 @@ function encoderArgs(enc: string): string[] {
 let httpServer: ReturnType<typeof createServer> | null = null
 let serverPort = 0
 let currentProcess: ChildProcess | null = null
+let currentResponse: ServerResponse | null = null
 let currentStreamUrl = ''
 let currentScale: string | null = null
 
@@ -198,6 +199,9 @@ function buildInputArgs(streamUrl: string): string[] {
     // Use a browser-like User-Agent so the server doesn't block ffmpeg.
     base.push('-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36')
     base.push('-multiple_requests', '1')
+    // Give up after 30s on a dead stream — long enough for slow-starting
+    // live transcoders but short enough to avoid a permanent hang.
+    base.push('-timeout', '30000000')
   }
   if (isRtmp) {
     base.push('-rtmp_live', 'live')
@@ -266,6 +270,7 @@ function handleProxyRequest(
     'Access-Control-Allow-Origin': '*',
   })
 
+  currentResponse = res
   proc.stdout?.pipe(res)
 
   proc.stderr?.on('data', (data: Buffer) => {
@@ -298,6 +303,9 @@ function handleProxyRequest(
       currentProcess = null
       safeKill(p)
     }
+    if (currentResponse === res) {
+      currentResponse = null
+    }
   })
 }
 
@@ -316,6 +324,12 @@ export function stopProxy() {
     currentProcess = null
     safeKill(p)
   }
+  // Destroy the HTTP response so VLC's connection is closed immediately —
+  // without this, VLC may keep the pipe open draining a dead stream.
+  if (currentResponse && !currentResponse.writableEnded) {
+    currentResponse.destroy()
+  }
+  currentResponse = null
   currentStreamUrl = ''
 }
 
@@ -341,6 +355,10 @@ export function getProxyUrl(
       switchTimer = null
       switchResolve = null
       switchReject = null
+
+      // Give the OS time to fully kill the old ffmpeg process and release
+      // its TCP socket / pipe before we start a new one.
+      await new Promise<void>((r) => setTimeout(r, 50))
 
       try {
         currentScale = scale && SCALE_MAP[scale] ? scale : null

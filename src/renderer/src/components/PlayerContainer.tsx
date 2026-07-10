@@ -27,6 +27,7 @@ export default function PlayerContainer() {
   const epgTimerRef = useRef<ReturnType<typeof setTimeout>>()
   const bufferTimerRef = useRef<ReturnType<typeof setTimeout>>()
   const errorTimerRef = useRef<ReturnType<typeof setTimeout>>()
+  const switchIdRef = useRef(0)
 
   const tvgUrl = currentChannel?.tvgUrl
   const cachedPrograms = useMemo(() => {
@@ -55,17 +56,23 @@ export default function PlayerContainer() {
       setPlayerError(null)
       clearTimeout(bufferTimerRef.current)
       clearTimeout(errorTimerRef.current)
+      const capturedId = switchIdRef.current
       errorTimerRef.current = setTimeout(() => {
+        if (switchIdRef.current !== capturedId) return
         setPlayerError('連接超時，播放無響應')
         setIsBuffering(false)
-      }, 10000)
+      }, 30000)
     })
 
     const offPlaying = window.electronAPI.onPlayerPlaying(() => {
       clearTimeout(bufferTimerRef.current)
       clearTimeout(errorTimerRef.current)
       setPlayerError(null)
-      bufferTimerRef.current = setTimeout(() => setIsBuffering(false), 600)
+      const capturedId = switchIdRef.current
+      bufferTimerRef.current = setTimeout(() => {
+        if (switchIdRef.current !== capturedId) return
+        setIsBuffering(false)
+      }, 600)
     })
 
     const offError = window.electronAPI.onPlayerError(() => {
@@ -86,6 +93,10 @@ export default function PlayerContainer() {
 
   useEffect(() => {
     if (currentChannel) {
+      // Increment switch ID so any stale buffering/error timers from the
+      // previous stream are no-ops when they fire.
+      switchIdRef.current += 1
+
       // Clear all pending timers FIRST so a stale error/buffer timeout from
       // the previous dead stream cannot race against the new stream's state.
       clearTimeout(bufferTimerRef.current)
