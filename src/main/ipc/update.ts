@@ -3,6 +3,7 @@ import { autoUpdater, UpdateInfo } from 'electron-updater'
 import { getState } from './shared'
 import { readSettings, writeSettings } from '../settingsStore'
 
+
 autoUpdater.autoDownload = false
 autoUpdater.autoInstallOnAppQuit = false
 
@@ -21,7 +22,7 @@ async function backgroundCheck() {
   if (settings.snoozeUpdateUntil > Date.now()) return
   try {
     const result = await autoUpdater.checkForUpdates()
-    if (result) {
+    if (result?.isUpdateAvailable) {
       _updateAvailable = result.updateInfo
       sendToRenderer('update-available', {
         version: result.updateInfo.version,
@@ -47,7 +48,7 @@ export function registerUpdateIpc() {
     try {
       const result = await autoUpdater.checkForUpdates()
       checkInProgress = false
-      if (result) {
+      if (result?.isUpdateAvailable) {
         _updateAvailable = result.updateInfo
         return { available: true, info: result.updateInfo }
       }
