@@ -134,7 +134,7 @@ npm run preview      # 預覽構建結果
 
 ## 📊 倉庫活躍度
 
-![Repobeats](https://repobeats.axiom.co/api/embed/alex200376/iptv-player.svg "Repobeats analytics image")
+![Alt](https://repobeats.axiom.co/api/embed/3b690494bfeb187b8b6b030f7ee27c861a26dbba.svg "Repobeats analytics image")
 
 ---
 
