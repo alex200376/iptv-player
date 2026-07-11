@@ -52,8 +52,8 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     try {
       const result = await window.electronAPI.getSettings()
       set({ settings: { ...DEFAULTS, ...result }, loaded: true })
-    } catch {
-      set({ loaded: true })
+    } catch (e) {
+      console.error('[settings] loadSettings failed:', e)
     }
   },
 
@@ -62,8 +62,8 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     set({ settings: next })
     try {
       await window.electronAPI.saveSettings(next)
-    } catch {
-      // ignore
+    } catch (e) {
+      console.error('[settings] updateSettings failed:', e)
     }
   },
 }))

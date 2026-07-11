@@ -26,10 +26,9 @@ function isHttpTsStream(url: string): boolean {
     if (/\.ts$/.test(path)) return true
     if (/\/(live|stream|play|channel|video)\.ts/.test(path)) return true
     if (u.searchParams.has('channelId')) return true
-  } catch {
-    // malformed URL — fall through
-  }
-  return false
+      } catch {
+        // malformed URL — fall through
+      }
 }
 
 const SCALE_MAP: Record<string, string | null> = {
@@ -176,8 +175,8 @@ function safeKill(proc: ChildProcess): void {
     } else {
       proc.kill('SIGKILL')
     }
-  } catch {
-    // Process may have already exited
+  } catch (e) {
+    console.error('[stream-proxy] safeKill error:', e)
   }
 }
 
@@ -229,6 +228,8 @@ function buildInputArgs(streamUrl: string): string[] {
     // Use a browser-like User-Agent so the server doesn't block ffmpeg.
     base.push('-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36')
     base.push('-multiple_requests', '1')
+    // Limit ffmpeg TCP connect timeout to avoid blocking on dead streams
+    base.push('-timeout', '5000000')
   }
   if (isRtmp) {
     base.push('-rtmp_live', 'live')
@@ -297,7 +298,29 @@ async function handleProxyRequest(
     'Access-Control-Allow-Origin': '*',
   })
 
+  // Watchdog: if ffmpeg doesn't output any data within 8 seconds, kill it.
+  // Prevents VLC from blocking indefinitely when the upstream is dead.
+  const outputTimeout = setTimeout(() => {
+    if (currentProcess === proc) {
+      console.warn('[stream-proxy] ffmpeg no output for 8s, killing')
+      const p = proc
+      currentProcess = null
+      safeKill(p)
+      if (!res.writableEnded) {
+        try { res.destroy() } catch (e) { console.error('[stream-proxy] destroy response:', e) }
+      }
+    }
+  }, 8000)
+
   proc.stdout?.pipe(res)
+
+  let hasOutput = false
+  proc.stdout?.on('data', () => {
+    if (!hasOutput) {
+      hasOutput = true
+      clearTimeout(outputTimeout)
+    }
+  })
 
   proc.stderr?.on('data', (data: Buffer) => {
     const text = data.toString()
@@ -311,12 +334,14 @@ async function handleProxyRequest(
 
   proc.on('close', (code) => {
     console.log('[stream-proxy] ffmpeg exited, code:', code)
+    clearTimeout(outputTimeout)
     if (currentProcess === proc) currentProcess = null
     if (!res.writableEnded) res.end()
   })
 
   proc.on('error', (err) => {
     console.error('[stream-proxy] ffmpeg error:', err.message)
+    clearTimeout(outputTimeout)
     if (currentProcess === proc) currentProcess = null
     if (!res.writableEnded) res.end()
   })

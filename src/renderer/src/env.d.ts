@@ -8,6 +8,7 @@ interface Channel {
   group?: string
   tvgId?: string
   tvgUrl?: string
+  tvgChno?: string
   status?: 'unknown' | 'online' | 'offline'
   lastCheckedAt?: number
 }
@@ -119,6 +120,8 @@ interface ElectronAPI {
   cancelCheckAll: () => void
   removeOfflineChannels: () => Promise<{ channels: Channel[]; removedCount: number }>
   clearAllData: () => Promise<{ success: boolean; error?: string }>
+  backupData: () => Promise<{ success: boolean; error?: string }>
+  restoreData: () => Promise<{ success: boolean; info?: { channels: number; playlists: number }; error?: string }>
   onChannelsCheckProgress: (callback: (progress: { checked: number; total: number }) => void) => void
   onChannelsCheckLog: (callback: (log: { name: string; url: string; protocol: string; result: string; checked: number; total: number }) => void) => void
   onChannelsCheckDone: (callback: (channels: Channel[]) => void) => void
@@ -130,6 +133,7 @@ interface ElectronAPI {
 
   // Update
   getAppVersion: () => Promise<string>
+  getVlcVersion: () => Promise<string>
   snoozeUpdate: (until: number) => Promise<boolean>
   checkForUpdate: () => Promise<{ available: boolean; info?: { version: string; releaseDate?: string; releaseNotes?: string }; error?: string; checking?: boolean }>
   downloadUpdate: () => Promise<{ downloading: boolean; error?: string }>

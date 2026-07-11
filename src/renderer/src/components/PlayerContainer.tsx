@@ -110,7 +110,7 @@ export default function PlayerContainer() {
       errorTimerRef.current = setTimeout(() => {
         setPlayerError(t('player.bufferingTimeout'))
         setIsBuffering(false)
-      }, 10000)
+      }, 8000)
     })
 
     const offPlaying = window.electronAPI.onPlayerPlaying(() => {

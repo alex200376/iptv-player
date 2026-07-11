@@ -14,7 +14,9 @@ async function enterPipMode() {
   if (state.originalUrl && await isFfmpegAvailable(state.vlcDir)) {
     try {
       pipUrl = await getProxyUrl(state.originalUrl, state.vlcDir, settings.proxyResolution)
-    } catch {}
+    } catch (e) {
+      console.error('[pip] proxy failed, using original URL:', e)
+    }
   }
   const wasPlaying = state.player.isPlaying()
   const savedVolume = state.player.getVolume()
@@ -47,7 +49,7 @@ async function enterPipMode() {
   state.pipWindow.on('resize', () => {
     const s = getState()
     if (!s.player || !s.pipWindow || s.pipWindow.isDestroyed()) return
-    try { s.player.notifyLayoutChange() } catch {}
+    try { s.player.notifyLayoutChange() } catch (e) { console.error('[pip] notifyLayoutChange:', e) }
   })
 
   state.pipWindow.on('closed', () => {
@@ -80,7 +82,9 @@ export async function exitPipMode() {
   if (state.originalUrl && await isFfmpegAvailable(state.vlcDir)) {
     try {
       playUrl = await getProxyUrl(state.originalUrl, state.vlcDir, settings.proxyResolution)
-    } catch {}
+    } catch (e) {
+      console.error('[pip] exit proxy failed:', e)
+    }
   }
 
   state.player = new VlcPlayer({

@@ -6,6 +6,7 @@ export interface Channel {
   group?: string
   tvgId?: string
   tvgUrl?: string
+  tvgChno?: string
   playlistId?: string
   status?: 'unknown' | 'online' | 'offline'
   lastCheckedAt?: number

@@ -4,7 +4,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useStore, groupChannels } from '../stores/useStore'
 import ContextMenu from './ContextMenu'
 import { usePlayChannel } from '../hooks/usePlayChannel'
-import type { Channel, EpgProgram } from '../types'
+import type { Channel, ChannelGroup, EpgProgram } from '../types'
 import { useTranslation } from 'react-i18next'
 import { getGroupDisplayName } from '../utils/groupLabels'
 
@@ -27,6 +27,8 @@ function GripIcon() {
   )
 }
 
+type ChannelWithGroup = Channel & { _groupName: string }
+
 function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
   const { t } = useTranslation()
   const groups = useStore((s) => s.groups)
@@ -43,24 +45,24 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
   const [dropGroupPos, setDropGroupPos] = useState<'before' | 'after'>('before')
 
   const filteredGroups = useMemo(() => {
-    let channels = groups.flatMap((g) => {
+    let channels: ChannelWithGroup[] = groups.flatMap((g) => {
       const chs = g.channels.map((ch: Channel) => ({ ...ch, _groupName: g.name }))
       return chs
     })
     if (activePlaylistId) {
-      channels = channels.filter((ch: any) => ch.playlistId === activePlaylistId)
+      channels = channels.filter((ch) => ch.playlistId === activePlaylistId)
     }
     if (categoryFilter) {
-      channels = channels.filter((ch: any) => ch._groupName === categoryFilter)
+      channels = channels.filter((ch) => ch._groupName === categoryFilter)
     }
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
-      channels = channels.filter((ch: any) => ch.name.toLowerCase().includes(q))
+      channels = channels.filter((ch) => ch.name.toLowerCase().includes(q))
     }
     return groupChannels(channels)
   }, [groups, searchQuery, activePlaylistId, categoryFilter])
 
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; channel: any } | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; channel: Channel } | null>(null)
   const activeRef = useRef<HTMLButtonElement>(null)
   const setChannels = useStore((s) => s.setChannels)
 
@@ -76,7 +78,7 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
     try {
       const result = await window.electronAPI.removeOfflineChannels()
       if (result.channels.length >= 0) {
-        setChannels(result.channels as any)
+        setChannels(result.channels as Channel[])
       }
     } finally {
       setRemoving(false)
@@ -91,7 +93,7 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
 
   const handlePlay = usePlayChannel()
 
-  const handleContextMenu = useCallback((e: React.MouseEvent, ch: any) => {
+  const handleContextMenu = useCallback((e: React.MouseEvent, ch: Channel) => {
     e.preventDefault()
     setCtxMenu({ x: e.clientX, y: e.clientY, channel: ch })
   }, [])
@@ -100,11 +102,11 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
   const updateChannelStatus = useStore((s) => s.updateChannelStatus)
 
   const copyUrl = useCallback((url: string) => {
-    navigator.clipboard.writeText(url).catch(() => {})
+    navigator.clipboard.writeText(url).catch((e) => console.error('[clipboard] copy failed:', e))
   }, [])
 
   const handleCheck = useCallback(
-    async (ch: any) => {
+    async (ch: Channel) => {
       const result = await window.electronAPI.checkChannelUrl(ch.url)
       updateChannelStatus(ch.id, result.online ? 'online' : 'offline', result.lastCheckedAt)
     },
@@ -162,7 +164,7 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
     )
   }
 
-  const totalChannels = filteredGroups.reduce((s: number, g: any) => s + g.channels.length, 0)
+  const totalChannels = filteredGroups.reduce((s: number, g: ChannelGroup) => s + g.channels.length, 0)
 
   return (
     <div>
@@ -182,7 +184,7 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
         </div>
       </div>
       <Accordion.Root type="multiple" className="flex flex-col" defaultValue={[]}>
-        {filteredGroups.map((group: any, i: number) => {
+        {filteredGroups.map((group: ChannelGroup, i: number) => {
           const showTopIndicator =
             dropTargetGroupName === group.name && dropGroupPos === 'before'
           const showBottomIndicator =
@@ -287,12 +289,12 @@ function ChannelGroupChannels({
   onToggleFav,
   epgCache,
 }: {
-  channels: any[]
-  currentChannel: any
+  channels: Channel[]
+  currentChannel: Channel | null
   favoriteIds: string[]
-  activeRef: React.RefObject<HTMLButtonElement>
-  onPlay: (ch: any, retry?: number) => void
-  onContextMenu: (e: React.MouseEvent, ch: any) => void
+  activeRef: React.Ref<HTMLButtonElement>
+  onPlay: (ch: Channel, retry?: number) => void
+  onContextMenu: (e: React.MouseEvent, ch: Channel) => void
   onToggleFav: (id: string) => void
   epgCache: Record<string, EpgProgram[]>
 }) {
@@ -432,16 +434,16 @@ function ChannelRowWrapper({
   onDrop,
   onDragEnd,
 }: {
-  ch: any
+  ch: Channel
   idx: number
   dragChId: string | null
   dropTargetId: string | null
   dropPosition: 'before' | 'after'
-  currentChannel: any
+  currentChannel: Channel | null
   favoriteIds: string[]
   activeRef: React.RefObject<HTMLButtonElement>
-  onPlay: (ch: any) => void
-  onContextMenu: (e: React.MouseEvent, ch: any) => void
+  onPlay: (ch: Channel) => void
+  onContextMenu: (e: React.MouseEvent, ch: Channel) => void
   onToggleFav: (id: string) => void
   epgCache: Record<string, EpgProgram[]>
   onDragStart: (e: React.DragEvent, chId: string) => void
@@ -493,7 +495,7 @@ function ChannelRowWrapper({
           }`}
         >
           <span className="text-xs text-muted-foreground w-5 text-right flex-shrink-0 font-mono">
-            {ch.num || ''}
+            {ch.tvgChno || ''}
           </span>
           {ch.logo ? (
             <img

@@ -5,10 +5,19 @@ import { getState, ensureEmbedded } from './shared'
 import { t } from '../i18n'
 
 export function registerWindowIpc() {
+  ipcMain.handle('get-vlc-version', async () => {
+    try {
+      const binding = getBinding()
+      const version = binding?.getVersion?.() || '3.0.23'
+      return version
+    } catch {
+      return '3.0.23'
+    }
+  })
   ipcMain.handle('hide-player-window', async () => {
     const state = getState()
     if (ensureEmbedded()) {
-      try { getBinding().setPlayerWindowVisible(state.player!.playerId, false) } catch {}
+      try { getBinding().setPlayerWindowVisible(state.player!.playerId, false) } catch (e) { console.error('[window] hidePlayerWindow:', e) }
       state.player!.hideOverlay()
     }
   })
@@ -16,13 +25,13 @@ export function registerWindowIpc() {
   ipcMain.handle('show-player-window', async () => {
     const state = getState()
     if (ensureEmbedded()) {
-      try { getBinding().setPlayerWindowVisible(state.player!.playerId, true) } catch {}
+      try { getBinding().setPlayerWindowVisible(state.player!.playerId, true) } catch (e) { console.error('[window] showPlayerWindow:', e) }
       state.player!.showOverlay()
     }
   })
 
-  ipcMain.on('hide-overlay', () => { try { getState().player?.hideOverlay() } catch {} })
-  ipcMain.on('show-overlay', () => { try { getState().player?.showOverlay() } catch {} })
+  ipcMain.on('hide-overlay', () => { try { getState().player?.hideOverlay() } catch (e) { console.error('[window] hideOverlay:', e) } })
+  ipcMain.on('show-overlay', () => { try { getState().player?.showOverlay() } catch (e) { console.error('[window] showOverlay:', e) } })
 
   ipcMain.handle('toggle-fullscreen', () => {
     const state = getState()
@@ -31,7 +40,7 @@ export function registerWindowIpc() {
   })
 
   ipcMain.handle('notify-layout-change', () => {
-    try { getState().player?.notifyLayoutChange() } catch {}
+    try { getState().player?.notifyLayoutChange() } catch (e) { console.error('[window] notifyLayoutChange:', e) }
   })
 
   ipcMain.handle('exit-fullscreen', () => {

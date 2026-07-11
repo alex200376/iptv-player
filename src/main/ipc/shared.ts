@@ -27,12 +27,16 @@ export function getState(): SharedState {
 }
 
 export function buildMediaOptions(settings: Settings): string[] {
-  const cache = Math.max(settings.networkCache, 600)
+  const cache = Math.max(settings.networkCache, 300)
   const options = [
     `:network-caching=${cache}`,
     `:live-caching=${cache}`,
-    `:file-caching=${cache}`,
+    `:file-caching=${Math.min(cache, 1000)}`,
     `:h264-threads=${settings.h264Threads}`,
+    ':tcp-timeout=4000',
+    ':http-reconnect',
+    ':rtsp-tcp',
+    ':sout-mux-caching=100',
     ':no-drop-late-frames',
     ':no-skip-frames',
     ':clock-synchro=0',

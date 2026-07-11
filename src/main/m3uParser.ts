@@ -8,6 +8,7 @@ export interface Channel {
   group?: string
   tvgId?: string
   tvgUrl?: string
+  tvgChno?: string
   playlistId?: string
   status?: 'unknown' | 'online' | 'offline'
   lastCheckedAt?: number
@@ -52,12 +53,14 @@ export function parseM3U(content: string, playlistId?: string): Promise<Channel[
           const logo = line.match(/tvg-logo="([^"]*)"/)?.[1]
           const tvgId = line.match(/tvg-id="([^"]*)"/)?.[1]
           const tvgUrl = line.match(/tvg-url="([^"]*)"/)?.[1]
+          const tvgChno = line.match(/tvg-chno="([^"]*)"/)?.[1]
           const name = line.split(',').pop()?.trim()
           current = {
             group: group || t('group.ungrouped'),
             logo,
             tvgId,
             tvgUrl,
+            tvgChno,
             name: name || t('channel.unknown'),
           }
         } else if (line.startsWith('#') || line.startsWith('//')) {
@@ -73,6 +76,7 @@ export function parseM3U(content: string, playlistId?: string): Promise<Channel[
             group: ch.group || t('group.ungrouped'),
             tvgId: ch.tvgId,
             tvgUrl: ch.tvgUrl,
+            tvgChno: ch.tvgChno,
             playlistId,
           })
           current = null

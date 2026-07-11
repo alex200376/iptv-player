@@ -1,11 +1,11 @@
-import { ipcMain, dialog, net } from 'electron'
+import { ipcMain, dialog, net, app } from 'electron'
 import { createConnection } from 'net'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { parseM3U, urlToId } from '../m3uParser'
 import { saveChannels, loadChannels } from '../channelStore'
 import { saveUserData, loadUserData } from '../userDataStore'
-import { writeSettings } from '../settingsStore'
+import { readSettings, writeSettings } from '../settingsStore'
 import type { Channel } from '../m3uParser'
 import { getState } from './shared'
 
@@ -308,7 +308,9 @@ async function probeHttp(url: string): Promise<ProbeResult> {
         if (!done && value) bytes = value
         reader.cancel()
       }
-    } catch {}
+    } catch (e) {
+      console.error('[probe] reader error:', e)
+    }
 
     clearTimeout(timer)
 
@@ -671,6 +673,57 @@ export function registerPlaylistIpc() {
       const { writeFileSync } = require('fs')
       writeFileSync(result.filePath, m3u, 'utf-8')
       return { success: true }
+    } catch (e) {
+      return { success: false, error: (e as Error).message }
+    }
+  })
+
+  ipcMain.handle('backup-data', async () => {
+    const state = getState()
+    if (!state.mainWindow) return { success: false, error: '窗口未初始化' }
+    const channels = await loadChannels()
+    const userData = await loadUserData()
+    const settings = readSettings()
+    const result = await dialog.showSaveDialog(state.mainWindow, {
+      title: '備份 IPTV 播放器資料',
+      defaultPath: `iptv-backup-${new Date().toISOString().slice(0, 10)}.json`,
+      filters: [{ name: 'IPTV Backup', extensions: ['json'] }],
+    })
+    if (result.canceled || !result.filePath) return { success: false }
+    try {
+      const backup = { version: 1, exportedAt: Date.now(), channels, userData, settings }
+      writeFileSync(result.filePath, JSON.stringify(backup, null, 2), 'utf-8')
+      return { success: true }
+    } catch (e) {
+      return { success: false, error: (e as Error).message }
+    }
+  })
+
+  ipcMain.handle('restore-data', async () => {
+    const state = getState()
+    if (!state.mainWindow) return { success: false, error: '窗口未初始化' }
+    const result = await dialog.showOpenDialog(state.mainWindow, {
+      title: '還原 IPTV 播放器備份',
+      filters: [{ name: 'IPTV Backup', extensions: ['json'] }],
+      properties: ['openFile'],
+    })
+    if (result.canceled || result.filePaths.length === 0) return { success: false }
+    try {
+      const raw = readFileSync(result.filePaths[0], 'utf-8')
+      const backup = JSON.parse(raw)
+      if (!backup.version || !backup.channels || !backup.userData) {
+        return { success: false, error: '無效的備份檔案' }
+      }
+      await saveChannels(backup.channels)
+      await saveUserData(backup.userData)
+      if (backup.settings) writeSettings(backup.settings)
+      return {
+        success: true,
+        info: {
+          channels: backup.channels.length,
+          playlists: backup.userData.playlists.length,
+        },
+      }
     } catch (e) {
       return { success: false, error: (e as Error).message }
     }

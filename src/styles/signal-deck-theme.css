@@ -4,23 +4,31 @@
   --tv-bg-surface: #1c1f24;
   --tv-bg-elevated: #1c1f24;
   --tv-bg-inset: #0d0e10;
+  --tv-bg-overlay: #1f1f28;
   --tv-accent: #ff8a3d;
   --tv-accent-hover: #e67a2e;
-  --tv-accent-dim: #b35f28;
+  --tv-accent-dim: rgba(255, 138, 61, 0.12);
   --tv-accent-glow: rgba(255, 138, 61, 0.35);
   --tv-text-primary: #eef0f2;
   --tv-text-secondary: #8a8f98;
   --tv-text-tertiary: #565a63;
   --tv-border: #2a2d33;
+  --tv-border-strong: rgba(255, 255, 255, 0.13);
   --tv-divider: #1f2226;
-  --tv-live: #ff4d4d;
-  --tv-rec: #ff8a3d;
-  --tv-offline: #4a4f58;
+  --tv-live: #22c55e;
+  --tv-rec: #ef4444;
+  --tv-online: #22c55e;
+  --tv-offline: #ef4444;
+  --tv-checking: #f59e0b;
+  --tv-unknown: #6b7280;
   --tv-focus-ring: #ff8a3d;
 
   --tv-radius-sm: 2px;
   --tv-radius-md: 4px;
   --tv-radius-none: 0px;
+  --tv-radius-lg: 8px;
+  --tv-radius-xl: 12px;
+  --tv-radius-full: 9999px;
 
   --tv-font-display: 'Rajdhani', 'Barlow Condensed', 'Noto Sans SC', sans-serif;
   --tv-font-body: 'Inter', 'Noto Sans SC', sans-serif;
@@ -28,4 +36,9 @@
 
   --tv-scanline-opacity: 0.03;
   --tv-focus-scale: 1.04;
+
+  --tv-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.45);
+  --tv-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.55);
+  --tv-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.70);
+  --tv-shadow-glow: 0 0 20px rgba(255, 138, 61, 0.18);
 }

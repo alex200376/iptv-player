@@ -185,8 +185,9 @@ export const useStore = create<PlayerStore>((set) => ({
   }),
 
   addHistoryEntry: (channel) => set((s) => {
-    const filtered = s.historyEntries.filter((e) => e.channel.id !== channel.id)
-    const historyEntries = [{ channel, watchedAt: Date.now() }, ...filtered].slice(0, 100)
+    const { _groupName: _unused, ...cleanChannel } = channel as Channel & { _groupName?: string }
+    const filtered = s.historyEntries.filter((e) => e.channel.id !== cleanChannel.id)
+    const historyEntries = [{ channel: cleanChannel, watchedAt: Date.now() }, ...filtered].slice(0, 100)
     debouncedSaveUserData({ favoriteIds: s.favoriteIds, historyEntries, playlists: s.playlists, epgSources: s.epgSources })
     return { historyEntries }
   }),
@@ -218,7 +219,10 @@ export const useStore = create<PlayerStore>((set) => ({
 
   loadUserData: (data) => set({
     favoriteIds: data.favoriteIds || [],
-    historyEntries: data.historyEntries || [],
+    historyEntries: (data.historyEntries || []).map((entry) => {
+      const { _groupName: _unused, ...cleanChannel } = (entry.channel as Channel & { _groupName?: string })
+      return { ...entry, channel: cleanChannel as Channel }
+    }),
     playlists: data.playlists || [],
     epgSources: (data as UserData).epgSources || [],
   }),

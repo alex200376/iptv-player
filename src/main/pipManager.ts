@@ -151,7 +151,9 @@ body{border-radius:4px;overflow:hidden;--pip-radius:4px}
       volumeSlider.value = volume
       updatePlayBtn()
       updateVolumeIcon()
-    } catch {}
+    } catch (e) {
+      console.error('[pip] poll error:', e)
+    }
   }
 
   setInterval(poll, 2000)

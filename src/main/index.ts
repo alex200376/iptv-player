@@ -64,7 +64,7 @@ async function createWindow() {
       resizeTimer = null
       const p = getState().player
       if (p && !p.destroyed) {
-        try { p.notifyLayoutChange() } catch {}
+        try { p.notifyLayoutChange() } catch (e) { console.error('[main] notifyLayoutChange:', e) }
       }
     }, 150)
   })

@@ -8,6 +8,7 @@ interface Channel {
   group?: string
   tvgId?: string
   tvgUrl?: string
+  tvgChno?: string
   status?: 'unknown' | 'online' | 'offline'
   lastCheckedAt?: number
 }
@@ -51,6 +52,7 @@ function on<T>(channel: string, cb: (payload: T) => void): () => void {
 const api = {
   switchChannel: (url: string) => ipcRenderer.invoke('switch-channel', url),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  getVlcVersion: () => ipcRenderer.invoke('get-vlc-version'),
   snoozeUpdate: (until: number) => ipcRenderer.invoke('snooze-update', until),
   checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
   downloadUpdate: () => ipcRenderer.invoke('download-update'),
@@ -123,6 +125,8 @@ const api = {
       removedCount: number
     }>,
   clearAllData: () => ipcRenderer.invoke('clear-all-data'),
+  backupData: () => ipcRenderer.invoke('backup-data'),
+  restoreData: () => ipcRenderer.invoke('restore-data'),
   onChannelsCheckProgress: (
     callback: (progress: { checked: number; total: number }) => void,
   ) => on('channels-check-progress', callback),

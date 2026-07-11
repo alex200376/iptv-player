@@ -9,6 +9,7 @@ import UpdateDialog from './components/UpdateDialog'
 import { useStore } from './stores/useStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { applyTheme } from './themes'
+import type { Channel } from './types'
 
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -53,10 +54,10 @@ export default function App() {
     })
 
     const offRefreshed = window.electronAPI.onPlaylistsRefreshed((channels) => {
-      if (channels.length > 0) setChannels(channels as any)
+      if (channels.length > 0) setChannels(channels as Channel[])
     })
     const offCheckDone = window.electronAPI.onChannelsCheckDone((channels) => {
-      if (channels.length > 0) setChannels(channels as any)
+      if (channels.length > 0) setChannels(channels as Channel[])
       useStore.setState({ checkRunning: false })
     })
     const offCheckLog = window.electronAPI.onChannelsCheckLog((log) => {

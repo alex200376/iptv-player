@@ -17,6 +17,7 @@ async function doPlay(
   const effectiveCache = cacheOverride ?? settings.networkCache
   const mediaOptions = buildMediaOptions({ ...settings, networkCache: effectiveCache })
   const state = getState()
+  let watchdogTimer: ReturnType<typeof setTimeout> | null = null
 
   function attachListeners(player: InstanceType<typeof VlcPlayer>) {
     player.removeAllListeners('error')
@@ -35,6 +36,7 @@ async function doPlay(
     player.on('playing', () => {
       if (currentPlayId !== _playId) return
       console.log('[vlc-playing]', url.substring(0, 60))
+      if (watchdogTimer) { clearTimeout(watchdogTimer); watchdogTimer = null }
       if (state.mainWindow && !state.mainWindow.isDestroyed()) {
         state.mainWindow.webContents.send('player-playing')
       }
@@ -55,11 +57,12 @@ async function doPlay(
     try {
       state.player.removeAllListeners()
       state.player.destroy()
-    } catch {}
-    state.player = null
+    } catch (e) {
+      console.error('[playback] destroy player failed:', e)
+    }
     // Give libVLC extra time to release GPU surfaces / threads before
     // allocating a new VlcPlayer (avoids race on Windows / dead-stream freeze).
-    await new Promise<void>((r) => setTimeout(r, 80))
+    await new Promise<void>((r) => setTimeout(r, 120))
     if (currentPlayId !== _playId) return { success: false }
   }
 
@@ -90,6 +93,21 @@ async function doPlay(
     state.player.setSource(url, { mediaOptions })
     state.player.play()
     state.currentUrl = url
+
+    // Watchdog: if playing event doesn't fire within 12s, kill player and report error.
+    // This bounds the worst-case freeze to ~12s instead of VLC's default 20-30s.
+    watchdogTimer = setTimeout(() => {
+      if (currentPlayId !== _playId) return
+      console.warn('[play] watchdog: no playing event within 12s, killing player')
+      if (state.player) {
+        try { state.player.removeAllListeners(); state.player.destroy() } catch (e) { console.error('[playback] watchdog kill failed:', e) }
+        state.player = null
+      }
+      if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+        state.mainWindow.webContents.send('player-error')
+      }
+    }, 12000)
+
     return { success: true }
   }
 
@@ -98,7 +116,7 @@ async function doPlay(
   } catch (e) {
     console.error('[play] error, rebuilding player:', url, (e as Error).message)
     if (state.player) {
-      try { state.player.removeAllListeners(); state.player.destroy() } catch {}
+      try { state.player.removeAllListeners(); state.player.destroy() } catch (e) { console.error('[playback] rebuild destroy failed:', e) }
       state.player = null
     }
     if (currentPlayId !== _playId) return { success: false }
@@ -115,7 +133,7 @@ export function registerPlaybackIpc() {
     // Debounce rapid channel switches (e.g. clicking two dead streams quickly)
     // to prevent concurrent VlcPlayer allocations that race on GPU surfaces.
     const now = Date.now()
-    if (now - _lastSwitchTime < 300) {
+    if (now - _lastSwitchTime < 500) {
       console.log('[switch-channel] debounced, ignoring rapid switch')
       return { success: false }
     }
@@ -130,9 +148,9 @@ export function registerPlaybackIpc() {
     const settings = readSettings()
 
     // Kill any running proxy/ffmpeg IMMEDIATELY before starting the new stream.
-    // This is the key fix: a dead stream's ffmpeg stays alive during its TCP
-    // probe timeout unless we force-kill it here, causing the next stream to
-    // contend for the same pipe and VLC to lag/freeze.
+    // A dead stream's ffmpeg stays alive during its TCP probe timeout unless
+    // we force-kill it here, causing the next stream to contend for the same
+    // pipe and VLC to lag/freeze.
     stopProxy()
 
     if (currentPlayId !== _playId) return { success: false }
@@ -211,14 +229,14 @@ export function registerPlaybackIpc() {
     _playId++
     const state = getState()
     if (state.pipWindow) {
-      if (state.player) { try { state.player.destroy() } catch {}; state.player = null }
+      if (state.player) { try { state.player.destroy() } catch (e) { console.error('[playback] pip destroy:', e) }; state.player = null }
       if (!state.pipWindow.isDestroyed()) state.pipWindow.close()
       state.pipWindow = null
     }
-    if (state.player) {
-      try { state.player.removeAllListeners() } catch {}
-      try { state.player.destroy() } catch {}
-      state.player = null
+      if (state.player) {
+        try { state.player.removeAllListeners() } catch (e) { console.error('[playback] removeAllListeners:', e) }
+        try { state.player.destroy() } catch (e) { console.error('[playback] destroy:', e) }
+        state.player = null
     }
     stopProxy()
   })
