@@ -2,6 +2,7 @@ import { ipcMain, app } from 'electron'
 import { autoUpdater, UpdateInfo } from 'electron-updater'
 import { getState } from './shared'
 import { readSettings, writeSettings } from '../settingsStore'
+import { t } from '../i18n'
 
 
 autoUpdater.autoDownload = false
@@ -31,7 +32,7 @@ async function backgroundCheck() {
       })
       if (settings.autoDownloadUpdates) {
         autoUpdater.downloadUpdate()
-        sendToRenderer('update-status', '正在背景下载更新...')
+        sendToRenderer('update-status', t('update.downloading'))
       }
     }
   } catch {
@@ -96,7 +97,7 @@ autoUpdater.on('update-downloaded', (info: UpdateInfo) => {
 })
 
 autoUpdater.on('error', (err) => {
-  sendToRenderer('update-status', `更新錯誤: ${err.message}`)
+  sendToRenderer('update-status', `${t('update.error').replace('{{message}}', err.message)}`)
 })
 
 export { backgroundCheck }

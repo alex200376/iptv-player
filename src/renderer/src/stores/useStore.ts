@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import i18n from '../i18n'
 import type { Channel, ChannelGroup, PlaylistMeta, HistoryEntry, EpgProgram, EpgSource, UserData } from '../types'
 
 let directIdCounter = 0
@@ -72,7 +73,7 @@ interface PlayerStore {
 export function groupChannels(channels: Channel[]): ChannelGroup[] {
   const map = new Map<string, Channel[]>()
   for (const ch of channels) {
-    const g = ch.group || '未分组'
+    const g = ch.group || i18n.t('group.ungrouped')
     if (!map.has(g)) map.set(g, [])
     map.get(g)!.push(ch)
   }
@@ -150,7 +151,7 @@ export const useStore = create<PlayerStore>((set) => ({
   addDirectStream: (url: string) => {
     const id = `direct-${++directIdCounter}`
     const label = url.length > 50 ? url.slice(0, 47) + '...' : url
-    const ch: Channel = { id, name: label, url, group: '直接播放' }
+    const ch: Channel = { id, name: label, url, group: i18n.t('group.directPlay') }
     set((s) => {
       const allChannels = [...s.groups.flatMap((g) => g.channels), ch]
       debouncedSave(allChannels)

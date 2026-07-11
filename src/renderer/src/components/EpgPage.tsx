@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../stores/useStore'
 import type { Channel, EpgProgram } from '../types'
+import { useTranslation } from 'react-i18next'
+import { getGroupDisplayName } from '../utils/groupLabels'
 
 function getCurrentProgram(programs: EpgProgram[], channelTvgId?: string): EpgProgram | null {
   const now = new Date()
@@ -29,6 +31,7 @@ function programProgress(p: EpgProgram): number {
 }
 
 export default function EpgPage({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation()
   const groups = useStore((s) => s.groups)
   const currentChannel = useStore((s) => s.currentChannel)
   const setCurrentChannel = useStore((s) => s.setCurrentChannel)
@@ -57,7 +60,7 @@ export default function EpgPage({ onClose }: { onClose: () => void }) {
   const grouped = useMemo(() => {
     const map = new Map<string, Channel[]>()
     for (const ch of channels) {
-      const g = ch.group || '未分组'
+      const g = ch.group || t('epg.unknown')
       if (!map.has(g)) map.set(g, [])
       map.get(g)!.push(ch)
     }
@@ -79,17 +82,17 @@ export default function EpgPage({ onClose }: { onClose: () => void }) {
     const result = await importEpgFromUrl(url)
     setImporting(false)
     if (result.success) {
-      setImportMsg({ ok: true, text: `导入成功: ${result.count} 条节目数据` })
+      setImportMsg({ ok: true, text: t('epg.importSuccess', { count: result.count }) })
       setImportUrl('')
     } else {
-      setImportMsg({ ok: false, text: result.error || '导入失败' })
+      setImportMsg({ ok: false, text: result.error || t('epg.importFailed') })
     }
   }
 
   return (
     <div className="h-full flex flex-col bg-tv-bg-surface">
       <div className="flex items-center justify-between px-8 py-5 border-b border-tv-border shrink-0">
-        <h2 className="text-tv-lg font-bold text-tv-text-primary">节目指南</h2>
+        <h2 className="text-tv-lg font-bold text-tv-text-primary">{t('epg.title')}</h2>
         <button
           onClick={onClose}
           className="text-tv-text-secondary hover:text-tv-text-primary p-2 rounded-tv-sm"
@@ -107,7 +110,7 @@ export default function EpgPage({ onClose }: { onClose: () => void }) {
             value={importUrl}
             onChange={(e) => setImportUrl(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleImport()}
-            placeholder="粘贴 EPG (XMLTV) 链接..."
+            placeholder={t('epg.importPlaceholder')}
             disabled={importing}
             className="flex-1 px-3 py-2 bg-tv-bg border border-tv-border rounded-tv-md text-tv-sm text-tv-text-primary placeholder-tv-text-secondary"
           />
@@ -116,7 +119,7 @@ export default function EpgPage({ onClose }: { onClose: () => void }) {
             disabled={importing}
             className="px-4 py-2 bg-tv-accent text-white text-tv-sm rounded-tv-md hover:bg-tv-accent-hover transition-colors disabled:opacity-50"
           >
-            {importing ? '导入中...' : '导入'}
+            {importing ? t('epg.importing') : t('epg.import')}
           </button>
         </div>
         {importMsg && (
@@ -149,7 +152,7 @@ export default function EpgPage({ onClose }: { onClose: () => void }) {
       <div className="flex-1 overflow-y-auto">
         {grouped.length === 0 ? (
           <div className="flex items-center justify-center h-32 text-tv-sm text-tv-text-secondary">
-            暂无频道
+            {t('epg.empty')}
           </div>
         ) : (
           grouped.map(([groupName, chs]) => (
@@ -197,13 +200,13 @@ export default function EpgPage({ onClose }: { onClose: () => void }) {
                       )}
                       {next && (
                         <div className="mt-1.5 text-tv-xs text-tv-text-secondary/70">
-                          下一步: {next.title} — <span className="font-mono">{formatTime(next.start)}</span>
+                          {t('epg.nextProgram', { title: next.title, time: formatTime(next.start) })}
                         </div>
                       )}
                     </div>
                     {current && (
                       <span className="shrink-0 self-start mt-1.5 px-2 py-0.5 rounded-tv-sm text-tv-xs bg-tv-accent/10 text-tv-accent/80 font-medium">
-                        直播中
+                        {t('epg.currentProgram')}
                       </span>
                     )}
                   </button>

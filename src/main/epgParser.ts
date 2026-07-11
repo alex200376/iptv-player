@@ -1,3 +1,5 @@
+import { t } from './i18n'
+
 export interface EpgProgram {
   channelTvgId: string
   start: Date
@@ -49,7 +51,7 @@ export function parseXmltv(xml: string): Promise<EpgProgram[]> {
           channelTvgId: channelMatch[1],
           start: parseXmltvTime(startMatch[1]),
           stop: stopMatch ? parseXmltvTime(stopMatch[1]) : new Date(Date.now() + 86400000),
-          title: title || '未知节目',
+          title: title || t('epg.unknownTitle'),
           description: desc,
           category,
           icon: iconMatch?.[1],

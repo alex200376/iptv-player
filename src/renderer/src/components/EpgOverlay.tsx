@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { useStore } from '../stores/useStore'
 import type { EpgProgram } from '../types'
+import { useTranslation } from 'react-i18next'
 
 function formatEpgTime(d: Date): string {
   return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
@@ -37,6 +38,7 @@ function findPrograms(
 }
 
 export default function EpgOverlay({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation()
   const currentChannel = useStore((s) => s.currentChannel)
   const epgCache = useStore((s) => s.epgCache)
   const loadEpg = useStore((s) => s.loadEpg)
@@ -74,7 +76,7 @@ export default function EpgOverlay({ onClose }: { onClose: () => void }) {
       <div className="px-4 py-3 space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-foreground">
-            节目表 — {currentChannel?.name || '未知'}
+            {t('player.epgHeader', { name: currentChannel?.name || t('epg.unknown') })}
           </h2>
           <button
             onClick={onClose}
@@ -87,18 +89,18 @@ export default function EpgOverlay({ onClose }: { onClose: () => void }) {
         </div>
 
         {loading && (
-          <div className="text-center text-sm text-muted-foreground py-4">加载节目表中...</div>
+          <div className="text-center text-sm text-muted-foreground py-4">{t('epg.overlay.loading')}</div>
         )}
 
         {!hasData && !loading && (
           <div className="text-center text-sm text-muted-foreground py-4">
-            该频道暂无 EPG 数据
+            {t('epg.overlay.noData')}
           </div>
         )}
 
         {current && !loading && (
           <div className="p-3 bg-primary/10 border border-primary/30 rounded-lg">
-            <div className="text-xs text-primary font-medium mb-1">正在播放</div>
+            <div className="text-xs text-primary font-medium mb-1">{t('epg.overlay.nowPlaying')}</div>
             <div className="text-sm text-foreground font-medium">{current.title}</div>
             <div className="text-xs text-muted-foreground mt-1 font-mono">
               {formatEpgTime(new Date(current.start))} — {formatEpgTime(new Date(current.stop))}
@@ -111,7 +113,7 @@ export default function EpgOverlay({ onClose }: { onClose: () => void }) {
 
         {nextPrograms.length > 0 && !loading && (
           <div>
-            <div className="text-xs text-muted-foreground font-medium mb-2">即将播出</div>
+            <div className="text-xs text-muted-foreground font-medium mb-2">{t('epg.overlay.upcoming')}</div>
             <div className="space-y-1.5">
               {nextPrograms.map((p, i) => (
                 <div

@@ -4,8 +4,10 @@ import { themes, applyTheme, type ThemeId } from '../themes'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useStore } from '../stores/useStore'
 import UpdateDialog from './UpdateDialog'
+import { useTranslation } from 'react-i18next'
 
 export default function SettingsPage({ variant = 'page', onClose }: { variant?: 'page' | 'overlay'; onClose?: () => void }) {
+  const { t, i18n } = useTranslation()
   const { settings, updateSettings } = useSettingsStore()
   const [showUpdateDialog, setShowUpdateDialog] = useState(false)
 
@@ -16,20 +18,20 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
   const content = (
     <div className={`flex flex-col h-full bg-tv-bg-surface ${variant === 'overlay' ? 'border border-tv-border rounded-tv-md shadow-2xl' : ''}`}>
       <div className="flex items-center justify-between px-8 py-5 border-b border-tv-border">
-        <h2 className="text-tv-lg font-bold text-tv-text-primary">设置</h2>
+        <h2 className="text-tv-lg font-bold text-tv-text-primary">{t('settings.title')}</h2>
         <button onClick={handleClose} className="text-tv-text-secondary hover:text-tv-text-primary p-2 rounded-tv-sm">
           <svg className="w-6 h-6" viewBox="0 0 15 15" fill="none"><path d="M4 4l7 7M11 4l-7 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
         </button>
       </div>
         <Tabs.Root defaultValue="playback" className="flex-1 flex flex-col overflow-hidden">
-          <Tabs.List className="flex gap-1 px-8 pt-4 border-b border-tv-border">
+          <Tabs.List className="flex gap-1 px-8 pt-4 border-b border-tv-border overflow-x-auto flex-nowrap">
             {[
-              { value: 'playback', label: '播放' },
-              { value: 'appearance', label: '外观' },
-              { value: 'playlists', label: '播放列表' },
-              { value: 'verify', label: '检测' },
-              { value: 'epg', label: 'EPG' },
-              { value: 'about', label: '关于' },
+              { value: 'playback', label: t('settings.playback') },
+              { value: 'appearance', label: t('settings.appearance') },
+              { value: 'playlists', label: t('settings.playlists') },
+              { value: 'verify', label: t('settings.verify') },
+              { value: 'epg', label: t('settings.epg') },
+              { value: 'about', label: t('settings.about') },
             ].map((tab) => (
               <Tabs.Trigger
                 key={tab.value}
@@ -43,7 +45,7 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
 
           <Tabs.Content value="playback" className="flex-1 overflow-y-auto p-8 space-y-6">
             <div className="space-y-3">
-              <label className="block text-tv-sm font-medium text-tv-text-primary">硬件加速</label>
+              <label className="block text-tv-sm font-medium text-tv-text-primary">{t('settings.hardwareAccel')}</label>
               <select
                 value={settings.hardwareAcceleration}
                 onChange={async (e) => {
@@ -52,17 +54,17 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                 }}
                 className="w-full px-4 py-3 bg-tv-bg border border-tv-border rounded-tv-md text-tv-sm text-tv-text-primary"
               >
-                <option value="d3d11va">Direct3D11 VA (推荐)</option>
-                <option value="dxva2">DXVA2</option>
-                <option value="vaapi">VAAPI</option>
-                <option value="vda">VDA</option>
-                <option value="videotoolbox">VideoToolbox</option>
-                <option value="none">关闭</option>
+                <option value="d3d11va">{t('settings.hardwareAccel.d3d11va')}</option>
+                <option value="dxva2">{t('settings.hardwareAccel.dxva2')}</option>
+                <option value="vaapi">{t('settings.hardwareAccel.vaapi')}</option>
+                <option value="vda">{t('settings.hardwareAccel.vda')}</option>
+                <option value="videotoolbox">{t('settings.hardwareAccel.videotoolbox')}</option>
+                <option value="none">{t('settings.hardwareAccel.none')}</option>
               </select>
-              <p className="text-tv-sm text-tv-text-secondary">切换 HW 后需要重新播放才能生效</p>
+              <p className="text-tv-sm text-tv-text-secondary">{t('settings.hardwareAccelDesc')}</p>
             </div>
             <div className="space-y-3">
-              <label className="block text-tv-sm font-medium text-tv-text-primary">网络缓存</label>
+              <label className="block text-tv-sm font-medium text-tv-text-primary">{t('settings.networkCache')}</label>
               <div className="flex items-center gap-4">
                 <input
                   type="range"
@@ -85,24 +87,24 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                 className="w-4 h-4 accent-tv-accent"
               />
               <label htmlFor="compat-mode" className="text-tv-sm text-tv-text-primary cursor-pointer select-none">
-                解码兼容模式
+                {t('settings.compatMode')}
               </label>
-              <span className="text-tv-xs text-tv-text-secondary">（get_buffer failed / 花屏时开启，软件解码）</span>
+              <span className="text-tv-xs text-tv-text-secondary">{t('settings.compatModeDesc')}</span>
             </div>
             <div className="space-y-3">
-              <label className="block text-tv-sm font-medium text-tv-text-primary">H.264 解码线程数</label>
+              <label className="block text-tv-sm font-medium text-tv-text-primary">{t('settings.h264Threads')}</label>
               <select
                 value={settings.h264Threads}
                 onChange={(e) => updateSettings({ h264Threads: parseInt(e.target.value) })}
                 className="w-full px-4 py-3 bg-tv-bg border border-tv-border rounded-tv-md text-tv-sm text-tv-text-primary"
               >
-                <option value={0}>自动（默认）</option>
-                <option value={1}>1 线程</option>
-                <option value={2}>2 线程</option>
-                <option value={4}>4 线程</option>
-                <option value={8}>8 线程</option>
+                <option value={0}>{t('settings.h264Threads.auto')}</option>
+                <option value={1}>{t('settings.h264Threads.count', { count: 1 })}</option>
+                <option value={2}>{t('settings.h264Threads.count', { count: 2 })}</option>
+                <option value={4}>{t('settings.h264Threads.count', { count: 4 })}</option>
+                <option value={8}>{t('settings.h264Threads.count', { count: 8 })}</option>
               </select>
-              <p className="text-tv-sm text-tv-text-secondary">增加线程数可提升解码性能，过高可能导致不稳定</p>
+              <p className="text-tv-sm text-tv-text-secondary">{t('settings.h264ThreadsDesc')}</p>
             </div>
             <div className="flex items-center gap-3 py-2">
               <input
@@ -113,9 +115,9 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                 className="w-4 h-4 accent-tv-accent"
               />
               <label htmlFor="avcodec-hw" className="text-tv-sm text-tv-text-primary cursor-pointer select-none">
-                禁用 avcodec 硬件解码
+                {t('settings.disableAvcodecHw')}
               </label>
-              <span className="text-tv-xs text-tv-text-secondary">（花屏/绿屏时开启，强制软件解码）</span>
+              <span className="text-tv-xs text-tv-text-secondary">{t('settings.disableAvcodecHwDesc')}</span>
             </div>
             <div className="space-y-3 pt-2 border-t border-tv-border">
               <div className="flex items-center gap-3">
@@ -127,22 +129,22 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                   className="w-4 h-4 accent-tv-accent"
                 />
                 <label htmlFor="auto-reconnect" className="text-tv-sm text-tv-text-primary cursor-pointer select-none">
-                  播失败自动重连
+                  {t('settings.autoReconnect')}
                 </label>
               </div>
               {settings.autoReconnect && (
                 <div className="flex items-center gap-4 pl-7">
-                  <span className="text-tv-sm text-tv-text-secondary">重连间隔</span>
+                  <span className="text-tv-sm text-tv-text-secondary">{t('settings.reconnectInterval')}</span>
                   <select
                     value={settings.reconnectInterval}
                     onChange={(e) => updateSettings({ reconnectInterval: parseInt(e.target.value) })}
                     className="px-3 py-1.5 bg-tv-bg border border-tv-border rounded-tv-sm text-tv-sm text-tv-text-primary"
                   >
-                    <option value={1000}>1 秒</option>
-                    <option value={2000}>2 秒</option>
-                    <option value={3000}>3 秒</option>
-                    <option value={5000}>5 秒</option>
-                    <option value={10000}>10 秒</option>
+                    <option value={1000}>{t('settings.reconnectSec', { count: 1 })}</option>
+                    <option value={2000}>{t('settings.reconnectSec', { count: 2 })}</option>
+                    <option value={3000}>{t('settings.reconnectSec', { count: 3 })}</option>
+                    <option value={5000}>{t('settings.reconnectSec', { count: 5 })}</option>
+                    <option value={10000}>{t('settings.reconnectSec', { count: 10 })}</option>
                   </select>
                 </div>
               )}
@@ -156,51 +158,51 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                 className="w-4 h-4 accent-tv-accent"
               />
               <label htmlFor="stream-proxy" className="text-tv-sm text-tv-text-primary cursor-pointer select-none">
-                串流转发代理
+                {t('settings.streamProxy')}
               </label>
-              <span className="text-tv-xs text-tv-text-secondary">（RTMP/RTSP/UDP 转 HTTP-FLV，需系统安装 ffmpeg）</span>
+              <span className="text-tv-xs text-tv-text-secondary">{t('settings.streamProxyDesc')}</span>
             </div>
             {settings.streamProxy && (
               <div className="space-y-3 pl-7">
-                <label className="block text-tv-sm font-medium text-tv-text-primary">自动缩放分辨率</label>
+                <label className="block text-tv-sm font-medium text-tv-text-primary">{t('settings.proxyResolution')}</label>
                 <select
                   value={settings.proxyResolution}
                   onChange={(e) => updateSettings({ proxyResolution: e.target.value })}
                   className="w-full px-4 py-3 bg-tv-bg border border-tv-border rounded-tv-md text-tv-sm text-tv-text-primary"
                 >
-                  <option value="original">原始分辨率（直接复制，不重新编码）</option>
-                  <option value="2160p">4K (2160p)</option>
-                  <option value="1440p">2K (1440p)</option>
-                  <option value="1080p">1080p</option>
-                  <option value="720p">720p</option>
-                  <option value="540p">540p</option>
-                  <option value="480p">480p</option>
-                  <option value="360p">360p</option>
+                  <option value="original">{t('settings.proxyResolution.original')}</option>
+                  <option value="2160p">{t('settings.proxyResolution.2160p')}</option>
+                  <option value="1440p">{t('settings.proxyResolution.1440p')}</option>
+                  <option value="1080p">{t('settings.proxyResolution.1080p')}</option>
+                  <option value="720p">{t('settings.proxyResolution.720p')}</option>
+                  <option value="540p">{t('settings.proxyResolution.540p')}</option>
+                  <option value="480p">{t('settings.proxyResolution.480p')}</option>
+                  <option value="360p">{t('settings.proxyResolution.360p')}</option>
                 </select>
-                <p className="text-tv-xs text-tv-text-secondary">缩放需重新编码，CPU 占用较高；建议 720p 平衡画质与性能</p>
+                <p className="text-tv-xs text-tv-text-secondary">{t('settings.proxyResolutionDesc')}</p>
               </div>
             )}
             <div className="space-y-3 pt-2 border-t border-tv-border">
-              <label className="block text-tv-sm font-medium text-tv-text-primary">播放列表自动刷新</label>
+              <label className="block text-tv-sm font-medium text-tv-text-primary">{t('settings.playlistAutoRefresh')}</label>
               <select
                 value={settings.playlistRefreshInterval}
                 onChange={(e) => updateSettings({ playlistRefreshInterval: parseInt(e.target.value) })}
                 className="w-full px-4 py-3 bg-tv-bg border border-tv-border rounded-tv-md text-tv-sm text-tv-text-primary"
               >
-                <option value={0}>关闭</option>
-                <option value={15}>每 15 分钟</option>
-                <option value={30}>每 30 分钟</option>
-                <option value={60}>每 1 小时</option>
-                <option value={360}>每 6 小时</option>
-                <option value={1440}>每天</option>
+                <option value={0}>{t('settings.playlistAutoRefresh.off')}</option>
+                <option value={15}>{t('settings.playlistAutoRefresh.15min')}</option>
+                <option value={30}>{t('settings.playlistAutoRefresh.30min')}</option>
+                <option value={60}>{t('settings.playlistAutoRefresh.1hour')}</option>
+                <option value={360}>{t('settings.playlistAutoRefresh.6hours')}</option>
+                <option value={1440}>{t('settings.playlistAutoRefresh.daily')}</option>
               </select>
-              <p className="text-tv-sm text-tv-text-secondary">重新拉取 URL 播放列表并更新频道信息</p>
+              <p className="text-tv-sm text-tv-text-secondary">{t('settings.playlistAutoRefreshDesc')}</p>
             </div>
           </Tabs.Content>
 
           <Tabs.Content value="appearance" className="flex-1 overflow-y-auto p-8 space-y-6">
             <div className="space-y-3">
-              <label className="block text-tv-sm font-medium text-tv-text-primary">主题</label>
+              <label className="block text-tv-sm font-medium text-tv-text-primary">{t('settings.theme')}</label>
               <select
                 value={settings.theme}
                 onChange={(e) => {
@@ -209,19 +211,19 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                 }}
                 className="w-full px-4 py-3 bg-tv-bg border border-tv-border rounded-tv-md text-tv-sm text-tv-text-primary"
               >
-                {themes.map((t) => (
-                  <option key={t.id} value={t.id}>{t.label}</option>
+                {themes.map((theme) => (
+                  <option key={theme.id} value={theme.id}>{t(theme.labelKey)}</option>
                 ))}
               </select>
               {(() => {
-                const t = themes.find((th) => th.id === settings.theme) || themes[0]
-                const bg = t.variables['--tv-bg']
-                const secondary = t.variables['--tv-bg-secondary']
-                const card = t.variables['--tv-bg-surface']
-                const text = t.variables['--tv-text-primary']
-                const muted = t.variables['--tv-text-secondary']
-                const accent = t.variables['--tv-accent']
-                const border = t.variables['--tv-border']
+                const th = themes.find((th) => th.id === settings.theme) || themes[0]
+                const bg = th.variables['--tv-bg']
+                const secondary = th.variables['--tv-bg-secondary']
+                const card = th.variables['--tv-bg-surface']
+                const text = th.variables['--tv-text-primary']
+                const muted = th.variables['--tv-text-secondary']
+                const accent = th.variables['--tv-accent']
+                const border = th.variables['--tv-border']
                 return (
                   <div
                     className="mt-3 rounded-tv-md border overflow-hidden"
@@ -229,7 +231,7 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                   >
                     <div className="px-4 py-3 space-y-2.5">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold">{t.label} Theme</span>
+                        <span className="text-sm font-bold">{t(th.labelKey)} Theme</span>
                         <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: accent, color: '#fff' }}>Preview</span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -242,7 +244,7 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                         Current program title with a longer description that shows how the text appears in this theme.
                       </div>
                       <div className="flex items-center gap-2 text-xs">
-                        <span className="px-2 py-1 rounded" style={{ background: accent, color: '#fff' }}>节目表</span>
+                        <span className="px-2 py-1 rounded" style={{ background: accent, color: '#fff' }}>{t('player.epgButton')}</span>
                         <span className="px-2 py-1 rounded" style={{ background: card, border: `1px solid ${border}`, color: muted }}>Sub button</span>
                       </div>
                     </div>
@@ -259,13 +261,13 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
               })()}
             </div>
             <div className="space-y-3">
-              <label className="block text-tv-sm font-medium text-tv-text-primary">字号</label>
+              <label className="block text-tv-sm font-medium text-tv-text-primary">{t('settings.fontSize')}</label>
               <div className="flex gap-3">
                 {[
-                  { value: 'small', label: '小' },
-                  { value: 'normal', label: '标准' },
-                  { value: 'large', label: '大' },
-                  { value: 'xlarge', label: '超大' },
+                  { value: 'small', label: t('settings.fontSize.small') },
+                  { value: 'normal', label: t('settings.fontSize.normal') },
+                  { value: 'large', label: t('settings.fontSize.large') },
+                  { value: 'xlarge', label: t('settings.fontSize.xlarge') },
                 ].map((opt) => (
                   <button
                     key={opt.value}
@@ -281,10 +283,26 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                 ))}
               </div>
             </div>
+            <div className="space-y-3">
+              <label className="block text-tv-sm font-medium text-tv-text-primary">{t('settings.language')}</label>
+              <select
+                value={settings.language}
+                onChange={async (e) => {
+                  const lang = e.target.value as 'zh-CN' | 'en-US'
+                  await updateSettings({ language: lang })
+                  i18n.changeLanguage(lang)
+                  document.documentElement.lang = lang
+                }}
+                className="w-full px-4 py-3 bg-tv-bg border border-tv-border rounded-tv-md text-tv-sm text-tv-text-primary"
+              >
+                <option value="zh-CN">{t('language.zhCN')}</option>
+                <option value="en-US">{t('language.enUS')}</option>
+              </select>
+            </div>
           </Tabs.Content>
 
           <Tabs.Content value="playlists" className="flex-1 overflow-y-auto p-8 space-y-4">
-            <p className="text-tv-sm text-tv-text-secondary">已导入的播放列表</p>
+            <p className="text-tv-sm text-tv-text-secondary">{t('settings.playlistSettings')}</p>
             <PlaylistSettingsList />
           </Tabs.Content>
 
@@ -294,7 +312,7 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
 
           <Tabs.Content value="epg" className="flex-1 overflow-y-auto p-8 space-y-4">
             <div className="flex items-center justify-between">
-              <p className="text-tv-sm text-tv-text-secondary">已导入的 EPG 数据源</p>
+              <p className="text-tv-sm text-tv-text-secondary">{t('settings.epgSettings')}</p>
             </div>
             <EpgSourceSettings />
           </Tabs.Content>
@@ -302,11 +320,11 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
           <Tabs.Content value="about" className="flex-1 overflow-y-auto p-8 space-y-4">
             <div className="space-y-2 text-tv-sm text-tv-text-primary">
               <p><strong>IPTV Player</strong></p>
-              <p className="text-tv-text-secondary">基于 Electron + React + libVLC 构建</p>
-              <p className="text-tv-text-secondary">支持 RTMP / RTSP / HLS / M3U / UDP</p>
+              <p className="text-tv-text-secondary">{t('settings.aboutDesc')}</p>
+              <p className="text-tv-text-secondary">{t('settings.aboutFormats')}</p>
             </div>
             <div className="pt-4 border-t border-tv-border space-y-4">
-              <p className="text-tv-sm text-tv-text-secondary">VLC 版本: 3.0.23</p>
+              <p className="text-tv-sm text-tv-text-secondary">{t('settings.vlcVersion')}</p>
               <div className="flex items-center gap-3 py-1">
                 <input
                   type="checkbox"
@@ -316,15 +334,15 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                   className="w-4 h-4 accent-tv-accent"
                 />
                 <label htmlFor="auto-download-updates" className="text-tv-sm text-tv-text-primary cursor-pointer select-none">
-                  背景自动下载更新
-                </label>
-                <span className="text-tv-xs text-tv-text-secondary">（发现新版后自动下载，不打扰）</span>
+                {t('settings.autoDownloadUpdates')}
+              </label>
+              <span className="text-tv-xs text-tv-text-secondary">{t('settings.autoDownloadUpdatesDesc')}</span>
               </div>
               <button
                 onClick={() => setShowUpdateDialog(true)}
                 className="w-full py-2.5 bg-tv-accent text-white text-tv-sm rounded-tv-md hover:bg-tv-accent-hover transition-colors"
               >
-                检查更新
+                {t('settings.checkUpdate')}
               </button>
             </div>
             {showUpdateDialog && <UpdateDialog onClose={() => setShowUpdateDialog(false)} />}
@@ -347,6 +365,7 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
 }
 
 function ChannelVerifier() {
+  const { t } = useTranslation()
   const logs = useStore((s) => s.checkLogs)
   const running = useStore((s) => s.checkRunning)
   const totalCh = useStore((s) => s.checkTotal)
@@ -382,33 +401,33 @@ function ChannelVerifier() {
             onClick={handleStart}
             className="px-5 py-2 bg-tv-accent text-white text-tv-sm rounded-tv-md hover:bg-tv-accent-hover transition-colors"
           >
-            开始检测
-          </button>
-        ) : (
-          <button
-            onClick={handleCancel}
-            className="px-5 py-2 bg-red-700 text-white text-tv-sm rounded-tv-md hover:bg-red-600 transition-colors"
-          >
-            取消检测
-          </button>
-        )}
-        {logs.length > 0 && running && (
-          <span className="text-tv-xs text-tv-text-secondary ml-1">
-            检测中 {logs.length}/{totalCh}
-          </span>
-        )}
-      </div>
+             {t('verify.start')}
+            </button>
+          ) : (
+            <button
+              onClick={handleCancel}
+              className="px-5 py-2 bg-red-700 text-white text-tv-sm rounded-tv-md hover:bg-red-600 transition-colors"
+            >
+              {t('verify.cancel')}
+            </button>
+          )}
+          {logs.length > 0 && running && (
+            <span className="text-tv-xs text-tv-text-secondary ml-1">
+              {t('verify.checking', { done: logs.length, total: totalCh })}
+            </span>
+          )}
+        </div>
 
-      {logs.length > 0 && (
-        <div className="flex items-center gap-4 text-tv-xs">
-          <span className="text-green-500">可用 {onlineCount}</span>
-          <span className="text-red-500">离线 {offlineCount}</span>
-          {skippedCount > 0 && <span className="text-gray-500">跳过 {skippedCount}</span>}
-          {remaining > 0 && <span className="text-gray-500">剩余 {remaining}</span>}
-          <span className="text-tv-text-secondary">| 共 {totalCh} 频道</span>
-          <span className="ml-auto text-tv-text-secondary">
-            {running ? '检测完成后自动更新频道状态' : '检测完成'}
-          </span>
+        {logs.length > 0 && (
+          <div className="flex items-center gap-4 text-tv-xs">
+            <span className="text-green-500">{t('verify.online', { count: onlineCount })}</span>
+            <span className="text-red-500">{t('verify.offline', { count: offlineCount })}</span>
+            {skippedCount > 0 && <span className="text-gray-500">{t('verify.skipped', { count: skippedCount })}</span>}
+            {remaining > 0 && <span className="text-gray-500">{t('verify.remaining', { count: remaining })}</span>}
+            <span className="text-tv-text-secondary">{t('verify.total', { count: totalCh })}</span>
+            <span className="ml-auto text-tv-text-secondary">
+              {running ? t('verify.autoUpdate') : t('verify.done')}
+            </span>
         </div>
       )}
 
@@ -418,12 +437,12 @@ function ChannelVerifier() {
       >
         {logs.length === 0 && !running && (
           <div className="flex items-center justify-center h-full text-tv-text-secondary">
-            点击「开始检测」检查所有频道状态
+            {t('verify.emptyHint')}
           </div>
         )}
         {logs.length === 0 && running && (
           <div className="flex items-center justify-center h-full text-tv-text-secondary">
-            正在检测...
+            {t('verify.checkingHint')}
           </div>
         )}
         {logs.map((log, i) => {
@@ -458,6 +477,7 @@ function ChannelVerifier() {
 }
 
 function PlaylistSettingsList() {
+  const { t } = useTranslation()
   const playlists = useStore((s) => s.playlists)
   const removePlaylist = useStore((s) => s.removePlaylist)
   const setActivePlaylistId = useStore((s) => s.setActivePlaylistId)
@@ -481,7 +501,7 @@ function PlaylistSettingsList() {
   if (playlists.length === 0) {
     return (
       <div className="flex items-center justify-center h-32 border-2 border-dashed border-tv-border rounded-tv-md text-tv-sm text-tv-text-secondary">
-        暂无播放列表
+        {t('playlist.empty')}
       </div>
     )
   }
@@ -493,7 +513,7 @@ function PlaylistSettingsList() {
           <div className="flex-1 min-w-0">
             <div className="text-tv-sm text-tv-text-primary truncate">{pl.name}</div>
             <div className="text-tv-xs text-tv-text-secondary">
-              {pl.channelCount} 频道 · {pl.source === 'file' ? '本地文件' : '在线地址'}
+              {t('playlist.channelCount', { count: pl.channelCount, source: pl.source === 'file' ? t('playlist.localFile') : t('playlist.onlineUrl') })}
             </div>
           </div>
           <div className="flex items-center gap-2 ml-4">
@@ -503,7 +523,7 @@ function PlaylistSettingsList() {
                 disabled={refreshingUrl === pl.url}
                 className="px-3 py-1 rounded-tv-sm text-tv-xs bg-tv-bg-surface text-tv-text-secondary hover:text-tv-accent transition-colors disabled:opacity-40"
               >
-                {refreshingUrl === pl.url ? '更新中...' : '更新'}
+                {refreshingUrl === pl.url ? t('playlist.updating') : t('playlist.update')}
               </button>
             )}
             <button
@@ -514,7 +534,7 @@ function PlaylistSettingsList() {
                   : 'bg-tv-bg-surface text-tv-text-secondary hover:text-tv-text-primary'
               }`}
             >
-              {activePlaylistId === pl.id ? '查看中' : '查看'}
+              {activePlaylistId === pl.id ? t('playlist.viewing') : t('playlist.view')}
             </button>
             <button
               onClick={() => {
@@ -531,14 +551,14 @@ function PlaylistSettingsList() {
                   : 'bg-tv-bg-surface text-tv-text-secondary hover:text-red-400'
               }`}
             >
-              {confirmDelete === pl.id ? '确认删除' : '删除'}
+              {confirmDelete === pl.id ? t('playlist.confirmDelete') : t('playlist.delete')}
             </button>
             {confirmDelete === pl.id && (
               <button
                 onClick={() => setConfirmDelete(null)}
                 className="px-3 py-1 rounded-tv-sm text-tv-xs bg-tv-bg-surface text-tv-text-secondary hover:text-tv-text-primary transition-colors"
               >
-                取消
+                {t('playlist.cancel')}
               </button>
             )}
           </div>
@@ -548,13 +568,14 @@ function PlaylistSettingsList() {
         onClick={() => { setActivePlaylistId(null); setNavTab('channels') }}
         className="w-full py-2 text-tv-xs text-tv-accent hover:text-tv-accent-hover transition-colors text-center"
       >
-        显示全部频道
+        {t('playlist.showAll')}
       </button>
     </div>
   )
 }
 
 function EpgSourceSettings() {
+  const { t } = useTranslation()
   const epgSources = useStore((s) => s.epgSources)
   const importEpgFromUrl = useStore((s) => s.importEpgFromUrl)
   const removeEpgSource = useStore((s) => s.removeEpgSource)
@@ -578,10 +599,10 @@ function EpgSourceSettings() {
     const result = await importEpgFromUrl(trimmed)
     setImporting(false)
     if (result.success) {
-      setMsg({ ok: true, text: `导入成功: ${result.count} 条节目数据` })
+      setMsg({ ok: true, text: t('epg.importSuccess', { count: result.count }) })
       setUrl('')
     } else {
-      setMsg({ ok: false, text: result.error || '导入失败' })
+      setMsg({ ok: false, text: result.error || t('epg.importFailed') })
     }
   }
 
@@ -593,7 +614,7 @@ function EpgSourceSettings() {
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleImport()}
-          placeholder="输入 EPG (XMLTV) 链接..."
+          placeholder={t('epg.importPlaceholder')}
           disabled={importing}
           className="flex-1 px-3 py-2 bg-tv-bg border border-tv-border rounded-tv-md text-tv-sm text-tv-text-primary placeholder-tv-text-secondary"
         />
@@ -602,7 +623,7 @@ function EpgSourceSettings() {
           disabled={importing}
           className="px-4 py-2 bg-tv-accent text-white text-tv-sm rounded-tv-md hover:bg-tv-accent-hover transition-colors disabled:opacity-50"
         >
-          {importing ? '导入中...' : '导入'}
+          {importing ? t('epg.importing') : t('epg.import')}
         </button>
       </div>
       {msg && (
@@ -611,7 +632,7 @@ function EpgSourceSettings() {
 
       {epgSources.length === 0 ? (
         <div className="flex items-center justify-center h-24 border-2 border-dashed border-tv-border rounded-tv-md text-tv-sm text-tv-text-secondary">
-          暂无 EPG 数据源
+          {t('epg.noEpgData')}
         </div>
       ) : (
         <div className="space-y-2">
@@ -620,7 +641,7 @@ function EpgSourceSettings() {
               <div className="flex-1 min-w-0">
                 <div className="text-tv-sm text-tv-text-primary truncate">{es.url}</div>
                 <div className="text-tv-xs text-tv-text-secondary">
-                  {es.programCount} 条节目数据 · {es.tvgIds.length} 个频道
+                  {t('epg.programCount', { count: es.programCount, channels: es.tvgIds.length })}
                 </div>
               </div>
               <div className="flex items-center gap-2 ml-4">
@@ -629,13 +650,13 @@ function EpgSourceSettings() {
                   disabled={refreshingEpgUrl === es.url}
                   className="px-3 py-1 rounded-tv-sm text-tv-xs bg-tv-bg-surface text-tv-text-secondary hover:text-tv-accent transition-colors disabled:opacity-40"
                 >
-                  {refreshingEpgUrl === es.url ? '更新中...' : '更新'}
+                  {refreshingEpgUrl === es.url ? t('playlist.updating') : t('playlist.update')}
                 </button>
                 <button
                   onClick={() => removeEpgSource(es.url)}
                   className="px-3 py-1 rounded-tv-sm text-tv-xs bg-tv-bg-surface text-tv-text-secondary hover:text-red-400 transition-colors"
                 >
-                  删除
+                  {t('playlist.delete')}
                 </button>
               </div>
             </div>

@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useStore } from '../stores/useStore'
 import ImportDialog from './ImportDialog'
+import { useTranslation } from 'react-i18next'
 
 function formatDate(ts: number): string {
   const d = new Date(ts)
@@ -8,6 +9,7 @@ function formatDate(ts: number): string {
 }
 
 export default function PlaylistList() {
+  const { t } = useTranslation()
   const playlists = useStore((s) => s.playlists)
   const removePlaylist = useStore((s) => s.removePlaylist)
   const setActivePlaylistId = useStore((s) => s.setActivePlaylistId)
@@ -75,13 +77,13 @@ export default function PlaylistList() {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4 px-3">
         <div className="text-center text-tv-xs text-tv-text-secondary">
-          暂无播放列表
+          {t('playlist.empty')}
         </div>
         <button
           onClick={() => setDialogOpen(true)}
           className="px-4 py-2 bg-tv-accent hover:bg-tv-accent-hover rounded-tv-sm text-tv-sm font-medium transition-colors"
         >
-          导入 M3U
+          {t('playlist.import')}
         </button>
         <ImportDialog open={dialogOpen} onOpenChange={setDialogOpen} />
       </div>
@@ -93,29 +95,29 @@ export default function PlaylistList() {
   return (
     <div>
       <div className="px-3 py-2 border-b border-tv-border flex items-center justify-between">
-        <span className="text-tv-xs text-tv-text-secondary">共 {playlists.length} 个列表 · {totalChannels} 频道</span>
+        <span className="text-tv-xs text-tv-text-secondary">{t('playlist.count', { count: playlists.length, total: totalChannels })}</span>
         <div className="flex items-center gap-2">
           <button
             onClick={handleRefreshAll}
             disabled={refreshing}
             className="text-tv-xs text-tv-text-secondary hover:text-tv-accent transition-colors disabled:opacity-40"
-            title="刷新所有 URL 播放列表"
+            title={t('playlist.refreshAll')}
           >
-            {refreshing ? '刷新中...' : '刷新'}
+            {refreshing ? t('playlist.refreshing') : t('playlist.refresh')}
           </button>
           <button
             onClick={handleExport}
             disabled={exporting || totalChannels === 0}
             className="text-tv-xs text-tv-text-secondary hover:text-tv-accent transition-colors disabled:opacity-40"
-            title="导出为 M3U"
+            title={t('playlist.exportM3U')}
           >
-            {exporting ? '导出中...' : '导出'}
+            {exporting ? t('playlist.exporting') : t('playlist.export')}
           </button>
           <button
             onClick={() => setDialogOpen(true)}
             className="text-tv-xs text-tv-accent hover:text-tv-accent-hover transition-colors"
           >
-            导入
+            {t('playlist.importAction')}
           </button>
         </div>
       </div>
@@ -133,7 +135,7 @@ export default function PlaylistList() {
           <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5">
             <rect x="2" y="2" width="11" height="11" rx="2" />
           </svg>
-          <span className="flex-1">全部频道</span>
+          <span className="flex-1">{t('playlist.allChannels')}</span>
           <span className="text-tv-xs opacity-60">{totalChannels}</span>
         </button>
       </div>
@@ -153,7 +155,7 @@ export default function PlaylistList() {
                   {pl.name}
                 </div>
                 <div className="text-tv-xs text-tv-text-secondary">
-                  {pl.channelCount} 频道 · {formatDate(pl.importedAt)}
+                  {pl.channelCount} {t('channel.count', { count: pl.channelCount })} · {formatDate(pl.importedAt)}
                 </div>
               </div>
             </button>
@@ -164,7 +166,7 @@ export default function PlaylistList() {
                   disabled={refreshingUrl === pl.url}
                   className="text-tv-xs text-tv-text-secondary hover:text-tv-accent transition-colors disabled:opacity-40"
                 >
-                  {refreshingUrl === pl.url ? '刷新中...' : '刷新'}
+                  {refreshingUrl === pl.url ? t('playlist.refreshing') : t('playlist.refresh')}
                 </button>
               )}
               <button
@@ -175,14 +177,14 @@ export default function PlaylistList() {
                     : 'text-tv-text-secondary hover:text-red-400'
                 }`}
               >
-                {confirmDelete === pl.id ? '确认删除' : '删除'}
+                {confirmDelete === pl.id ? t('playlist.confirmDelete') : t('playlist.delete')}
               </button>
               {confirmDelete === pl.id && (
                 <button
                   onClick={() => setConfirmDelete(null)}
                   className="text-tv-xs text-tv-text-secondary hover:text-tv-text-primary transition-colors"
                 >
-                  取消
+                  {t('playlist.cancel')}
                 </button>
               )}
             </div>

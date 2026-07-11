@@ -3,8 +3,10 @@ import { useStore } from '../stores/useStore'
 import ContextMenu from './ContextMenu'
 import { useState } from 'react'
 import { usePlayChannel } from '../hooks/usePlayChannel'
+import { useTranslation } from 'react-i18next'
 
 export default function FavoriteList() {
+  const { t } = useTranslation()
   const groups = useStore((s) => s.groups)
   const favoriteIds = useStore((s) => s.favoriteIds)
   const currentChannel = useStore((s) => s.currentChannel)
@@ -33,7 +35,7 @@ export default function FavoriteList() {
   if (favoriteChannels.length === 0) {
     return (
       <div className="px-3 py-8 text-center text-tv-xs text-tv-text-secondary">
-        暂未收藏任何频道，在频道列表右键或点击星标即可收藏
+        {t('favorites.empty')}
       </div>
     )
   }
@@ -76,11 +78,11 @@ export default function FavoriteList() {
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
           items={[
-            { label: '播放', onClick: () => handlePlay(ctxMenu.channel), icon: <PlayIcon /> },
-            { label: '复制 URL', onClick: () => copyUrl(ctxMenu.channel.url), icon: <CopyIcon /> },
+            { label: t('channel.play'), onClick: () => handlePlay(ctxMenu.channel), icon: <PlayIcon /> },
+            { label: t('channel.copyUrl'), onClick: () => copyUrl(ctxMenu.channel.url), icon: <CopyIcon /> },
             { separator: true, label: '', onClick: () => {} },
             {
-              label: '取消收藏',
+              label: t('channel.unfavorite'),
               onClick: () => toggleFavorite(ctxMenu.channel.id),
               danger: true,
               icon: <StarOffIcon />,

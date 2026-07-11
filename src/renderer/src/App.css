@@ -244,6 +244,7 @@ html, body, #root {
   position: fixed;
   z-index: 100;
   min-width: 188px;
+  max-width: 280px;
   background: var(--tv-bg-overlay);
   border: 1px solid var(--tv-border-strong);
   border-radius: var(--tv-radius-lg);
@@ -252,6 +253,7 @@ html, body, #root {
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   animation: ctx-appear var(--tv-duration-fast) var(--tv-ease);
+  word-break: break-word;
 }
 
 @keyframes ctx-appear {

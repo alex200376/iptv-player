@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useStore } from '../stores/useStore'
 import type { PlaylistMeta } from '../types'
+import { useTranslation } from 'react-i18next'
 
 export default function ImportDialog({
   open,
@@ -10,6 +11,7 @@ export default function ImportDialog({
   open: boolean
   onOpenChange: (v: boolean) => void
 }) {
+  const { t } = useTranslation()
   const [url, setUrl] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -43,7 +45,7 @@ export default function ImportDialog({
       }
     }
     if (unique.length === 0) {
-      setError(`所有频道已存在，跳过导入（共 ${dupCount} 个重复频道）`)
+      setError(t('import.allExist', { count: dupCount }))
       return
     }
     const merged = [...existing, ...unique]
@@ -59,8 +61,10 @@ export default function ImportDialog({
       channelCount: unique.length,
     }
     addPlaylist(meta)
-    const dupText = dupCount > 0 ? `，已跳过 ${dupCount} 个重复频道` : ''
-    setSuccessMsg(`成功导入 ${unique.length} 个频道${dupText}`)
+    const msg = dupCount > 0
+      ? t('import.successWithDup', { count: unique.length, dup: dupCount })
+      : t('import.success', { count: unique.length })
+    setSuccessMsg(msg)
   }
 
   const handleFile = async () => {
@@ -72,7 +76,7 @@ export default function ImportDialog({
       if (result.error) {
         setError(result.error)
       } else if (result.channels.length > 0 && result.playlistId) {
-        mergeChannels(result.channels, result.playlistId, result.playlistName || '未命名', 'file')
+        mergeChannels(result.channels, result.playlistId, result.playlistName || t('import.unnamed'), 'file')
         if (!error) setTimeout(() => onOpenChange(false), 1200)
       }
     } finally {
@@ -96,7 +100,7 @@ export default function ImportDialog({
             setTimeout(() => { onOpenChange(false); setUrl('') }, 1200)
           }
         } else {
-          setError('未找到频道，请确认链接为有效 M3U/M3U8 播放列表')
+          setError(t('import.noChannels'))
         }
       }
     } finally {
@@ -112,7 +116,7 @@ export default function ImportDialog({
           className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-[480px] bg-tv-bg-surface rounded-tv-md border border-tv-border p-6 shadow-xl animate-[fadeIn_150ms_ease]"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
-          <Dialog.Title className="text-tv-base font-semibold text-tv-text-primary mb-4">导入 M3U 播放列表</Dialog.Title>
+          <Dialog.Title className="text-tv-base font-semibold text-tv-text-primary mb-4">{t('import.title')}</Dialog.Title>
           <div className="space-y-3">
             <button
               onClick={handleFile}
@@ -122,11 +126,11 @@ export default function ImportDialog({
               <svg className="w-4 h-4" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                 <path d="M8 2v4h4M8 6l4-4M4 8h7M4 11h7" />
               </svg>
-              {loading ? '导入中...' : '从文件导入 (.m3u / .m3u8)'}
+              {loading ? t('import.loading') : t('import.fromFile')}
             </button>
             <div className="flex items-center gap-2">
               <div className="flex-1 h-px bg-tv-border" />
-              <span className="text-tv-xs text-tv-text-secondary">或者</span>
+              <span className="text-tv-xs text-tv-text-secondary">{t('import.or')}</span>
               <div className="flex-1 h-px bg-tv-border" />
             </div>
             <div className="space-y-2">
@@ -136,7 +140,7 @@ export default function ImportDialog({
                 type="text"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="粘贴 M3U 在线地址..."
+                placeholder={t('import.urlPlaceholder')}
                 className="w-full px-3 py-2 bg-tv-bg border border-tv-border rounded-tv-sm text-tv-sm text-tv-text-primary placeholder-tv-text-secondary"
               />
               <button
@@ -144,7 +148,7 @@ export default function ImportDialog({
                 disabled={loading || !url.trim()}
                 className="w-full py-2 px-3 bg-tv-bg border border-tv-border hover:bg-tv-bg-surface disabled:opacity-50 rounded-tv-sm text-tv-sm transition-colors"
               >
-                从 URL 导入
+                {t('import.fromUrl')}
               </button>
             </div>
             {error && (

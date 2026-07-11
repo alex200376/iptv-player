@@ -10,6 +10,7 @@ import { registerEpgIpc } from './ipc/epg'
 import { registerWindowIpc } from './ipc/window'
 import { registerUpdateIpc, backgroundCheck } from './ipc/update'
 import { destroyProxy } from './streamProxy'
+import { t } from './i18n'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -73,7 +74,7 @@ async function createWindow() {
 
   const vlcDir = probeDefaultVlcDir()
   if (!vlcDir) {
-    dialog.showErrorBox('缺少 VLC', '未找到 VLC Media Player，请先安装 VLC 3.0 或更高版本')
+    dialog.showErrorBox(t('error.missingVlc'), t('error.missingVlcDesc'))
     return
   }
   state.vlcDir = vlcDir

@@ -2,6 +2,7 @@ import { ipcMain, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { getBinding } from 'electron-vlc-player'
 import { getState, ensureEmbedded } from './shared'
+import { t } from '../i18n'
 
 export function registerWindowIpc() {
   ipcMain.handle('hide-player-window', async () => {
@@ -42,7 +43,7 @@ export function registerWindowIpc() {
     const settingsWin = new BrowserWindow({
       width: 780,
       height: 640,
-      title: '设置 - IPTV Player',
+      title: t('window.settingsTitle'),
       backgroundColor: '#0f0f1a',
       icon: join(__dirname, '../../build/icon.png'),
       resizable: true,

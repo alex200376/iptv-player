@@ -3,18 +3,21 @@ import { useStore } from '../stores/useStore'
 import { useState } from 'react'
 import ContextMenu from './ContextMenu'
 import { usePlayChannel } from '../hooks/usePlayChannel'
-
-function formatTime(ts: number): string {
-  const d = new Date(ts)
-  const now = new Date()
-  const diff = now.getTime() - d.getTime()
-  if (diff < 60000) return '刚刚'
-  if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`
-  return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
-}
+import { useTranslation } from 'react-i18next'
 
 export default function HistoryList() {
+  const { t, i18n } = useTranslation()
+
+  function formatTime(ts: number): string {
+    const d = new Date(ts)
+    const now = new Date()
+    const diff = now.getTime() - d.getTime()
+    if (diff < 60000) return t('history.justNow')
+    if (diff < 3600000) return t('history.minutesAgo', { count: Math.floor(diff / 60000) })
+    if (diff < 86400000) return t('history.hoursAgo', { count: Math.floor(diff / 3600000) })
+    return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
+  }
+
   const historyEntries = useStore((s) => s.historyEntries)
   const currentChannel = useStore((s) => s.currentChannel)
   const clearHistory = useStore((s) => s.clearHistory)
@@ -36,7 +39,7 @@ export default function HistoryList() {
   if (historyEntries.length === 0) {
     return (
       <div className="px-3 py-8 text-center text-tv-xs text-tv-text-secondary">
-        暂无观看历史，播放频道后自动记录
+        {t('history.empty')}
       </div>
     )
   }
@@ -44,12 +47,12 @@ export default function HistoryList() {
   return (
     <div>
       <div className="px-3 py-2 border-b border-tv-border flex items-center justify-between">
-        <span className="text-tv-xs text-tv-text-secondary">共 {historyEntries.length} 条记录</span>
+        <span className="text-tv-xs text-tv-text-secondary">{t('history.count', { count: historyEntries.length })}</span>
         <button
           onClick={clearHistory}
           className="text-tv-xs text-tv-text-secondary hover:text-red-400 transition-colors"
         >
-          清除历史
+          {t('history.clear')}
         </button>
       </div>
       {historyEntries.map((entry) => (
@@ -86,8 +89,8 @@ export default function HistoryList() {
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
           items={[
-            { label: '播放', onClick: () => handlePlay(ctxMenu.channel), icon: <PlayIcon /> },
-            { label: '复制 URL', onClick: () => copyUrl(ctxMenu.channel.url), icon: <CopyIcon /> },
+            { label: t('channel.play'), onClick: () => handlePlay(ctxMenu.channel), icon: <PlayIcon /> },
+            { label: t('channel.copyUrl'), onClick: () => copyUrl(ctxMenu.channel.url), icon: <CopyIcon /> },
           ]}
         />
       )}

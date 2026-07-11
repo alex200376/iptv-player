@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { useStore } from '../stores/useStore'
 import EpgOverlay from './EpgOverlay'
 import type { Channel, EpgProgram } from '../types'
+import { useTranslation } from 'react-i18next'
 
 function getCurrentProgram(programs: EpgProgram[], channelTvgId?: string): EpgProgram | null {
   const now = new Date()
@@ -40,7 +41,7 @@ function findPrograms(
   return []
 }
 
-function EpgProgressBar({ program }: { program: EpgProgram | null }) {
+function EpgProgressBar({ program, t }: { program: EpgProgram | null, t: (key: string, opts?: any) => string }) {
   if (!program) return null
   const start = new Date(program.start).getTime()
   const stop = new Date(program.stop).getTime()
@@ -54,14 +55,15 @@ function EpgProgressBar({ program }: { program: EpgProgram | null }) {
         <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
       </div>
       <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
-        <span>{elapsed}分钟</span>
-        <span>{total}分钟</span>
+        <span>{t('player.minutes', { count: elapsed })}</span>
+        <span>{t('player.minutes', { count: total })}</span>
       </div>
     </div>
   )
 }
 
 export default function PlayerContainer() {
+  const { t } = useTranslation()
   const [showInfo, setShowInfo] = useState(false)
   const [showEpg, setShowEpg] = useState(false)
   const [isBuffering, setIsBuffering] = useState(true)
@@ -106,7 +108,7 @@ export default function PlayerContainer() {
       clearTimeout(bufferTimerRef.current)
       clearTimeout(errorTimerRef.current)
       errorTimerRef.current = setTimeout(() => {
-        setPlayerError('連接超時，播放無響應')
+        setPlayerError(t('player.bufferingTimeout'))
         setIsBuffering(false)
       }, 10000)
     })
@@ -122,7 +124,7 @@ export default function PlayerContainer() {
       clearTimeout(bufferTimerRef.current)
       clearTimeout(errorTimerRef.current)
       setIsBuffering(false)
-      setPlayerError('播放出錯，點擊重試')
+      setPlayerError(t('player.playError'))
     })
 
     return () => {
@@ -199,7 +201,7 @@ export default function PlayerContainer() {
         </div>
       )}
 
-      <div className={`${showEpg ? 'flex-[3]' : 'flex-1'} relative group`} id="player-container">
+      <div className={`${showEpg ? 'flex-1' : 'flex-1'} relative group min-h-0`} id="player-container">
         <div id="player" className="w-full h-full" />
         {isBuffering && currentChannel && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
@@ -247,15 +249,15 @@ export default function PlayerContainer() {
                 <rect x="2" y="3" width="20" height="14" rx="2" />
                 <path d="M8 21h8M12 17v4" />
               </svg>
-              <div className="text-sm">導入 M3U 播放列表開始觀看</div>
-              <div className="text-xs mt-1 opacity-60">Ctrl+I 導入 · Ctrl+B 切換頻道列表</div>
+              <div className="text-sm">{t('player.empty')}</div>
+              <div className="text-xs mt-1 opacity-60">{t('player.emptyHint')}</div>
             </div>
           </div>
         )}
       </div>
 
       {currentChannel && (
-        <div className={`${showEpg ? 'flex-1 min-h-0 overflow-y-auto' : ''} flex flex-col bg-card border-t border-border`}>
+        <div className={`${showEpg ? 'flex-1 flex flex-col min-h-0' : ''} bg-card border-t border-border`}>
           <div className="px-4 pt-3 pb-2 space-y-3">
             {currentProgram && (
               <h1 className="text-lg font-bold text-foreground leading-tight">
@@ -293,13 +295,13 @@ export default function PlayerContainer() {
                     : 'bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80'
                 }`}
               >
-                节目表
+                {t('player.epgButton')}
               </button>
             </div>
 
             {currentProgram && (
               <div>
-                <EpgProgressBar program={currentProgram} />
+                <EpgProgressBar program={currentProgram} t={t} />
                 {currentProgram.description && (
                   <p className="text-sm text-muted-foreground mt-2 line-clamp-3 leading-relaxed">
                     {currentProgram.description}
@@ -310,7 +312,7 @@ export default function PlayerContainer() {
           </div>
 
           {showEpg && (
-            <div className="border-t border-border">
+            <div className="flex-1 min-h-0 overflow-y-auto border-t border-border">
               <EpgOverlay onClose={() => setShowEpg(false)} />
             </div>
           )}

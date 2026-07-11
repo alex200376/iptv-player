@@ -1,9 +1,10 @@
 import { ipcMain } from 'electron'
 import { fetchEpgForUrl, importEpgFromUrl } from '../epgCache'
+import { t } from '../i18n'
 
 export function registerEpgIpc() {
   ipcMain.handle('import-epg-url', async (_event, url: string) => {
-    if (!url) return { success: false, count: 0, tvgIds: [], error: 'URL 不能为空' }
+    if (!url) return { success: false, count: 0, tvgIds: [], error: t('epg.emptyUrl') }
     return importEpgFromUrl(url)
   })
 

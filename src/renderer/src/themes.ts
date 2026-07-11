@@ -3,6 +3,7 @@ export type ThemeId = 'dark' | 'midnight' | 'light' | 'oled' | 'forest' | 'ocean
 export interface Theme {
   id: ThemeId
   label: string
+  labelKey: string
   variables: Record<string, string>
 }
 
@@ -10,6 +11,7 @@ export const themes: Theme[] = [
   {
     id: 'dark',
     label: '深邃暗色',
+    labelKey: 'theme.dark',
     variables: {
       '--tv-bg': '#14161a',
       '--tv-bg-secondary': '#1c1f24',
@@ -33,6 +35,7 @@ export const themes: Theme[] = [
   {
     id: 'midnight',
     label: '午夜暗蓝',
+    labelKey: 'theme.midnight',
     variables: {
       '--tv-bg': '#10141c',
       '--tv-bg-secondary': '#171c26',
@@ -56,6 +59,7 @@ export const themes: Theme[] = [
   {
     id: 'light',
     label: '明亮',
+    labelKey: 'theme.light',
     variables: {
       '--tv-bg': '#f2f4f6',
       '--tv-bg-secondary': '#ffffff',
@@ -79,6 +83,7 @@ export const themes: Theme[] = [
   {
     id: 'oled',
     label: 'OLED 纯黑',
+    labelKey: 'theme.oled',
     variables: {
       '--tv-bg': '#000000',
       '--tv-bg-secondary': '#0a0a0a',
@@ -102,6 +107,7 @@ export const themes: Theme[] = [
   {
     id: 'forest',
     label: '森林绿',
+    labelKey: 'theme.forest',
     variables: {
       '--tv-bg': '#121812',
       '--tv-bg-secondary': '#1a221a',
@@ -125,6 +131,7 @@ export const themes: Theme[] = [
   {
     id: 'ocean',
     label: '海洋蓝',
+    labelKey: 'theme.ocean',
     variables: {
       '--tv-bg': '#0e1419',
       '--tv-bg-secondary': '#141e26',
@@ -148,6 +155,7 @@ export const themes: Theme[] = [
   {
     id: 'sunset',
     label: '日落暖橙',
+    labelKey: 'theme.sunset',
     variables: {
       '--tv-bg': '#1a1414',
       '--tv-bg-secondary': '#241c1a',
@@ -171,6 +179,7 @@ export const themes: Theme[] = [
   {
     id: 'coffee',
     label: '咖啡棕',
+    labelKey: 'theme.coffee',
     variables: {
       '--tv-bg': '#171312',
       '--tv-bg-secondary': '#221d1a',
@@ -194,6 +203,7 @@ export const themes: Theme[] = [
   {
     id: 'dracula',
     label: '德古拉紫',
+    labelKey: 'theme.dracula',
     variables: {
       '--tv-bg': '#1e1e2e',
       '--tv-bg-secondary': '#282840',
@@ -217,6 +227,7 @@ export const themes: Theme[] = [
   {
     id: 'nord',
     label: '北极蓝',
+    labelKey: 'theme.nord',
     variables: {
       '--tv-bg': '#2e3440',
       '--tv-bg-secondary': '#3b4252',

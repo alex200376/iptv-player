@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react'
 import { useSettingsStore } from '../stores/settingsStore'
+import { useTranslation } from 'react-i18next'
 
 type State =
   | { phase: 'checking' }
@@ -53,15 +54,16 @@ function renderNotes(text: string): ReactNode {
   return elements
 }
 
-function formatEta(speed: number, remaining: number): string {
+function formatEta(speed: number, remaining: number, t: (key: string, opts?: any) => string): string {
   if (speed <= 0) return ''
   const seconds = remaining / speed
-  if (seconds < 60) return `剩余 ${Math.ceil(seconds)} 秒`
-  if (seconds < 3600) return `剩余 ${Math.ceil(seconds / 60)} 分钟`
-  return `剩余 ${(seconds / 3600).toFixed(1)} 小时`
+  if (seconds < 60) return t('update.etaSeconds', { count: Math.ceil(seconds) })
+  if (seconds < 3600) return t('update.etaMinutes', { count: Math.ceil(seconds / 60) })
+  return t('update.etaHours', { count: (seconds / 3600).toFixed(1) })
 }
 
 export default function UpdateDialog({ onClose }: { onClose: () => void }) {
+  const { t, i18n } = useTranslation()
   const [state, setState] = useState<State>({ phase: 'checking' })
   const [appVersion, setAppVersion] = useState('')
   const { settings } = useSettingsStore()
@@ -111,7 +113,7 @@ export default function UpdateDialog({ onClose }: { onClose: () => void }) {
   const handleDownload = useCallback(async () => {
     const result = await window.electronAPI.downloadUpdate()
     if (!result.downloading) {
-      setState({ phase: 'error', message: result.error || '下载失败' })
+      setState({ phase: 'error', message: t('update.downloadFailed') || result.error! })
     }
   }, [])
 
@@ -155,7 +157,7 @@ export default function UpdateDialog({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 animate-[fadeIn_200ms_ease]">
       <div className="w-[90vw] max-w-[440px] bg-tv-bg-surface border border-tv-border rounded-tv-md shadow-2xl overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-tv-border">
-          <h2 className="text-tv-lg font-bold text-tv-text-primary">更新</h2>
+          <h2 className="text-tv-lg font-bold text-tv-text-primary">{t('update.title')}</h2>
           <button
             onClick={onClose}
             className="text-tv-text-secondary hover:text-tv-text-primary p-1 rounded-tv-sm transition-colors"
@@ -184,7 +186,7 @@ export default function UpdateDialog({ onClose }: { onClose: () => void }) {
                 <circle cx="12" cy="12" r="10" strokeOpacity="0.3" />
                 <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
               </svg>
-              正在检查更新...
+              {t('update.checking')}
             </div>
           )}
 
@@ -199,8 +201,8 @@ export default function UpdateDialog({ onClose }: { onClose: () => void }) {
               >
                 <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <p className="text-tv-sm text-tv-text-primary">已是最新版本</p>
-              <p className="text-tv-xs text-tv-text-secondary mt-1">v{appVersion} 已为最新版</p>
+              <p className="text-tv-sm text-tv-text-primary">{t('update.upToDate')}</p>
+              <p className="text-tv-xs text-tv-text-secondary mt-1">{t('update.upToDateDesc', { version: appVersion })}</p>
             </div>
           )}
 
@@ -208,7 +210,7 @@ export default function UpdateDialog({ onClose }: { onClose: () => void }) {
             <div className="space-y-4">
               <div className="flex items-center justify-center gap-4">
                 <div className="text-center">
-                  <p className="text-tv-xs text-tv-text-secondary">当前版本</p>
+                  <p className="text-tv-xs text-tv-text-secondary">{t('update.currentVersion')}</p>
                   <p className="text-tv-sm text-tv-text-primary font-bold">v{appVersion}</p>
                 </div>
                 <svg
@@ -225,13 +227,13 @@ export default function UpdateDialog({ onClose }: { onClose: () => void }) {
                   />
                 </svg>
                 <div className="text-center">
-                  <p className="text-tv-xs text-tv-accent">最新版本</p>
+                  <p className="text-tv-xs text-tv-accent">{t('update.latestVersion')}</p>
                   <p className="text-tv-sm text-tv-accent font-bold">v{state.version}</p>
                 </div>
               </div>
               {state.date && (
                 <p className="text-tv-xs text-tv-text-secondary text-center">
-                  发布于 {new Date(state.date).toLocaleDateString('zh-CN')}
+                  {t('update.releasedOn', { date: new Date(state.date).toLocaleDateString(i18n.language) })}
                 </p>
               )}
               {state.notes && (
@@ -244,13 +246,13 @@ export default function UpdateDialog({ onClose }: { onClose: () => void }) {
                   onClick={handleDownload}
                   className="flex-1 py-2.5 bg-tv-accent text-white text-tv-sm rounded-tv-md hover:bg-tv-accent-hover transition-colors"
                 >
-                  下载更新
+                  {t('update.download')}
                 </button>
                 <button
                   onClick={handleSnooze}
                   className="py-2.5 px-4 bg-tv-bg border border-tv-border text-tv-text-secondary text-tv-sm rounded-tv-md hover:text-tv-text-primary transition-colors"
                 >
-                  稍后提醒
+                  {t('update.snooze')}
                 </button>
               </div>
             </div>
@@ -258,7 +260,7 @@ export default function UpdateDialog({ onClose }: { onClose: () => void }) {
 
           {state.phase === 'downloading' && (
             <div className="space-y-4">
-              <p className="text-tv-sm text-tv-text-primary text-center">正在下载更新...</p>
+              <p className="text-tv-sm text-tv-text-primary text-center">{t('update.downloading')}</p>
               <div className="w-full bg-tv-bg rounded-full h-2.5 overflow-hidden">
                 <div
                   className="h-full bg-tv-accent rounded-full transition-all duration-300"
@@ -274,8 +276,8 @@ export default function UpdateDialog({ onClose }: { onClose: () => void }) {
                 <span>
                   {state.speed > 0 ? `${(state.speed / 1024 / 1024).toFixed(1)} MB/s` : ''}
                   {state.speed > 0 &&
-                    formatEta(state.speed, state.total - state.transferred) &&
-                    ` · ${formatEta(state.speed, state.total - state.transferred)}`}
+                    formatEta(state.speed, state.total - state.transferred, t) &&
+                    ` · ${formatEta(state.speed, state.total - state.transferred, t)}`}
                 </span>
               </div>
               {!isAutoDownload && (
@@ -283,7 +285,7 @@ export default function UpdateDialog({ onClose }: { onClose: () => void }) {
                   onClick={handleBackgroundDownload}
                   className="w-full py-2 rounded-tv-sm text-tv-xs text-tv-accent hover:text-tv-accent-hover transition-colors"
                 >
-                  背景下载，关闭此窗口
+                  {t('update.downloadBackground')}
                 </button>
               )}
             </div>
@@ -300,20 +302,20 @@ export default function UpdateDialog({ onClose }: { onClose: () => void }) {
               >
                 <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <p className="text-tv-sm text-tv-text-primary">更新已下载完成</p>
-              <p className="text-tv-xs text-tv-text-secondary">重启应用以安装 v{state.version}</p>
+              <p className="text-tv-sm text-tv-text-primary">{t('update.downloaded')}</p>
+              <p className="text-tv-xs text-tv-text-secondary">{t('update.installPrompt', { version: state.version })}</p>
               <div className="flex gap-2">
                 <button
                   onClick={handleInstall}
                   className="flex-1 py-2.5 bg-tv-accent text-white text-tv-sm rounded-tv-md hover:bg-tv-accent-hover transition-colors"
                 >
-                  立即重启安装
+                  {t('update.installNow')}
                 </button>
                 <button
                   onClick={onClose}
                   className="py-2.5 px-4 bg-tv-bg border border-tv-border text-tv-text-secondary text-tv-sm rounded-tv-md hover:text-tv-text-primary transition-colors"
                 >
-                  稍后
+                  {t('update.later')}
                 </button>
               </div>
             </div>
@@ -331,13 +333,13 @@ export default function UpdateDialog({ onClose }: { onClose: () => void }) {
                 <circle cx="12" cy="12" r="10" />
                 <path d="M12 8v4m0 4h.01" strokeLinecap="round" />
               </svg>
-              <p className="text-tv-sm text-tv-text-primary">检查更新失败</p>
+              <p className="text-tv-sm text-tv-text-primary">{t('update.failed')}</p>
               <p className="text-tv-xs text-tv-text-secondary">{state.message}</p>
               <button
                 onClick={handleRetry}
                 className="w-full py-2.5 bg-tv-accent text-white text-tv-sm rounded-tv-md hover:bg-tv-accent-hover transition-colors"
               >
-                重试
+                {t('update.retry')}
               </button>
             </div>
           )}

@@ -1,18 +1,12 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import ChannelList from './ChannelList'
-import ImportDialog from './ImportDialog'
 import FavoriteList from './FavoriteList'
 import HistoryList from './HistoryList'
 import PlaylistList from './PlaylistList'
 import { useStore } from '../stores/useStore'
 import { Search, X } from 'lucide-react'
-
-const navItems = [
-  { id: 'channels', label: '频道', icon: 'tv' },
-  { id: 'playlists', label: '播放列表', icon: 'list' },
-  { id: 'favorites', label: '收藏', icon: 'star' },
-  { id: 'history', label: '历史', icon: 'clock' },
-]
+import { useTranslation } from 'react-i18next'
+import { getGroupDisplayName } from '../utils/groupLabels'
 
 function NavIcon({ icon }: { icon: string }) {
   const paths: Record<string, string> = {
@@ -20,6 +14,7 @@ function NavIcon({ icon }: { icon: string }) {
     list: 'M2 4h20M2 10h20M2 16h20',
     star: 'M7.5 1.5l2 4.5h4.5l-3.5 3 1.5 4.5-3.5-2.5-3.5 2.5 1.5-4.5-3.5-3h4.5z',
     clock: 'M7.5 1.5v6l4 2M7.5 1.5A6 6 0 1013.5 7.5 6 6 0 007.5 1.5z',
+    play: 'M5 3l7 4.5L5 12z',
   }
   return (
     <svg className="w-4 h-4" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -29,7 +24,13 @@ function NavIcon({ icon }: { icon: string }) {
 }
 
 export default function Sidebar({ collapsed }: { collapsed?: boolean }) {
-  const [dialogOpen, setDialogOpen] = useState(false)
+  const { t } = useTranslation()
+  const navItems = [
+    { id: 'channels', label: t('nav.channels'), icon: 'tv' },
+    { id: 'playlists', label: t('nav.playlists'), icon: 'list' },
+    { id: 'favorites', label: t('nav.favorites'), icon: 'star' },
+    { id: 'history', label: t('nav.history'), icon: 'clock' },
+  ]
   const [localSearch, setLocalSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
   const navTab = useStore((s) => s.navTab)
@@ -103,9 +104,10 @@ export default function Sidebar({ collapsed }: { collapsed?: boolean }) {
 
   if (collapsed) {
     return (
-      <>
-        <aside className="w-full h-full bg-card flex flex-col items-center py-2 gap-1 border-r border-border">
-          {navItems.map((item) => (
+      <aside className="w-full h-full bg-card flex flex-col items-center py-2 gap-1 border-r border-border">
+        {navItems.map((item) => {
+          const Icon = item.icon
+          return (
             <button
               key={item.id}
               onClick={() => setNavTab(item.id as 'channels' | 'playlists' | 'favorites' | 'history')}
@@ -114,22 +116,12 @@ export default function Sidebar({ collapsed }: { collapsed?: boolean }) {
               }`}
               title={item.label}
             >
-              <NavIcon icon={item.icon} />
+              <NavIcon icon={Icon} />
             </button>
-          ))}
-          <div className="flex-1" />
-          <button
-            onClick={() => setDialogOpen(true)}
-            className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-            title="导入 M3U (Ctrl+I)"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M8 2v4h4M8 6l4-4M4 8h7M4 11h7" />
-            </svg>
-          </button>
-        </aside>
-        <ImportDialog open={dialogOpen} onOpenChange={setDialogOpen} />
-      </>
+          )
+        })}
+        <div className="flex-1" />
+      </aside>
     )
   }
 
@@ -144,7 +136,7 @@ export default function Sidebar({ collapsed }: { collapsed?: boolean }) {
               type="text"
               value={localSearch}
               onChange={handleSearchChange}
-              placeholder="搜索频道..."
+              placeholder={t('sidebar.search')}
               className="w-full pl-8 pr-7 py-1.5 bg-background border border-border rounded-md text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary"
             />
             {localSearch && (
@@ -173,7 +165,7 @@ export default function Sidebar({ collapsed }: { collapsed?: boolean }) {
                 !categoryFilter ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
               }`}
             >
-              全部
+               {t('sidebar.all')}
             </button>
             {allCategories.map((cat) => (
               <button
@@ -183,7 +175,7 @@ export default function Sidebar({ collapsed }: { collapsed?: boolean }) {
                   categoryFilter === cat ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {cat}
+                {getGroupDisplayName(cat, t)}
               </button>
             ))}
           </div>
@@ -195,20 +187,7 @@ export default function Sidebar({ collapsed }: { collapsed?: boolean }) {
           {navTab === 'favorites' && <FavoriteList />}
           {navTab === 'history' && <HistoryList />}
         </div>
-
-        <div className="px-2 py-1.5 border-t border-border">
-          <button
-            onClick={() => setDialogOpen(true)}
-            className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M8 2v4h4M8 6l4-4M4 8h7M4 11h7" />
-            </svg>
-            <span>导入 M3U</span>
-          </button>
-        </div>
       </aside>
-      <ImportDialog open={dialogOpen} onOpenChange={setDialogOpen} />
     </>
   )
 }

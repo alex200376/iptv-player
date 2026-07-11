@@ -16,6 +16,7 @@ export interface Settings {
   proxyResolution: string
   autoDownloadUpdates: boolean
   snoozeUpdateUntil: number
+  language: 'zh-CN' | 'en-US'
 }
 
 interface SettingsStore {
@@ -40,6 +41,7 @@ const DEFAULTS: Settings = {
   proxyResolution: 'original',
   autoDownloadUpdates: false,
   snoozeUpdateUntil: 0,
+  language: 'zh-CN',
 }
 
 export const useSettingsStore = create<SettingsStore>((set, get) => ({

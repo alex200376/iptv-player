@@ -72,6 +72,7 @@ interface Settings {
   proxyResolution: string
   autoDownloadUpdates: boolean
   snoozeUpdateUntil: number
+  language: string
 }
 
 interface PlayResult {

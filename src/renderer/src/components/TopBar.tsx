@@ -2,6 +2,7 @@ import { useRef, useEffect, useState, useCallback } from 'react'
 import { useStore } from '../stores/useStore'
 import OpenStreamDialog from './OpenStreamDialog'
 import UpdateBadge from './UpdateBadge'
+import { useTranslation } from 'react-i18next'
 
 export default function TopBar({
   sidebarOpen,
@@ -16,6 +17,7 @@ export default function TopBar({
   onOpenEpg: () => void
   onOpenUpdate: () => void
 }) {
+  const { t } = useTranslation()
   const [streamDialogOpen, setStreamDialogOpen] = useState(false)
   const [localSearch, setLocalSearch] = useState('')
   const setSearchQuery = useStore((s) => s.setSearchQuery)
@@ -46,7 +48,7 @@ export default function TopBar({
         <button
           onClick={onToggleSidebar}
           className="p-1.5 rounded-tv-sm text-tv-text-secondary hover:text-tv-text-primary hover:bg-tv-bg-surface transition-colors"
-          title={sidebarOpen ? '折叠侧栏 (Ctrl+B)' : '展开侧栏 (Ctrl+B)'}
+          title={sidebarOpen ? t('topbar.collapseSidebar') : t('topbar.expandSidebar')}
         >
           <svg className="w-4 h-4" viewBox="0 0 15 15" fill="none">
             <path d="M2 4h11M2 7.5h11M2 11h11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -66,7 +68,7 @@ export default function TopBar({
             type="text"
             value={localSearch}
             onChange={handleSearchChange}
-            placeholder="搜索频道 (Ctrl+F)..."
+            placeholder={t('topbar.searchPlaceholder')}
             className="w-full pl-8 pr-3 py-1.5 bg-tv-bg border border-tv-border rounded-tv-sm text-tv-sm text-tv-text-primary placeholder-tv-text-secondary"
           />
           {localSearch && (
@@ -89,7 +91,7 @@ export default function TopBar({
             setStreamDialogOpen(true)
           }}
           className="p-1.5 rounded-tv-sm text-tv-text-secondary hover:text-tv-accent hover:bg-tv-accent/10 transition-colors"
-          title="打开网络流"
+          title={t('topbar.openStream')}
         >
           <svg className="w-4 h-4" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
             <circle cx="7.5" cy="7.5" r="5.5" /><path d="M5.5 7.5l4-2.5v5z" />
@@ -98,7 +100,7 @@ export default function TopBar({
         <button
           onClick={onOpenEpg}
           className="p-1.5 rounded-tv-sm text-tv-text-secondary hover:text-tv-accent hover:bg-tv-accent/10 transition-colors"
-          title="节目指南"
+          title={t('topbar.epgGuide')}
         >
           <svg className="w-4 h-4" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
             <path d="M2 2h11v11H2zM2 6h11M6 2v11" />
@@ -108,7 +110,7 @@ export default function TopBar({
         <button
           onClick={onOpenSettings}
           className="p-1.5 rounded-tv-sm text-tv-text-secondary hover:text-tv-text-primary hover:bg-tv-bg-surface transition-colors"
-          title="设置 (Ctrl+,)"
+          title={t('topbar.settings')}
         >
           <svg className="w-4 h-4" viewBox="0 0 15 15" fill="none">
             <path d="M7.5 1.5v1.5M7.5 12v1.5M1.5 7.5H3M12 7.5h1.5M3.3 3.3l1.06 1.06M10.64 10.64l1.06 1.06M3.3 11.7l1.06-1.06M10.64 4.36l1.06-1.06" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />

@@ -17,6 +17,7 @@ export interface Settings {
   proxyResolution: string
   autoDownloadUpdates: boolean
   snoozeUpdateUntil: number
+  language: string
 }
 
 const DEFAULTS: Settings = {
@@ -38,6 +39,7 @@ const DEFAULTS: Settings = {
   proxyResolution: 'original',
   autoDownloadUpdates: false,
   snoozeUpdateUntil: 0,
+  language: 'zh-CN',
 }
 
 function getFilePath(): string {

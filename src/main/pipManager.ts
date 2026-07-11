@@ -1,5 +1,6 @@
 import { BrowserWindow, screen as electronScreen } from 'electron'
 import { join } from 'path'
+import { t } from './i18n'
 
 export function getPipHtml(): string {
   return `<!DOCTYPE html>
@@ -34,7 +35,7 @@ body{border-radius:4px;overflow:hidden;--pip-radius:4px}
 <div id="drag-strip"><div id="drag-handle"></div></div>
 <div id="player"></div>
 <div id="controls-bar">
-  <button class="ctrl-btn" id="play-btn" title="播放/暂停">
+  <button class="ctrl-btn" id="play-btn" title="${t('pip.playPause')}">
     <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
   </button>
   <span id="time-display">--:-- / --:--</span>
@@ -42,12 +43,12 @@ body{border-radius:4px;overflow:hidden;--pip-radius:4px}
     <input type="range" id="progress-bar" min="0" max="1000" value="0">
   </div>
   <div id="volume-wrap">
-    <button class="ctrl-btn" id="volume-btn" title="静音">
+    <button class="ctrl-btn" id="volume-btn" title="${t('pip.mute')}">
       <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8.5v7a4.49 4.49 0 0 0 2.5-3.5zm2.5 0A7.5 7.5 0 0 0 14 5.5v2a5.5 5.5 0 0 1 0 9v2a7.5 7.5 0 0 0 5-6.5z"/></svg>
     </button>
     <input type="range" id="volume-slider" min="0" max="100" value="80">
   </div>
-  <button class="ctrl-btn" id="close-btn" title="关闭画中画">
+  <button class="ctrl-btn" id="close-btn" title="${t('pip.close')}">
     <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
   </button>
 </div>

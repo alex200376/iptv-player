@@ -5,6 +5,8 @@ import { useStore, groupChannels } from '../stores/useStore'
 import ContextMenu from './ContextMenu'
 import { usePlayChannel } from '../hooks/usePlayChannel'
 import type { Channel, EpgProgram } from '../types'
+import { useTranslation } from 'react-i18next'
+import { getGroupDisplayName } from '../utils/groupLabels'
 
 function getCurrentProgram(programs: EpgProgram[], channelTvgId?: string): EpgProgram | null {
   const now = Date.now()
@@ -26,6 +28,7 @@ function GripIcon() {
 }
 
 function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
+  const { t } = useTranslation()
   const groups = useStore((s) => s.groups)
   const currentChannel = useStore((s) => s.currentChannel)
   const searchQuery = useStore((s) => s.searchQuery)
@@ -151,10 +154,10 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
     return (
       <div className="px-3 py-8 text-center text-xs text-muted-foreground">
         {useStore.getState().searchQuery
-          ? '未找到匹配频道'
+          ? t('channel.emptySearch')
           : useStore.getState().activePlaylistId
-            ? '该播放列表暂无频道'
-            : '暂无频道，请先导入 M3U 文件'}
+            ? t('channel.emptyPlaylist')
+            : t('channel.emptyGeneral')}
       </div>
     )
   }
@@ -164,16 +167,16 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
   return (
     <div>
       <div className="flex items-center justify-between px-2 py-1 border-b border-border gap-1">
-        <span className="text-xs text-muted-foreground shrink-0">{totalChannels} 频道</span>
+        <span className="text-xs text-muted-foreground shrink-0">{t('channel.count', { count: totalChannels })}</span>
         <div className="flex items-center gap-2 ml-auto">
           {offlineCount > 0 && (
             <button
               onClick={handleRemoveOffline}
               disabled={removing}
               className="text-xs text-red-400 hover:text-red-300 transition-colors disabled:opacity-40 whitespace-nowrap"
-              title={`删除 ${offlineCount} 个不可用频道`}
+              title={t('channel.deleteOfflineTitle', { count: offlineCount })}
             >
-              {removing ? '删除中...' : `删除 ${offlineCount} 个离线`}
+              {removing ? t('channel.deleting') : t('channel.deleteOffline', { count: offlineCount })}
             </button>
           )}
         </div>
@@ -219,7 +222,7 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
                       />
                     </svg>
                     <span className="font-medium text-foreground truncate text-sm">
-                      {group.name}
+                      {getGroupDisplayName(group.name, t)}
                     </span>
                     <span className="ml-auto text-xs">{group.channels.length}</span>
                   </Accordion.Trigger>
@@ -252,17 +255,17 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
           items={[
-            { label: '播放', onClick: () => handlePlay(ctxMenu.channel), icon: <PlayIcon /> },
+            { label: t('channel.play'), onClick: () => handlePlay(ctxMenu.channel), icon: <PlayIcon /> },
             {
-              label: favoriteIds.includes(ctxMenu.channel.id) ? '取消收藏' : '收藏',
+              label: favoriteIds.includes(ctxMenu.channel.id) ? t('channel.unfavorite') : t('channel.favorite'),
               onClick: () => toggleFavorite(ctxMenu.channel.id),
               icon: <StarIcon filled={favoriteIds.includes(ctxMenu.channel.id)} />,
             },
-            { label: '复制 URL', onClick: () => copyUrl(ctxMenu.channel.url), icon: <CopyIcon /> },
-            { label: '检测链接', onClick: () => handleCheck(ctxMenu.channel), icon: <CheckIcon /> },
+            { label: t('channel.copyUrl'), onClick: () => copyUrl(ctxMenu.channel.url), icon: <CopyIcon /> },
+            { label: t('channel.checkLink'), onClick: () => handleCheck(ctxMenu.channel), icon: <CheckIcon /> },
             { separator: true, label: '', onClick: () => {} },
             {
-              label: '删除频道',
+              label: t('channel.deleteChannel'),
               onClick: () => handleDelete(ctxMenu.channel.id),
               danger: true,
               icon: <TrashIcon />,
@@ -446,6 +449,7 @@ function ChannelRowWrapper({
   onDrop: (e: React.DragEvent, chId: string) => void
   onDragEnd: () => void
 }) {
+  const { t } = useTranslation()
   const showTopIndicator = dropTargetId === ch.id && dropPosition === 'before'
   const showBottomIndicator = dropTargetId === ch.id && dropPosition === 'after'
 
@@ -529,7 +533,7 @@ function ChannelRowWrapper({
                 ? 'text-yellow-400 opacity-100'
                 : 'text-muted-foreground opacity-0 group-hover:opacity-100 hover:opacity-100'
             }`}
-            title={isFav ? '取消收藏' : '收藏'}
+            title={isFav ? t('channel.unfavoriteTitle') : t('channel.favoriteTitle')}
           >
             <svg
               className="w-3.5 h-3.5"

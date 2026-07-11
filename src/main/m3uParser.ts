@@ -1,3 +1,5 @@
+import { t } from './i18n'
+
 export interface Channel {
   id: string
   name: string
@@ -52,11 +54,11 @@ export function parseM3U(content: string, playlistId?: string): Promise<Channel[
           const tvgUrl = line.match(/tvg-url="([^"]*)"/)?.[1]
           const name = line.split(',').pop()?.trim()
           current = {
-            group: group || '未分组',
+            group: group || t('group.ungrouped'),
             logo,
             tvgId,
             tvgUrl,
-            name: name || '未知频道',
+            name: name || t('channel.unknown'),
           }
         } else if (line.startsWith('#') || line.startsWith('//')) {
           continue
@@ -68,7 +70,7 @@ export function parseM3U(content: string, playlistId?: string): Promise<Channel[
             name: ch.name || name,
             url: line,
             logo: ch.logo,
-            group: ch.group || '未分组',
+            group: ch.group || t('group.ungrouped'),
             tvgId: ch.tvgId,
             tvgUrl: ch.tvgUrl,
             playlistId,
