@@ -1,155 +1,156 @@
-# 🎬 IPTV Player
+<div align="center">
 
-> IPTV 全能播放器 - 支持 RTMP / M3U 等多種串流格式
+<img src="resources/icon.png" alt="IPTV Player Logo" width="120" height="120" />
 
-![Version](https://img.shields.io/badge/version-1.0.5-blue.svg)
-![Electron](https://img.shields.io/badge/Electron-43.x-47848F?logo=electron)
-![React](https://img.shields.io/badge/React-19.x-61DAFB?logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript)
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20)
+# 📺 IPTV Player
+
+### 全能桌面 IPTV 播放器 · Built with Electron + React + VLC
+
+[![Version](https://img.shields.io/badge/version-1.3.0-blue?style=for-the-badge&logo=github)](https://github.com/alex200376/iptv-player/releases)
+[![Platform](https://img.shields.io/badge/platform-Windows-0078D6?style=for-the-badge&logo=windows)](https://github.com/alex200376/iptv-player/releases)
+[![Electron](https://img.shields.io/badge/Electron-43.x-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://www.electronjs.org/)
+[![React](https://img.shields.io/badge/React-19.x-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](LICENSE)
+
+> 🎬 一款輕量、現代、跨平台的桌面 IPTV 播放器，支援 M3U / RTMP 串流格式，內建 VLC 核心引擎，帶來流暢的直播體驗。
+
+</div>
 
 ---
 
 ## ✨ 功能特色
 
-- 🎥 支援 **RTMP**、**M3U**、**M3U8** 等主流串流格式
-- ⚡ 基於 **electron-vlc-player** 的高效能影音解碼
-- 🖥️ 跨平台支援：Windows、macOS、Linux
-- 🔄 內建自動更新（`electron-updater`）
-- 🎨 現代化 UI（React 19 + Tailwind CSS + Radix UI）
-- 📋 頻道清單管理，支援虛擬捲動（`@tanstack/react-virtual`）
-- 💾 使用 Zustand 進行狀態管理
+| 功能 | 說明 |
+|------|------|
+| 🎞️ **多格式串流支援** | 支援 M3U、RTMP、HLS 等主流 IPTV 串流格式 |
+| ⚡ **VLC 核心引擎** | 基於 `electron-vlc-player` 提供穩定高效的播放能力 |
+| 🌐 **多語言介面** | 整合 `i18next`，支援自動偵測系統語言 |
+| 🗂️ **頻道管理** | 匯入 M3U 播放清單，分組瀏覽頻道 |
+| 🔄 **自動更新** | 使用 `electron-updater` 實現靜默後台更新 |
+| 🎨 **現代 UI** | Tailwind CSS + Radix UI 打造的深色主題介面 |
+| 📦 **虛擬列表渲染** | 採用 `@tanstack/react-virtual` 流暢渲染大量頻道 |
+| 🔧 **狀態管理** | 使用 `Zustand` 輕量管理應用狀態 |
 
 ---
 
-## 🖼️ 截圖
+## 🛠️ 技術棧
 
-> *(截圖即將上線)*
-
----
-
-## 🛠️ 技術架構
-
-| 技術 | 版本 | 用途 |
-|------|------|------|
-| Electron | 43.x | 桌面應用框架 |
-| React | 19.x | 前端 UI |
-| TypeScript | 5.x | 型別安全 |
-| Vite (electron-vite) | 5.x | 建置工具 |
-| Tailwind CSS | 3.x | 樣式框架 |
-| Radix UI | latest | 無障礙 UI 元件 |
-| Zustand | 5.x | 狀態管理 |
-| electron-vlc-player | 1.x | 影音播放引擎 |
-
----
-
-## 🚀 快速開始
-
-### 前置需求
-
-- [Node.js](https://nodejs.org/) >= 18
-- npm >= 9
-
-### 安裝依賴
-
-```bash
-npm install
+```
+Frontend     →  React 19 · TypeScript 5.7 · Tailwind CSS 3 · Radix UI
+Backend      →  Electron 43 · electron-vite · Node.js
+Player       →  electron-vlc-player (VLC core)
+State        →  Zustand 5
+I18n         →  i18next 26 · react-i18next
+Build Tool   →  electron-builder 26 · Vite
 ```
 
-> ⚠️ 安裝後會自動執行 `electron-rebuild` 以重新編譯原生模組。
+---
 
-### 開發模式
+## 📦 安裝與使用
+
+### 方法一：下載發行版（推薦）
+
+前往 [Releases](https://github.com/alex200376/iptv-player/releases) 下載最新版安裝包。
+
+| 平台 | 安裝包格式 |
+|------|-----------|
+| Windows | `.exe` 安裝程式 / Portable |
+
+### 方法二：從原始碼啟動（開發模式）
+
+**環境需求：** Node.js >= 18、npm
 
 ```bash
+# 1. 克隆倉庫
+git clone https://github.com/alex200376/iptv-player.git
+cd iptv-player
+
+# 2. 安裝依賴（自動 rebuild electron-vlc-player）
+npm install
+
+# 3. 啟動開發模式
 npm run dev
 ```
 
-### Windows 快速啟動
-
-```bash
-start.bat
-```
+> 💡 亦可使用 `start.bat` 快速啟動（Windows）
 
 ---
 
-## 📦 建置與發佈
-
-### 建置應用程式
-
-```bash
-npm run build
-```
-
-### 打包安裝檔（不發佈）
-
-```bash
-npm run pack
-```
-
-### 完整發佈建置
-
-```bash
-npm run dist
-```
-
-### 建置並驗證 ASAR
-
-```bash
-npm run dist:check
-```
-
-### 使用 PowerShell 發佈腳本
-
-```powershell
-.\release.ps1
-```
-
----
-
-## 📁 專案結構
+## 📁 項目結構
 
 ```
 iptv-player/
-├── src/                  # 原始碼
-│   ├── main/             # Electron 主進程
-│   ├── preload/          # Preload 腳本
-│   └── renderer/         # React 前端介面
-├── build/                # 建置資源（圖示等）
-├── scripts/              # 工具腳本
-├── electron-builder.yml  # 打包設定
+├── src/
+│   ├── main/          # Electron 主進程
+│   ├── preload/       # Preload 腳本
+│   └── renderer/      # React 前端頁面
+├── resources/         # 應用圖標及靜態資源
+├── build/             # 構建輸出配置
+├── electron-builder.yml   # 打包配置
 ├── electron.vite.config.ts
 ├── tailwind.config.js
-├── tsconfig.json
-└── start.bat             # Windows 快速啟動
+└── package.json
 ```
 
 ---
 
-## 🔧 設定檔
+## 🚀 可用腳本
 
-主要設定位於 `electron-builder.yml`，可調整：
-- 應用程式名稱、圖示
-- 目標平台（Windows `.exe`、macOS `.dmg`、Linux `.AppImage`）
-- 自動更新伺服器設定
+```bash
+npm run dev          # 啟動開發模式（熱重載）
+npm run build        # 構建應用
+npm run dist         # 打包為安裝程式
+npm run dist:check   # 打包並驗證 ASAR 完整性
+npm run preview      # 預覽構建結果
+```
 
 ---
 
-## 🤝 貢獻
+## 📋 系統需求
 
-歡迎提交 Issue 或 Pull Request！
+- **作業系統：** Windows 10 / 11（64-bit）
+- **記憶體：** 最低 4GB RAM（建議 8GB）
+- **儲存空間：** 至少 500MB 可用空間
+- **網路：** 穩定的網際網路連線（用於串流播放）
 
-1. Fork 本專案
-2. 建立你的功能分支：`git checkout -b feature/your-feature`
-3. 提交更改：`git commit -m 'feat: add some feature'`
+---
+
+## 🗺️ 開發路線圖
+
+- [x] M3U 播放清單匯入
+- [x] RTMP 串流支援
+- [x] 多語言介面
+- [x] 自動更新
+- [ ] EPG 電子節目表整合
+- [ ] 收藏頻道功能
+- [ ] macOS / Linux 支援
+- [ ] 畫中畫（PiP）模式
+
+---
+
+## 🤝 貢獻指南
+
+歡迎提交 Pull Request 或 Issue！
+
+1. Fork 此倉庫
+2. 建立功能分支：`git checkout -b feature/your-feature`
+3. 提交變更：`git commit -m 'feat: add your feature'`
 4. 推送分支：`git push origin feature/your-feature`
 5. 開啟 Pull Request
 
 ---
 
-## 📄 授權
+## 📄 授權協議
 
-本專案以 [MIT License](LICENSE) 授權釋出。
+本項目採用 [MIT License](LICENSE) 開源授權。
 
 ---
 
-<p align="center">Made with ❤️ by <a href="https://github.com/alex200376">alex200376</a></p>
+<div align="center">
+
+Made with ❤️ by [alex200376](https://github.com/alex200376)
+
+⭐ 如果這個項目對你有幫助，請給個 Star 支持！
+
+</div>
