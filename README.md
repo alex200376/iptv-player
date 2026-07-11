@@ -1,21 +1,37 @@
 <div align="center">
 
-<img src="build/icon.png" alt="IPTV Player Logo" width="120" height="120" />
+[![Header](https://capsule-render.vercel.app/api?type=waving&color=0:1a1a2e,50:16213e,100:0f3460&height=200&section=header&text=IPTV%20Player&fontSize=60&fontColor=e94560&animation=fadeIn&fontAlignY=38&desc=全能桌面%20IPTV%20播放器%20·%20Electron%20%2B%20React%20%2B%20VLC&descAlignY=58&descColor=a8b2d8)](https://github.com/alex200376/iptv-player)
 
-# 📺 IPTV Player
-
-### 全能桌面 IPTV 播放器 · Built with Electron + React + VLC
-
-[![Version](https://img.shields.io/badge/version-1.3.0-blue?style=for-the-badge&logo=github)](https://github.com/alex200376/iptv-player/releases)
-[![Platform](https://img.shields.io/badge/platform-Windows-0078D6?style=for-the-badge&logo=windows)](https://github.com/alex200376/iptv-player/releases)
-[![Electron](https://img.shields.io/badge/Electron-43.x-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://www.electronjs.org/)
-[![React](https://img.shields.io/badge/React-19.x-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](LICENSE)
+<!-- Dynamic Badges -->
+[![Release](https://img.shields.io/github/v/release/alex200376/iptv-player?style=for-the-badge&logo=github&label=Latest%20Release&color=e94560)](https://github.com/alex200376/iptv-player/releases)
+[![Downloads](https://img.shields.io/github/downloads/alex200376/iptv-player/total?style=for-the-badge&logo=github&label=Total%20Downloads&color=0f3460)](https://github.com/alex200376/iptv-player/releases)
+[![Stars](https://img.shields.io/github/stars/alex200376/iptv-player?style=for-the-badge&logo=github&color=f5a623)](https://github.com/alex200376/iptv-player/stargazers)
+[![Last Commit](https://img.shields.io/github/last-commit/alex200376/iptv-player?style=for-the-badge&logo=git&color=16213e)](https://github.com/alex200376/iptv-player/commits)
+[![Issues](https://img.shields.io/github/issues/alex200376/iptv-player?style=for-the-badge&logo=github&color=e94560)](https://github.com/alex200376/iptv-player/issues)
+[![License](https://img.shields.io/github/license/alex200376/iptv-player?style=for-the-badge&color=4caf50)](LICENSE)
 
 > 🎬 一款輕量、現代、跨平台的桌面 IPTV 播放器，支援 M3U / RTMP 串流格式，內建 VLC 核心引擎，帶來流暢的直播體驗。
 
 </div>
+
+---
+
+## ⚡ 技術棧
+
+<div align="center">
+
+[![Skills](https://skillicons.dev/icons?i=electron,react,ts,tailwind,nodejs,vite&theme=dark)](https://skillicons.dev)
+
+</div>
+
+| 層級 | 技術 |
+|------|------|
+| **Frontend** | React 19 · TypeScript 5.7 · Tailwind CSS 3 · Radix UI |
+| **Runtime** | Electron 43 · Node.js |
+| **Player** | electron-vlc-player (VLC core) |
+| **State** | Zustand 5 |
+| **I18n** | i18next 26 · react-i18next |
+| **Build** | electron-builder 26 · electron-vite · Vite |
 
 ---
 
@@ -31,19 +47,6 @@
 | 🎨 **現代 UI** | Tailwind CSS + Radix UI 打造的深色主題介面 |
 | 📦 **虛擬列表渲染** | 採用 `@tanstack/react-virtual` 流暢渲染大量頻道 |
 | 🔧 **狀態管理** | 使用 `Zustand` 輕量管理應用狀態 |
-
----
-
-## 🛠️ 技術棧
-
-```
-Frontend     →  React 19 · TypeScript 5.7 · Tailwind CSS 3 · Radix UI
-Backend      →  Electron 43 · electron-vite · Node.js
-Player       →  electron-vlc-player (VLC core)
-State        →  Zustand 5
-I18n         →  i18next 26 · react-i18next
-Build Tool   →  electron-builder 26 · Vite
-```
 
 ---
 
@@ -87,7 +90,7 @@ iptv-player/
 │   └── renderer/      # React 前端頁面
 ├── resources/         # 應用圖標及靜態資源
 ├── build/             # 構建輸出配置
-├── electron-builder.yml   # 打包配置
+├── electron-builder.yml
 ├── electron.vite.config.ts
 ├── tailwind.config.js
 └── package.json
@@ -129,6 +132,12 @@ npm run preview      # 預覽構建結果
 
 ---
 
+## 📊 倉庫活躍度
+
+![Repobeats](https://repobeats.axiom.co/api/embed/alex200376/iptv-player.svg "Repobeats analytics image")
+
+---
+
 ## 🤝 貢獻指南
 
 歡迎提交 Pull Request 或 Issue！
@@ -139,6 +148,12 @@ npm run preview      # 預覽構建結果
 4. 推送分支：`git push origin feature/your-feature`
 5. 開啟 Pull Request
 
+### 👥 貢獻者
+
+<a href="https://github.com/alex200376/iptv-player/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=alex200376/iptv-player" />
+</a>
+
 ---
 
 ## 📄 授權協議
@@ -148,6 +163,8 @@ npm run preview      # 預覽構建結果
 ---
 
 <div align="center">
+
+[![Footer](https://capsule-render.vercel.app/api?type=waving&color=0:1a1a2e,50:16213e,100:0f3460&height=120&section=footer)](https://github.com/alex200376/iptv-player)
 
 Made with ❤️ by [alex200376](https://github.com/alex200376)
 
