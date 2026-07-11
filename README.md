@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="resources/icon.png" alt="IPTV Player Logo" width="120" height="120" />
+<img src="build/icon.png" alt="IPTV Player Logo" width="120" height="120" />
 
 # 📺 IPTV Player
 
