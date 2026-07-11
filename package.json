@@ -11,7 +11,10 @@
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "verify-asar": "node scripts/verify-asar.mjs",
-    "dist:check": "npm run dist && npm run verify-asar"
+    "dist:check": "npm run dist && npm run verify-asar",
+    "setup": "node -e \"const{platform}=require('os');const{execSync}=require('child_process');if(platform()==='win32'){execSync('powershell -ExecutionPolicy Bypass -File scripts/install-deps.ps1',{stdio:'inherit'})}else{execSync('bash scripts/install-deps.sh',{stdio:'inherit'})}\"",
+    "setup:win": "powershell -ExecutionPolicy Bypass -File scripts/install-deps.ps1",
+    "setup:unix": "bash scripts/install-deps.sh"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.0",
