@@ -11,7 +11,7 @@ async function enterPipMode() {
   const settings = readSettings()
 
   let pipUrl = state.currentUrl
-  if (state.originalUrl && isFfmpegAvailable(state.vlcDir)) {
+  if (state.originalUrl && await isFfmpegAvailable(state.vlcDir)) {
     try {
       pipUrl = await getProxyUrl(state.originalUrl, state.vlcDir, settings.proxyResolution)
     } catch {}
@@ -77,7 +77,7 @@ export async function exitPipMode() {
   state.pipWindow = null
 
   let playUrl = state.currentUrl
-  if (state.originalUrl && isFfmpegAvailable(state.vlcDir)) {
+  if (state.originalUrl && await isFfmpegAvailable(state.vlcDir)) {
     try {
       playUrl = await getProxyUrl(state.originalUrl, state.vlcDir, settings.proxyResolution)
     } catch {}

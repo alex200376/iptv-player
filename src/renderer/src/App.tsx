@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Sidebar from './components/Sidebar'
 import PlayerContainer from './components/PlayerContainer'
-import TopBar from './components/TopBar'
+import NavBar from './components/NavBar'
 import SettingsPage from './components/SettingsPage'
 import EpgPage from './components/EpgPage'
 import Onboarding from './components/Onboarding'
@@ -44,9 +44,6 @@ export default function App() {
     document.documentElement.setAttribute('data-font-size', settings.fontSize)
   }, [settings.theme, settings.fontSize])
 
-  // BUG FIX: onPlaylistsRefreshed / onChannelsCheckDone registered ipcRenderer.on()
-  // listeners with no removeListener — accumulated on every StrictMode remount.
-  // Now using the unsubscribe-returning wrappers exposed from preload.
   useEffect(() => {
     window.electronAPI.loadChannels().then((channels) => {
       if (channels.length > 0) setChannels(channels)
@@ -217,82 +214,25 @@ export default function App() {
   }, [])
 
   return (
-    <div className="flex flex-col w-full h-full font-body">
-      <TopBar
-        sidebarOpen={sidebarOpen}
-        onToggleSidebar={toggleSidebar}
-        onOpenSettings={openSettings}
-          onOpenEpg={openEpgPage}
-        onOpenUpdate={() => setShowUpdateDialog(true)}
-      />
-      <div className="flex-1 flex overflow-hidden">
-        <div
-          className="flex-shrink-0 overflow-hidden transition-[width] duration-200 ease-in-out"
-          style={{ width: sidebarOpen ? 220 : 56 }}
-        >
-          <Sidebar collapsed={!sidebarOpen} />
-        </div>
-        <div className="flex-1 flex flex-col min-w-0 border-l border-tv-border">
-          {settingsOpen ? (
-            <SettingsPage variant="page" onClose={closeSettings} />
-          ) : epgPageOpen ? (
-            <EpgPage onClose={closeEpgPage} />
-          ) : (
-            <>
-              <PlayerContainer />
-              <StatusBar />
-            </>
-          )}
-        </div>
+    <div className="flex w-full h-full bg-background text-foreground">
+      <NavBar onOpenSettings={openSettings} />
+      <div
+        className="flex-shrink-0 overflow-hidden transition-[width] duration-200 ease-in-out border-r border-border"
+        style={{ width: sidebarOpen ? 220 : 56 }}
+      >
+        <Sidebar collapsed={!sidebarOpen} />
+      </div>
+      <div className="flex-1 flex flex-col min-w-0">
+        {settingsOpen ? (
+          <SettingsPage variant="page" onClose={closeSettings} />
+        ) : epgPageOpen ? (
+          <EpgPage onClose={closeEpgPage} />
+        ) : (
+          <PlayerContainer />
+        )}
       </div>
       {showOnboarding && <Onboarding onDone={handleOnboardingDone} />}
       {showUpdateDialog && <UpdateDialog onClose={() => setShowUpdateDialog(false)} />}
-    </div>
-  )
-}
-
-function StatusBar() {
-  const currentChannel = useStore((s) => s.currentChannel)
-  const groups = useStore((s) => s.groups)
-  const totalChannels = groups.reduce((sum, g) => sum + g.channels.length, 0)
-  const [pipActive, setPipActive] = useState(false)
-  const { settings } = useSettingsStore()
-
-  // BUG FIX: onPipStateChange had no cleanup — listener accumulated on remounts.
-  useEffect(() => {
-    const off = window.electronAPI.onPipStateChange((active) => setPipActive(active))
-    return () => off?.()
-  }, [])
-
-  const isProxied =
-    settings.streamProxy &&
-    (currentChannel?.url?.startsWith('rtmp') ||
-      currentChannel?.url?.startsWith('rtsp') ||
-      currentChannel?.url?.startsWith('udp:'))
-
-  return (
-    <div className="status-bar">
-      {currentChannel ? (
-        <>
-          <span className="flex items-center gap-1.5">
-            <span className="live-dot" />
-            正在播放 {currentChannel.name}
-          </span>
-          {pipActive && <span className="text-xs text-tv-accent ml-1">[画中画]</span>}
-          {isProxied && <span className="text-xs text-tv-accent ml-1">[代理]</span>}
-          <span className="text-tv-text-secondary">|</span>
-        </>
-      ) : (
-        <span>未在播放</span>
-      )}
-      <span>共 {totalChannels} 个频道</span>
-      <span className="ml-auto">
-        {currentChannel?.url?.startsWith('rtmp') && 'RTMP'}
-        {currentChannel?.url?.startsWith('rtsp') && 'RTSP'}
-        {currentChannel?.url?.endsWith('.m3u8') && 'HLS'}
-        {currentChannel?.url?.startsWith('udp:') && 'UDP'}
-        {!currentChannel && '就绪'}
-      </span>
     </div>
   )
 }

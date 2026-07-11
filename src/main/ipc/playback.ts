@@ -144,7 +144,7 @@ export function registerPlaybackIpc() {
     // settings (they use standard HTTP which VLC can handle directly).
     const isNonHttp = /^rtmp[s]?:\/\/|^rtsp:\/\/|^udp:\/\/|^rtp:\/\//i.test(url)
     if (needsProxy(url) && (isNonHttp || settings.streamProxy)) {
-      if (isNonHttp && !isFfmpegAvailable(state.vlcDir)) {
+      if (isNonHttp && !(await isFfmpegAvailable(state.vlcDir))) {
         console.warn('[switch-channel] ffmpeg not found, passing RTMP/RTSP directly to VLC')
       } else {
         try {

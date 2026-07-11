@@ -201,33 +201,62 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
           <Tabs.Content value="appearance" className="flex-1 overflow-y-auto p-8 space-y-6">
             <div className="space-y-3">
               <label className="block text-tv-sm font-medium text-tv-text-primary">主题</label>
-              <div className="grid grid-cols-2 gap-3">
+              <select
+                value={settings.theme}
+                onChange={(e) => {
+                  updateSettings({ theme: e.target.value as ThemeId })
+                  applyTheme(e.target.value as ThemeId)
+                }}
+                className="w-full px-4 py-3 bg-tv-bg border border-tv-border rounded-tv-md text-tv-sm text-tv-text-primary"
+              >
                 {themes.map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => {
-                      updateSettings({ theme: t.id as ThemeId })
-                      applyTheme(t.id as ThemeId)
-                    }}
-                    className={`flex items-center gap-3 px-4 py-4 rounded-tv-md border-2 text-tv-sm transition-colors ${
-                      settings.theme === t.id
-                        ? 'border-tv-accent bg-tv-accent/10 text-tv-text-primary'
-                        : 'border-tv-border bg-tv-bg text-tv-text-secondary hover:border-tv-text-secondary'
-                    }`}
-                    style={{
-                      '--demo-bg': t.variables['--tv-bg'],
-                      '--demo-text': t.variables['--tv-text-primary'],
-                      '--demo-accent': t.variables['--tv-accent'],
-                    } as React.CSSProperties}
-                  >
-                    <span className="w-8 h-8 rounded-tv-md" style={{ background: 'var(--demo-bg)', border: '2px solid var(--demo-accent)' }} />
-                    <div className="text-left">
-                      <div className="font-medium">{t.label}</div>
-                      <div className="text-xs opacity-60" style={{ color: 'var(--demo-text)' }}>{t.id}</div>
-                    </div>
-                  </button>
+                  <option key={t.id} value={t.id}>{t.label}</option>
                 ))}
-              </div>
+              </select>
+              {(() => {
+                const t = themes.find((th) => th.id === settings.theme) || themes[0]
+                const bg = t.variables['--tv-bg']
+                const secondary = t.variables['--tv-bg-secondary']
+                const card = t.variables['--tv-bg-surface']
+                const text = t.variables['--tv-text-primary']
+                const muted = t.variables['--tv-text-secondary']
+                const accent = t.variables['--tv-accent']
+                const border = t.variables['--tv-border']
+                return (
+                  <div
+                    className="mt-3 rounded-tv-md border overflow-hidden"
+                    style={{ background: bg, borderColor: border, color: text }}
+                  >
+                    <div className="px-4 py-3 space-y-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold">{t.label} Theme</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: accent, color: '#fff' }}>Preview</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: accent, color: '#fff' }}>A</div>
+                        <div className="text-xs" style={{ color: text }}>Display Name</div>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded uppercase font-bold" style={{ background: 'rgba(239,68,68,0.2)', color: '#ef4444' }}>Live</span>
+                      </div>
+                      <div className="h-1.5 rounded-full" style={{ background: muted }} />
+                      <div className="text-xs leading-relaxed" style={{ color: muted }}>
+                        Current program title with a longer description that shows how the text appears in this theme.
+                      </div>
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="px-2 py-1 rounded" style={{ background: accent, color: '#fff' }}>节目表</span>
+                        <span className="px-2 py-1 rounded" style={{ background: card, border: `1px solid ${border}`, color: muted }}>Sub button</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 px-4 py-2.5" style={{ background: secondary, borderTop: `1px solid ${border}` }}>
+                      <div className="flex gap-1.5">
+                        {[bg, card, accent, text, border].map((c, i) => (
+                          <div key={i} className="w-5 h-5 rounded" style={{ background: c, border: i === 4 ? `1px solid ${muted}` : undefined }} title={c} />
+                        ))}
+                      </div>
+                      <div className="text-[10px]" style={{ color: muted }}>BG · CARD · ACCENT · TEXT · BORDER</div>
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
             <div className="space-y-3">
               <label className="block text-tv-sm font-medium text-tv-text-primary">字号</label>

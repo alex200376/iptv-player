@@ -4,6 +4,28 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  :root {
+    --background: 0 0% 7%;
+    --foreground: 0 0% 90%;
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 90%;
+    --primary: 187 100% 42%;
+    --primary-foreground: 0 0% 100%;
+    --muted: 0 0% 14%;
+    --muted-foreground: 0 0% 55%;
+    --border: 0 0% 18%;
+  }
+  html.dark {
+    --background: 0 0% 3%;
+    --foreground: 0 0% 85%;
+    --card: 0 0% 8%;
+    --primary: 187 100% 42%;
+    --muted: 0 0% 12%;
+    --border: 0 0% 16%;
+  }
+}
+
 /* ── Font size scales ─────────────────────────────────────────── */
 [data-font-size="small"] {
   --tv-font-xs: 10px;

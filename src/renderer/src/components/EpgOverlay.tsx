@@ -1,222 +1,142 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { useStore } from '../stores/useStore'
-import type { Channel, EpgProgram } from '../types'
+import type { EpgProgram } from '../types'
 
 function formatEpgTime(d: Date): string {
   return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
 }
 
-function parsePrograms(raw: any[]): EpgProgram[] {
-  return raw.map((p) => ({
-    ...p,
-    start: new Date(p.start),
-    stop: new Date(p.stop),
-  }))
-}
-
 function getCurrentProgram(programs: EpgProgram[], channelTvgId?: string): EpgProgram | null {
-  const now = new Date()
+  const now = Date.now()
   return programs.find((p) =>
     (!channelTvgId || p.channelTvgId === channelTvgId) &&
-    p.start <= now && p.stop > now
+    new Date(p.start).getTime() <= now &&
+    new Date(p.stop).getTime() > now
   ) || null
 }
 
 function getNextPrograms(programs: EpgProgram[], channelTvgId?: string, count = 8): EpgProgram[] {
-  const now = new Date()
+  const now = Date.now()
   return programs.filter((p) =>
-    (!channelTvgId || p.channelTvgId === channelTvgId) && p.start > now
+    (!channelTvgId || p.channelTvgId === channelTvgId) && new Date(p.start).getTime() > now
   ).slice(0, count)
+}
+
+function findPrograms(
+  epgCache: Record<string, EpgProgram[]>,
+  tvgUrl?: string,
+  tvgId?: string,
+): EpgProgram[] {
+  if (tvgUrl && epgCache[tvgUrl]) return epgCache[tvgUrl]
+  if (tvgId) {
+    for (const programs of Object.values(epgCache)) {
+      if (programs.some((p) => p.channelTvgId === tvgId)) return programs
+    }
+  }
+  return []
 }
 
 export default function EpgOverlay({ onClose }: { onClose: () => void }) {
   const currentChannel = useStore((s) => s.currentChannel)
   const epgCache = useStore((s) => s.epgCache)
   const loadEpg = useStore((s) => s.loadEpg)
-  const importEpgFromUrl = useStore((s) => s.importEpgFromUrl)
-  const epgSources = useStore((s) => s.epgSources)
   const [loading, setLoading] = useState(false)
-  const [importUrl, setImportUrl] = useState('')
-  const [importMsg, setImportMsg] = useState<{ ok: boolean; text: string } | null>(null)
-  const [showImport, setShowImport] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const loadedRef = useRef(false)
 
   const tvgUrl = currentChannel?.tvgUrl
-  const cached = useMemo(() => {
-    if (!currentChannel) return undefined
-    if (currentChannel.tvgUrl && epgCache[currentChannel.tvgUrl]) return epgCache[currentChannel.tvgUrl]
-    if (currentChannel.tvgId) {
-      for (const programs of Object.values(epgCache)) {
-        if (programs.some((p) => p.channelTvgId === currentChannel.tvgId)) return programs
-      }
-    }
-    return undefined
-  }, [currentChannel, epgCache])
-  const programs = useMemo(() => cached ? parsePrograms(cached) : [], [cached])
-  const current = useMemo(() => getCurrentProgram(programs, currentChannel?.tvgId), [programs, currentChannel?.tvgId])
-  const nextPrograms = useMemo(() => getNextPrograms(programs, currentChannel?.tvgId), [programs, currentChannel?.tvgId])
+  const programs = useMemo(() => {
+    if (!currentChannel) return []
+    return findPrograms(epgCache, tvgUrl, currentChannel.tvgId)
+  }, [currentChannel, tvgUrl, epgCache])
+
+  const current = useMemo(
+    () => getCurrentProgram(programs, currentChannel?.tvgId),
+    [programs, currentChannel?.tvgId],
+  )
+
+  const nextPrograms = useMemo(
+    () => getNextPrograms(programs, currentChannel?.tvgId),
+    [programs, currentChannel?.tvgId],
+  )
+
+  const hasData = programs.length > 0
 
   useEffect(() => {
-    if (tvgUrl && !cached) {
+    if (tvgUrl && !hasData && !loadedRef.current) {
+      loadedRef.current = true
       setLoading(true)
       loadEpg(tvgUrl).finally(() => setLoading(false))
     }
-  }, [tvgUrl, cached, loadEpg])
-
-  const handleImport = async () => {
-    const url = importUrl.trim()
-    if (!url) return
-    setImportMsg(null)
-    const result = await importEpgFromUrl(url)
-    if (result.success) {
-      setImportMsg({ ok: true, text: `导入成功: ${result.count} 条节目数据` })
-      setImportUrl('')
-      setShowImport(false)
-    } else {
-      setImportMsg({ ok: false, text: result.error || '导入失败' })
-    }
-  }
+  }, [tvgUrl, hasData, loadEpg])
 
   return (
-    <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 animate-[fadeIn_150ms_ease]"
-      onClick={onClose}
-    >
-      <div
-         className="w-[90vw] max-w-[600px] max-h-[80vh] bg-tv-bg-surface border border-tv-border rounded-tv-md shadow-2xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-tv-border">
-          <h2 className="text-tv-base font-semibold text-tv-text-primary">
+    <div className="bg-background overflow-hidden">
+      <div className="px-4 py-3 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground">
             节目表 — {currentChannel?.name || '未知'}
           </h2>
-          <div className="flex items-center gap-2">
-            {!showImport && (
-              <button
-                onClick={() => { setShowImport(true); setTimeout(() => inputRef.current?.focus(), 50) }}
-                className="text-tv-xs text-tv-accent hover:text-tv-accent-hover px-2 py-1 rounded-tv-sm transition-colors"
-              >
-                + 导入 EPG
-              </button>
-            )}
-            <button
-              onClick={onClose}
-              className="text-tv-text-secondary hover:text-tv-text-primary p-1 rounded-tv-sm"
-            >
-              <svg className="w-5 h-5" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M4 4l7 7M11 4l-7 7" />
-              </svg>
-            </button>
-          </div>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground p-1 rounded transition-colors"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M4 4l7 7M11 4l-7 7" />
+            </svg>
+          </button>
         </div>
 
-        {showImport && (
-          <div className="px-6 py-3 border-b border-tv-border bg-tv-bg/50">
-            <div className="flex items-center gap-2">
-              <input
-                ref={inputRef}
-                type="text"
-                value={importUrl}
-                onChange={(e) => setImportUrl(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleImport()}
-                placeholder="粘贴 EPG (XMLTV) 链接..."
-                className="flex-1 px-3 py-1.5 bg-tv-bg border border-tv-border rounded-tv-sm text-tv-sm text-tv-text-primary placeholder-tv-text-secondary"
-              />
-              <button
-                onClick={handleImport}
-                className="px-3 py-1.5 bg-tv-accent text-white text-tv-sm rounded-tv-sm hover:bg-tv-accent-hover transition-colors"
-              >
-                导入
-              </button>
-              <button
-                onClick={() => { setShowImport(false); setImportUrl(''); setImportMsg(null) }}
-                className="px-3 py-1.5 text-tv-xs text-tv-text-secondary hover:text-tv-text-primary transition-colors"
-              >
-                取消
-              </button>
+        {loading && (
+          <div className="text-center text-sm text-muted-foreground py-4">加载节目表中...</div>
+        )}
+
+        {!hasData && !loading && (
+          <div className="text-center text-sm text-muted-foreground py-4">
+            该频道暂无 EPG 数据
+          </div>
+        )}
+
+        {current && !loading && (
+          <div className="p-3 bg-primary/10 border border-primary/30 rounded-lg">
+            <div className="text-xs text-primary font-medium mb-1">正在播放</div>
+            <div className="text-sm text-foreground font-medium">{current.title}</div>
+            <div className="text-xs text-muted-foreground mt-1 font-mono">
+              {formatEpgTime(new Date(current.start))} — {formatEpgTime(new Date(current.stop))}
             </div>
-            {importMsg && (
-              <p className={`mt-2 text-tv-xs ${importMsg.ok ? 'text-green-500' : 'text-red-400'}`}>
-                {importMsg.text}
-              </p>
+            {current.description && (
+              <div className="text-xs text-muted-foreground mt-1.5 line-clamp-2">{current.description}</div>
             )}
           </div>
         )}
 
-        <div className="p-6 overflow-y-auto max-h-[calc(80vh-64px)]">
-          {epgSources.length > 0 && !showImport && (
-            <div className="mb-4 flex flex-wrap gap-1.5">
-              {epgSources.map((es) => (
-                <button
-                  key={es.url}
-                  onClick={() => { setImportUrl(es.url); setShowImport(true) }}
-                  className="text-tv-xs text-tv-text-secondary bg-tv-bg border border-tv-border px-2 py-0.5 rounded-tv-sm hover:text-tv-accent transition-colors truncate max-w-[200px]"
-                  title={es.url}
+        {nextPrograms.length > 0 && !loading && (
+          <div>
+            <div className="text-xs text-muted-foreground font-medium mb-2">即将播出</div>
+            <div className="space-y-1.5">
+              {nextPrograms.map((p, i) => (
+                <div
+                  key={i}
+                  className="flex items-start gap-3 p-2.5 bg-card rounded-lg border border-border"
                 >
-                  {es.url.length > 30 ? es.url.slice(0, 27) + '...' : es.url}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {loading && (
-            <div className="text-center text-tv-sm text-tv-text-secondary py-8">加载节目表中...</div>
-          )}
-
-          {!loading && !tvgUrl && (
-            <div className="text-center text-tv-sm text-tv-text-secondary py-8">
-              该频道暂无 EPG 数据
-            </div>
-          )}
-
-          {!loading && tvgUrl && programs.length === 0 && (
-            <div className="text-center text-tv-sm text-tv-text-secondary py-8">
-              未获取到节目数据
-            </div>
-          )}
-
-          {current && (
-            <div className="mb-6 p-4 bg-tv-accent/10 border border-tv-accent/30 rounded-tv-md">
-              <div className="text-tv-xs text-tv-accent font-medium mb-1">正在播放</div>
-              <div className="text-tv-sm text-tv-text-primary font-medium">{current.title}</div>
-              <div className="text-tv-xs text-tv-text-secondary mt-1 font-mono">
-                {formatEpgTime(current.start)} — {formatEpgTime(current.stop)}
-              </div>
-              {current.description && (
-                <div className="text-tv-xs text-tv-text-secondary mt-2 line-clamp-2">{current.description}</div>
-              )}
-            </div>
-          )}
-
-          {nextPrograms.length > 0 && (
-            <div>
-              <div className="text-tv-xs text-tv-text-secondary font-medium mb-3">即将播出</div>
-              <div className="space-y-2">
-                {nextPrograms.map((p, i) => (
-                  <div
-                    key={i}
-                    className="flex items-start gap-3 p-3 bg-tv-bg rounded-tv-md border border-tv-border"
-                  >
-                     <div className="text-tv-xs text-tv-text-secondary whitespace-nowrap min-w-[70px] font-mono">
-                       {formatEpgTime(p.start)}
-                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-tv-sm text-tv-text-primary truncate">{p.title}</div>
-                      {p.description && (
-                        <div className="text-tv-xs text-tv-text-secondary mt-0.5 line-clamp-1">{p.description}</div>
-                      )}
-                    </div>
-                    {p.category && (
-                      <span className="text-tv-xs text-tv-text-secondary bg-tv-bg-surface px-2 py-0.5 rounded-tv-sm whitespace-nowrap">
-                        {p.category}
-                      </span>
+                  <div className="text-xs text-muted-foreground whitespace-nowrap min-w-[60px] font-mono pt-0.5">
+                    {formatEpgTime(new Date(p.start))}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-foreground truncate">{p.title}</div>
+                    {p.description && (
+                      <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{p.description}</div>
                     )}
                   </div>
-                ))}
-              </div>
+                  {p.category && (
+                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded whitespace-nowrap">
+                      {p.category}
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   )

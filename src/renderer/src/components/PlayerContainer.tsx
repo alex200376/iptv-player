@@ -15,13 +15,59 @@ function getCurrentProgram(programs: EpgProgram[], channelTvgId?: string): EpgPr
   )
 }
 
+function getNextPrograms(programs: EpgProgram[], channelTvgId?: string, count = 20): EpgProgram[] {
+  const now = Date.now()
+  return programs.filter((p) =>
+    (!channelTvgId || p.channelTvgId === channelTvgId) && new Date(p.start).getTime() > now
+  ).slice(0, count)
+}
+
+function formatTime(d: Date): string {
+  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
+}
+
+function findPrograms(
+  epgCache: Record<string, EpgProgram[]>,
+  tvgUrl?: string,
+  tvgId?: string,
+): EpgProgram[] {
+  if (tvgUrl && epgCache[tvgUrl]) return epgCache[tvgUrl]
+  if (tvgId) {
+    for (const programs of Object.values(epgCache)) {
+      if (programs.some((p) => p.channelTvgId === tvgId)) return programs
+    }
+  }
+  return []
+}
+
+function EpgProgressBar({ program }: { program: EpgProgram | null }) {
+  if (!program) return null
+  const start = new Date(program.start).getTime()
+  const stop = new Date(program.stop).getTime()
+  const now = Date.now()
+  const pct = Math.min(100, Math.max(0, ((now - start) / (stop - start)) * 100))
+  const elapsed = Math.floor((now - start) / 60000)
+  const total = Math.floor((stop - start) / 60000)
+  return (
+    <div className="space-y-1">
+      <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
+        <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+      </div>
+      <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
+        <span>{elapsed}分钟</span>
+        <span>{total}分钟</span>
+      </div>
+    </div>
+  )
+}
+
 export default function PlayerContainer() {
   const [showInfo, setShowInfo] = useState(false)
   const [showEpg, setShowEpg] = useState(false)
   const [isBuffering, setIsBuffering] = useState(true)
   const [playerError, setPlayerError] = useState<string | null>(null)
   const currentChannel = useStore((s) => s.currentChannel)
-  const epgCache = useStore((s) => currentChannel?.tvgUrl ? s.epgCache[currentChannel.tvgUrl] : undefined)
+  const epgCache = useStore((s) => s.epgCache)
   const loadEpg = useStore((s) => s.loadEpg)
   const timerRef = useRef<ReturnType<typeof setTimeout>>()
   const epgTimerRef = useRef<ReturnType<typeof setTimeout>>()
@@ -30,13 +76,19 @@ export default function PlayerContainer() {
 
   const tvgUrl = currentChannel?.tvgUrl
   const cachedPrograms = useMemo(() => {
-    if (!currentChannel || !epgCache) return undefined
-    return epgCache as EpgProgram[]
-  }, [currentChannel, epgCache])
+    if (!currentChannel) return undefined
+    const found = findPrograms(epgCache, tvgUrl, currentChannel.tvgId)
+    return found.length > 0 ? found : undefined
+  }, [currentChannel, tvgUrl, epgCache])
 
   const currentProgram = useMemo(
     () =>
       cachedPrograms ? getCurrentProgram(cachedPrograms, currentChannel?.tvgId) : null,
+    [cachedPrograms, currentChannel?.tvgId],
+  )
+
+  const nextPrograms = useMemo(
+    () => cachedPrograms ? getNextPrograms(cachedPrograms, currentChannel?.tvgId) : [],
     [cachedPrograms, currentChannel?.tvgId],
   )
 
@@ -47,8 +99,6 @@ export default function PlayerContainer() {
     window.electronAPI.switchChannel(currentChannel.url)
   }, [currentChannel])
 
-  // Register IPC listeners ONCE on mount and clean them up on unmount.
-  // The preload now returns an unsubscribe function from each on* method.
   useEffect(() => {
     const offBuffering = window.electronAPI.onPlayerBuffering(() => {
       setIsBuffering(true)
@@ -86,8 +136,6 @@ export default function PlayerContainer() {
 
   useEffect(() => {
     if (currentChannel) {
-      // Clear all pending timers FIRST so a stale error/buffer timeout from
-      // the previous dead stream cannot race against the new stream's state.
       clearTimeout(bufferTimerRef.current)
       clearTimeout(errorTimerRef.current)
       clearTimeout(timerRef.current)
@@ -122,6 +170,10 @@ export default function PlayerContainer() {
     return () => document.removeEventListener('keydown', handler)
   }, [currentChannel])
 
+  useEffect(() => {
+    window.electronAPI.notifyLayoutChange()
+  }, [showEpg])
+
   return (
     <div className="flex-1 relative bg-black flex flex-col min-w-0">
       <div className="scanline-overlay" />
@@ -133,34 +185,21 @@ export default function PlayerContainer() {
         >
           <div className="flex items-center gap-2">
             {currentChannel.logo && (
-              <img
-                src={currentChannel.logo}
-                alt=""
-                className="w-5 h-5 rounded-tv-sm object-contain"
-              />
+              <img src={currentChannel.logo} alt="" className="w-5 h-5 rounded object-contain" />
             )}
-            <span className="text-tv-sm font-medium text-white drop-shadow">
+            <span className="text-sm font-medium text-white drop-shadow">
               {currentChannel.name}
             </span>
             {currentProgram && (
-              <span className="text-tv-xs text-white/60 ml-2 truncate">
+              <span className="text-xs text-white/60 ml-2 truncate">
                 {currentProgram.title}
               </span>
-            )}
-            {tvgUrl && (
-              <button
-                onClick={() => setShowEpg(true)}
-                className="ml-auto text-tv-xs text-white/50 hover:text-white/90 transition-colors px-1.5 py-0.5 rounded-tv-sm"
-                title="節目表 (G)"
-              >
-                EPG
-              </button>
             )}
           </div>
         </div>
       )}
 
-      <div className="flex-1 relative group" id="player-container">
+      <div className={`${showEpg ? 'flex-[3]' : 'flex-1'} relative group`} id="player-container">
         <div id="player" className="w-full h-full" />
         {isBuffering && currentChannel && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
@@ -180,7 +219,7 @@ export default function PlayerContainer() {
           <div className="absolute inset-0 flex items-center justify-center z-20">
             <button
               onClick={handleReplay}
-              className="flex items-center gap-2 px-5 py-2.5 bg-tv-accent/20 hover:bg-tv-accent/30 border border-tv-accent/40 rounded-tv-md text-tv-sm text-tv-accent transition-colors"
+              className="flex items-center gap-2 px-5 py-2.5 bg-primary/20 hover:bg-primary/30 border border-primary/40 rounded-md text-sm text-primary transition-colors"
             >
               <svg
                 className="w-4 h-4"
@@ -196,7 +235,7 @@ export default function PlayerContainer() {
           </div>
         )}
         {!currentChannel && (
-          <div className="absolute inset-0 flex items-center justify-center text-tv-text-secondary select-none pointer-events-none">
+          <div className="absolute inset-0 flex items-center justify-center text-muted-foreground select-none pointer-events-none">
             <div className="text-center">
               <svg
                 className="w-16 h-16 mx-auto mb-3"
@@ -208,14 +247,75 @@ export default function PlayerContainer() {
                 <rect x="2" y="3" width="20" height="14" rx="2" />
                 <path d="M8 21h8M12 17v4" />
               </svg>
-              <div className="text-tv-sm">導入 M3U 播放列表開始觀看</div>
-              <div className="text-tv-xs mt-1 opacity-60">Ctrl+I 導入 · Ctrl+B 切換頻道列表</div>
+              <div className="text-sm">導入 M3U 播放列表開始觀看</div>
+              <div className="text-xs mt-1 opacity-60">Ctrl+I 導入 · Ctrl+B 切換頻道列表</div>
             </div>
           </div>
         )}
       </div>
 
-      {showEpg && <EpgOverlay onClose={() => setShowEpg(false)} />}
+      {currentChannel && (
+        <div className={`${showEpg ? 'flex-1 min-h-0 overflow-y-auto' : ''} flex flex-col bg-card border-t border-border`}>
+          <div className="px-4 pt-3 pb-2 space-y-3">
+            {currentProgram && (
+              <h1 className="text-lg font-bold text-foreground leading-tight">
+                {currentProgram.title}
+              </h1>
+            )}
+
+            <div className="flex items-center gap-3">
+              {currentChannel.logo ? (
+                <img
+                  src={currentChannel.logo}
+                  alt=""
+                  className="w-9 h-9 rounded-full object-contain flex-shrink-0 bg-background"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                />
+              ) : (
+                <span className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-muted text-muted-foreground">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="2" y="3" width="20" height="14" rx="2" />
+                    <path d="M8 21h8M12 17v4" />
+                  </svg>
+                </span>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-foreground text-sm truncate">{currentChannel.name}</span>
+                  <span className="text-[10px] uppercase tracking-wider text-red-500 font-bold border border-red-500/30 px-1.5 py-0.5 rounded">LIVE</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowEpg((v) => !v)}
+                className={`shrink-0 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  showEpg
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80'
+                }`}
+              >
+                节目表
+              </button>
+            </div>
+
+            {currentProgram && (
+              <div>
+                <EpgProgressBar program={currentProgram} />
+                {currentProgram.description && (
+                  <p className="text-sm text-muted-foreground mt-2 line-clamp-3 leading-relaxed">
+                    {currentProgram.description}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {showEpg && (
+            <div className="border-t border-border">
+              <EpgOverlay onClose={() => setShowEpg(false)} />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

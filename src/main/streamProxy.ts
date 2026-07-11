@@ -44,23 +44,27 @@ const SCALE_MAP: Record<string, string | null> = {
 
 /** Cached GPU encoder name, null if none available, undefined = not probed yet. */
 let _gpuEncoder: string | null | undefined = undefined
+let _gpuEncoderProbe: Promise<string | null> | null = null
 
 /**
  * Test whether a GPU encoder actually works by encoding a single null frame.
  * Only tests once per session and caches the result.
  */
-function detectGpuEncoder(ffmpegPath: string): string | null {
-  if (_gpuEncoder !== undefined) return _gpuEncoder
-
+async function probeGpuEncoder(ffmpegPath: string): Promise<string | null> {
   for (const enc of ['h264_nvenc', 'h264_amf']) {
     try {
-      const { execFileSync } = require('child_process')
-      execFileSync(ffmpegPath, [
-        '-f', 'lavfi', '-i', 'nullsrc=s=1280x720:duration=0.1',
-        '-frames:v', '1',
-        '-c:v', enc,
-        '-f', 'null', '-',
-      ], { encoding: 'utf8', timeout: 5000, stdio: 'ignore' })
+      const { execFile } = require('child_process')
+      await new Promise<void>((resolve, reject) => {
+        execFile(ffmpegPath, [
+          '-f', 'lavfi', '-i', 'nullsrc=s=1280x720:duration=0.1',
+          '-frames:v', '1',
+          '-c:v', enc,
+          '-f', 'null', '-',
+        ], { timeout: 5000, stdio: 'ignore' }, (err) => {
+          if (err) reject(err)
+          else resolve()
+        })
+      })
       _gpuEncoder = enc
       console.log('[stream-proxy] GPU encoder available:', enc)
       return enc
@@ -68,9 +72,15 @@ function detectGpuEncoder(ffmpegPath: string): string | null {
       console.log('[stream-proxy] GPU encoder not available:', enc)
     }
   }
-
   _gpuEncoder = null
   return null
+}
+
+async function detectGpuEncoder(ffmpegPath: string): Promise<string | null> {
+  if (_gpuEncoder !== undefined) return _gpuEncoder
+  if (_gpuEncoderProbe) return _gpuEncoderProbe
+  _gpuEncoderProbe = probeGpuEncoder(ffmpegPath)
+  return _gpuEncoderProbe
 }
 
 function encoderArgs(enc: string): string[] {
@@ -109,15 +119,19 @@ function findFfmpeg(vlcDir?: string | null): string {
  * On first call probes once and caches the result for the session.
  */
 let _ffmpegAvailable: boolean | undefined = undefined
+let _ffmpegProbe: Promise<boolean> | null = null
 
-export function isFfmpegAvailable(vlcDir?: string | null): boolean {
-  if (_ffmpegAvailable !== undefined) return _ffmpegAvailable
+async function probeFfmpeg(vlcDir?: string | null): Promise<boolean> {
   const ffmpegPath = findFfmpeg(vlcDir)
   if (ffmpegPath === 'ffmpeg' && !ffmpegPath.includes('\\') && !ffmpegPath.includes('/')) {
-    // Bare command — probe PATH
     try {
-      const { execFileSync } = require('child_process')
-      execFileSync(ffmpegPath, ['-version'], { encoding: 'utf8', timeout: 3000, stdio: 'ignore' })
+      const { execFile } = require('child_process')
+      await new Promise<void>((resolve, reject) => {
+        execFile(ffmpegPath, ['-version'], { timeout: 3000 }, (err) => {
+          if (err) reject(err)
+          else resolve()
+        })
+      })
       _ffmpegAvailable = true
     } catch {
       _ffmpegAvailable = false
@@ -126,6 +140,13 @@ export function isFfmpegAvailable(vlcDir?: string | null): boolean {
     _ffmpegAvailable = existsSync(ffmpegPath)
   }
   return _ffmpegAvailable
+}
+
+export async function isFfmpegAvailable(vlcDir?: string | null): Promise<boolean> {
+  if (_ffmpegAvailable !== undefined) return _ffmpegAvailable
+  if (_ffmpegProbe) return _ffmpegProbe
+  _ffmpegProbe = probeFfmpeg(vlcDir)
+  return _ffmpegProbe
 }
 
 /**
@@ -211,7 +232,7 @@ function buildInputArgs(streamUrl: string): string[] {
   return base
 }
 
-function handleProxyRequest(
+async function handleProxyRequest(
   streamUrl: string,
   req: IncomingMessage,
   res: ServerResponse,
@@ -230,7 +251,7 @@ function handleProxyRequest(
 
   // Low-latency ffmpeg args for live streams → HTTP-FLV
   const useScale = currentScale && SCALE_MAP[currentScale]
-  const gpuEnc = useScale ? detectGpuEncoder(ffmpegPath) : null
+  const gpuEnc = useScale ? await detectGpuEncoder(ffmpegPath) : null
   const args = [
     ...buildInputArgs(streamUrl),
     ...(useScale

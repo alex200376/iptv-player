@@ -36,6 +36,8 @@ interface PlayerStore {
   epgSources: EpgSource[]
 
   setChannels: (channels: Channel[]) => void
+  reorderGroup: (groupId: string, targetGroupId: string) => void
+  reorderChannel: (channelId: string, targetChannelId: string) => void
   setCurrentChannel: (channel: Channel) => void
   setIsPlaying: (playing: boolean) => void
   setSearchQuery: (q: string) => void
@@ -96,6 +98,48 @@ export const useStore = create<PlayerStore>((set) => ({
   checkTotal: 0,
 
   setChannels: (channels) => set({ groups: groupChannels(channels) }),
+
+  reorderGroup: (groupId: string, targetGroupId: string) => set((s) => {
+    const groups = [...s.groups]
+    const fromIdx = groups.findIndex((g) => g.name === groupId)
+    let toIdx = groups.findIndex((g) => g.name === targetGroupId)
+    if (fromIdx === -1 || toIdx === -1) return s
+    const [moved] = groups.splice(fromIdx, 1)
+    if (fromIdx < toIdx) toIdx--
+    groups.splice(toIdx, 0, moved)
+    const allChannels = groups.flatMap((g) => g.channels)
+    debouncedSave(allChannels)
+    return { groups }
+  }),
+
+  reorderChannel: (channelId: string, targetChannelId: string) => set((s) => {
+    const groups = s.groups.map((g) => ({ ...g, channels: [...g.channels] }))
+    let sourceGroupIdx = -1, sourceIdx = -1
+    let targetGroupIdx = -1, targetIdx = -1
+    for (let gi = 0; gi < groups.length; gi++) {
+      const ci = groups[gi].channels.findIndex((c) => c.id === channelId)
+      if (ci !== -1) { sourceGroupIdx = gi; sourceIdx = ci }
+      const tj = groups[gi].channels.findIndex((c) => c.id === targetChannelId)
+      if (tj !== -1) { targetGroupIdx = gi; targetIdx = tj }
+    }
+    if (sourceGroupIdx === -1 || targetGroupIdx === -1) return s
+
+    const sourceChs = groups[sourceGroupIdx].channels
+    const [moved] = sourceChs.splice(sourceIdx, 1)
+
+    if (sourceGroupIdx === targetGroupIdx) {
+      const adjust = targetIdx > sourceIdx ? targetIdx - 1 : targetIdx
+      sourceChs.splice(adjust, 0, moved)
+    } else {
+      groups[targetGroupIdx].channels.splice(targetIdx, 0, moved)
+      if (sourceChs.length === 0) {
+        groups.splice(sourceGroupIdx, 1)
+      }
+    }
+    const allChannels = groups.flatMap((g) => g.channels)
+    debouncedSave(allChannels)
+    return { groups }
+  }),
   setCurrentChannel: (channel) => set({ currentChannel: channel }),
   setIsPlaying: (playing) => set({ isPlaying: playing }),
   setSearchQuery: (q) => set({ searchQuery: q }),
