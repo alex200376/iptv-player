@@ -109,7 +109,8 @@ const api = {
   importEpgFromUrl: (url: string) => ipcRenderer.invoke('import-epg-url', url),
 
   refreshPlaylists: () => ipcRenderer.invoke('refresh-playlists'),
-  refreshPlaylistUrl: (url: string) => ipcRenderer.invoke('refresh-playlist-url', url),
+  refreshPlaylistUrl: (playlistId: string, url?: string) =>
+    ipcRenderer.invoke('refresh-playlist-url', playlistId, url),
   onPlaylistsRefreshed: (callback: (channels: unknown[]) => void) =>
     on<unknown[]>('playlists-refreshed', callback),
 
@@ -121,6 +122,7 @@ const api = {
       channels: Channel[]
       removedCount: number
     }>,
+  clearAllData: () => ipcRenderer.invoke('clear-all-data'),
   onChannelsCheckProgress: (
     callback: (progress: { checked: number; total: number }) => void,
   ) => on('channels-check-progress', callback),

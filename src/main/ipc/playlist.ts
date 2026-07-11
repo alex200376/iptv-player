@@ -1,9 +1,11 @@
 import { ipcMain, dialog, net } from 'electron'
 import { createConnection } from 'net'
-import { readFileSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
+import { join } from 'path'
 import { parseM3U, urlToId } from '../m3uParser'
 import { saveChannels, loadChannels } from '../channelStore'
 import { saveUserData, loadUserData } from '../userDataStore'
+import { writeSettings } from '../settingsStore'
 import type { Channel } from '../m3uParser'
 import { getState } from './shared'
 
@@ -19,26 +21,38 @@ function playlistNameFromPath(filePath: string): string {
 }
 
 export async function refreshPlaylistUrl(
-  url: string,
+  playlistId: string,
+  url?: string,
 ): Promise<{ added: number; updated: number; removed: number; error?: string }> {
   try {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 15000)
-    const res = await net.fetch(url, { signal: controller.signal })
+
+    const userData = await loadUserData()
+    const playlistMeta = userData.playlists.find((p) => p.id === playlistId)
+    const targetUrl = url || playlistMeta?.url
+    if (!targetUrl) return { added: 0, updated: 0, removed: 0, error: '\u672a\u627e\u5230\u64ad\u653e\u5217\u8868 URL' }
+
+    const res = await net.fetch(targetUrl, { signal: controller.signal })
     clearTimeout(timeout)
     if (!res.ok) return { added: 0, updated: 0, removed: 0, error: `HTTP ${res.status}` }
     const content = await res.text()
     if (!content.trim()) return { added: 0, updated: 0, removed: 0, error: '\u54cd\u5e94\u5185\u5bb9\u4e3a\u7a7a' }
 
-    const freshChannels = await parseM3U(content)
+    const freshChannels = await parseM3U(content, playlistId)
     const existing: Channel[] = await loadChannels()
+
+    const targetExisting = existing.filter((c) => c.playlistId === playlistId)
+    const otherChannels = existing.filter((c) => c.playlistId !== playlistId)
+    const allExistingUrls = new Set(existing.map((c) => c.url))
+
     const freshUrlSet = new Set(freshChannels.map((c) => c.url))
-    const kept: Channel[] = []
+    const kept: Channel[] = [...otherChannels]
     let addCount = 0
     let updateCount = 0
     let removeCount = 0
 
-    for (const old of existing) {
+    for (const old of targetExisting) {
       if (freshUrlSet.has(old.url)) {
         const match = freshChannels.find((c) => c.url === old.url)
         if (match) {
@@ -58,34 +72,27 @@ export async function refreshPlaylistUrl(
       }
     }
 
-    const existingPlaylistIds = new Set(
-      existing
-        .filter((c) => freshChannels.some((fc) => fc.url === c.url))
-        .map((c) => c.playlistId),
-    )
-    const playlistId =
-      existingPlaylistIds.values().next().value || `pl-refresh-${Date.now()}`
-
     for (const fresh of freshChannels) {
       if (!freshUrlSet.has(fresh.url)) continue
-      kept.push({
-        id: urlToId(fresh.url),
-        name: fresh.name,
-        url: fresh.url,
-        logo: fresh.logo,
-        group: fresh.group,
-        tvgId: fresh.tvgId,
-        tvgUrl: fresh.tvgUrl,
-        playlistId,
-      })
+      if (allExistingUrls.has(fresh.url)) continue
+      kept.push(fresh)
       addCount++
     }
 
     await saveChannels(kept)
+
+    if (playlistMeta) {
+      const newChannelCount = kept.filter((c) => c.playlistId === playlistId).length
+      const updatedPlaylists = userData.playlists.map((p) =>
+        p.id === playlistId ? { ...p, channelCount: newChannelCount } : p,
+      )
+      await saveUserData({ ...userData, playlists: updatedPlaylists })
+    }
+
     return { added: addCount, updated: updateCount, removed: removeCount }
   } catch (e) {
     const msg = (e as Error).message
-    console.error('[refresh]', url, msg)
+    console.error('[refresh]', playlistId, msg)
     return { added: 0, updated: 0, removed: 0, error: msg }
   }
 }
@@ -96,7 +103,7 @@ export async function refreshAllUrlPlaylists(): Promise<{ total: number; errors:
   let total = 0
   const errors: string[] = []
   for (const pl of urlPlaylists) {
-    const result = await refreshPlaylistUrl(pl.url)
+    const result = await refreshPlaylistUrl(pl.id, pl.url)
     total += result.added + result.updated
     if (result.error) errors.push(`${pl.name}: ${result.error}`)
   }
@@ -568,7 +575,7 @@ export function registerPlaylistIpc() {
       const playlistId = nextPlaylistId()
       const playlistName = playlistNameFromPath(filePath)
       const channels = await parseM3U(content, playlistId)
-      return { channels, playlistId, playlistName }
+      return { channels, playlistId, playlistName, filePath }
     } catch (e) {
       return { channels: [], error: `\u8bfb\u53d6\u6587\u4ef6\u5931\u8d25: ${(e as Error).message}` }
     }
@@ -627,8 +634,8 @@ export function registerPlaylistIpc() {
     return await refreshAllUrlPlaylists()
   })
 
-  ipcMain.handle('refresh-playlist-url', async (_event, url: string) => {
-    return await refreshPlaylistUrl(url)
+  ipcMain.handle('refresh-playlist-url', async (_event, playlistId: string, url?: string) => {
+    return await refreshPlaylistUrl(playlistId, url)
   })
 
   ipcMain.handle('save-user-data', async (_event, data: unknown) => {
@@ -663,6 +670,33 @@ export function registerPlaylistIpc() {
       }
       const { writeFileSync } = require('fs')
       writeFileSync(result.filePath, m3u, 'utf-8')
+      return { success: true }
+    } catch (e) {
+      return { success: false, error: (e as Error).message }
+    }
+  })
+
+  ipcMain.handle('clear-all-data', async () => {
+    try {
+      await saveChannels([])
+      await saveUserData({ favoriteIds: [], historyEntries: [], playlists: [] })
+      writeSettings({
+        theme: 'dark',
+        hardwareAcceleration: 'd3d11va',
+        networkCache: 400,
+        fontSize: 'normal',
+        compatibilityMode: false,
+        autoReconnect: true,
+        reconnectInterval: 2000,
+        playlistRefreshInterval: 0,
+        h264Threads: 0,
+        avcodecHwDisabled: false,
+        streamProxy: false,
+        proxyResolution: 'original',
+        autoDownloadUpdates: false,
+        snoozeUpdateUntil: 0,
+        language: 'zh-CN',
+      })
       return { success: true }
     } catch (e) {
       return { success: false, error: (e as Error).message }

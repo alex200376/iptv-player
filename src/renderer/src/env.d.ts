@@ -112,12 +112,13 @@ interface ElectronAPI {
   fetchEpg: (tvgUrl: string) => Promise<EpgProgram[]>
   importEpgFromUrl: (url: string) => Promise<{ success: boolean; count: number; tvgIds: string[]; error?: string }>
   refreshPlaylists: () => Promise<{ total: number; errors: string[] }>
-  refreshPlaylistUrl: (url: string) => Promise<{ added: number; updated: number; removed: number; error?: string }>
+  refreshPlaylistUrl: (playlistId: string, url?: string) => Promise<{ added: number; updated: number; removed: number; error?: string }>
   onPlaylistsRefreshed: (callback: (channels: Channel[]) => void) => void
   checkChannelUrl: (url: string) => Promise<{ online: boolean; length?: number; lastCheckedAt: number; error?: string }>
   checkAllChannels: () => Promise<{ total: number; channels: Channel[] }>
   cancelCheckAll: () => void
   removeOfflineChannels: () => Promise<{ channels: Channel[]; removedCount: number }>
+  clearAllData: () => Promise<{ success: boolean; error?: string }>
   onChannelsCheckProgress: (callback: (progress: { checked: number; total: number }) => void) => void
   onChannelsCheckLog: (callback: (log: { name: string; url: string; protocol: string; result: string; checked: number; total: number }) => void) => void
   onChannelsCheckDone: (callback: (channels: Channel[]) => void) => void

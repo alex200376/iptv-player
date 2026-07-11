@@ -10,6 +10,7 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
   const { t, i18n } = useTranslation()
   const { settings, updateSettings } = useSettingsStore()
   const [showUpdateDialog, setShowUpdateDialog] = useState(false)
+  const [confirmClear, setConfirmClear] = useState(false)
 
   const handleClose = () => {
     onClose?.()
@@ -344,6 +345,65 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
               >
                 {t('settings.checkUpdate')}
               </button>
+              <div className="pt-4 border-t border-tv-border space-y-3">
+                <p className="text-tv-sm font-medium text-red-400">{t('settings.clearAllData')}</p>
+                <p className="text-tv-xs text-tv-text-secondary">{t('settings.clearAllDataDesc')}</p>
+                {!confirmClear ? (
+                  <button
+                    onClick={() => setConfirmClear(true)}
+                    className="w-full py-2.5 bg-red-900/40 text-red-400 text-tv-sm rounded-tv-md hover:bg-red-900/60 transition-colors border border-red-800"
+                  >
+                    {t('settings.clearAllData')}
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-tv-xs text-red-400">{t('settings.clearAllDataConfirm')}</p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={async () => {
+                          const result = await window.electronAPI.clearAllData()
+                          if (result.success) {
+                            useStore.setState({
+                              groups: [],
+                              currentChannel: null,
+                              isPlaying: false,
+                              searchQuery: '',
+                              navTab: 'channels',
+                              directStreams: [],
+                              settingsOpen: false,
+                              activePlaylistId: null,
+                              favoriteIds: [],
+                              historyEntries: [],
+                              playlists: [],
+                              epgSources: [],
+                              checkLogs: [],
+                              checkRunning: false,
+                              checkTotal: 0,
+                            })
+                            await useSettingsStore.getState().loadSettings()
+                            const newSettings = useSettingsStore.getState().settings
+                            i18n.changeLanguage(newSettings.language)
+                            document.documentElement.lang = newSettings.language
+                            onClose?.()
+                          } else {
+                            console.error('[clearAllData]', result.error)
+                          }
+                          setConfirmClear(false)
+                        }}
+                        className="flex-1 py-2 bg-red-700 text-white text-tv-sm rounded-tv-md hover:bg-red-600 transition-colors"
+                      >
+                        {t('settings.confirmClear')}
+                      </button>
+                      <button
+                        onClick={() => setConfirmClear(false)}
+                        className="flex-1 py-2 bg-tv-bg border border-tv-border text-tv-text-secondary text-tv-sm rounded-tv-md hover:bg-tv-bg-surface transition-colors"
+                      >
+                        {t('playlist.cancel')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             {showUpdateDialog && <UpdateDialog onClose={() => setShowUpdateDialog(false)} />}
           </Tabs.Content>

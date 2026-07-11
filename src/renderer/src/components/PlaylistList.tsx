@@ -41,12 +41,13 @@ export default function PlaylistList() {
     setChannels(channels)
   }
 
-  const handleRefreshUrl = async (url: string) => {
-    setRefreshingUrl(url)
-    const result = await window.electronAPI.refreshPlaylistUrl(url)
+  const handleRefreshUrl = async (pl: { id: string; url?: string }) => {
+    if (!pl.url) return
+    setRefreshingUrl(pl.url)
+    const result = await window.electronAPI.refreshPlaylistUrl(pl.id, pl.url)
     setRefreshingUrl(null)
     if (result.error) {
-      console.error('[refresh]', url, result.error)
+      console.error('[refresh]', pl.url, result.error)
     }
     const channels = await window.electronAPI.loadChannels()
     setChannels(channels)
@@ -162,7 +163,7 @@ export default function PlaylistList() {
             <div className="flex items-center gap-1 px-2.5 pb-1.5">
               {pl.source === 'url' && pl.url && (
                 <button
-                  onClick={() => handleRefreshUrl(pl.url!)}
+                  onClick={() => handleRefreshUrl(pl)}
                   disabled={refreshingUrl === pl.url}
                   className="text-tv-xs text-tv-text-secondary hover:text-tv-accent transition-colors disabled:opacity-40"
                 >
