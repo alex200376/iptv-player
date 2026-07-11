@@ -23,6 +23,12 @@ nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   shortcutName: IPTV Player
+  include: build/installer.nsh
+extraResources:
+  - from: resources/
+    to: resources/
+    filter:
+      - "ffmpeg.exe"
 publish:
   provider: github
   owner: alex200376

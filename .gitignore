@@ -9,3 +9,4 @@ Thumbs.db
 .vite/
 .env.local
 *.tsbuildinfo
+ffmpeg.exe

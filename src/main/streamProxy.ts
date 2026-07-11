@@ -3,6 +3,7 @@ import { AddressInfo } from 'net'
 import { spawn, ChildProcess } from 'child_process'
 import { existsSync } from 'fs'
 import { join } from 'path'
+import { app } from 'electron'
 
 // RTMP/RTSP/UDP always need proxy.
 // HTTP .ts streams (MPEG-TS over HTTP) also need proxy — VLC cannot reliably
@@ -105,12 +106,21 @@ let switchResolve: ((url: string) => void) | null = null
 let switchReject: ((err: Error) => void) | null = null
 
 function findFfmpeg(vlcDir?: string | null): string {
+  // 1. Check bundled resources path (extraResources)
+  const bundled = app.isPackaged
+    ? join(process.resourcesPath, 'resources', 'ffmpeg.exe')
+    : join(__dirname, '..', '..', 'resources', 'ffmpeg.exe')
+  if (existsSync(bundled)) return bundled
+
+  // 2. Check VLC directory
   if (vlcDir) {
     for (const name of ['ffmpeg.exe', 'ffmpeg']) {
       const p = join(vlcDir, name)
       if (existsSync(p)) return p
     }
   }
+
+  // 3. Fall back to PATH
   return 'ffmpeg'
 }
 
