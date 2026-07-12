@@ -27,23 +27,40 @@ export function getState(): SharedState {
 }
 
 export function buildMediaOptions(settings: Settings): string[] {
+  // networkCache floor: 300 ms is the minimum that avoids constant rebuffering
+  // on a typical broadband connection while still feeling responsive on switch.
   const cache = Math.max(settings.networkCache, 300)
+
   const options = [
     `:network-caching=${cache}`,
     `:live-caching=${cache}`,
     `:file-caching=${Math.min(cache, 1000)}`,
     `:h264-threads=${settings.h264Threads}`,
+    // Generous TCP timeout so VLC does not immediately give up on slow streams.
     ':tcp-timeout=10000',
+    // Auto-reconnect at the HTTP layer (handles brief CDN 503s silently).
     ':http-reconnect',
     ':rtsp-tcp',
     ':sout-mux-caching=100',
     ':no-drop-late-frames',
     ':no-skip-frames',
+    // Free-running clock: essential for live streams that have no PCR.
     ':clock-synchro=0',
+    // Prevent some CDN/proxy servers from blocking headless HTTP clients.
+    ':http-user-agent=VLC/3.0',
+    // Pre-buffer 1 MiB ahead of the demuxer read position for smoother startup.
+    ':prefetch-buffer-size=1048576',
   ]
-  if (settings.avcodecHwDisabled) {
+
+  // avcodec-hw=disabled wins over hardwareAcceleration because it forces
+  // full software decode, which is what compatibilityMode is meant to do.
+  if (settings.compatibilityMode) {
+    options.push(':avcodec-hw=disabled')
+    options.push(':ffmpeg-hw=disabled')
+  } else if (settings.avcodecHwDisabled) {
     options.push(':avcodec-hw=disabled')
   }
+
   return options
 }
 

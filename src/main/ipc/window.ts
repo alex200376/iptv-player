@@ -5,6 +5,31 @@ import { getState, ensureEmbedded } from './shared'
 import { showMenuPopup } from '../menu'
 import { t } from '../i18n'
 
+// Rate-limit notify-layout-change so rapid sidebar toggles / React re-renders
+// do not hammer the VLC surface renegotiation path (causes ~200 ms freeze each time).
+let _layoutChangeTimer: ReturnType<typeof setTimeout> | null = null
+let _lastLayoutW = 0
+let _lastLayoutH = 0
+const LAYOUT_DEBOUNCE_MS = 120
+
+function debouncedNotifyLayout() {
+  if (_layoutChangeTimer) return
+  _layoutChangeTimer = setTimeout(() => {
+    _layoutChangeTimer = null
+    const state = getState()
+    if (!state.player || state.player.destroyed) return
+    // Only forward to VLC when the window bounds actually changed.
+    const win = state.mainWindow
+    if (win && !win.isDestroyed()) {
+      const [w, h] = win.getContentSize()
+      if (Math.abs(w - _lastLayoutW) < 4 && Math.abs(h - _lastLayoutH) < 4) return
+      _lastLayoutW = w
+      _lastLayoutH = h
+    }
+    try { state.player.notifyLayoutChange() } catch (e) { console.error('[window] notifyLayoutChange:', e) }
+  }, LAYOUT_DEBOUNCE_MS)
+}
+
 export function registerWindowIpc() {
   ipcMain.handle('get-vlc-version', async () => {
     try {
@@ -65,8 +90,10 @@ export function registerWindowIpc() {
     state.mainWindow.setFullScreen(!state.mainWindow.isFullScreen())
   })
 
+  // Debounced + dimension-checked so sidebar/EPG panel toggles don't
+  // trigger a full VLC surface renegotiation on every React render.
   ipcMain.handle('notify-layout-change', () => {
-    try { getState().player?.notifyLayoutChange() } catch (e) { console.error('[window] notifyLayoutChange:', e) }
+    debouncedNotifyLayout()
   })
 
   ipcMain.handle('exit-fullscreen', () => {

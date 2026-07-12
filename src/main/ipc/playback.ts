@@ -6,7 +6,10 @@ import { exitPipMode } from './pip'
 import { needsProxy, getProxyUrl, stopProxy, isFfmpegAvailable } from '../streamProxy'
 
 let _playId = 0
+// Tightened to 300 ms: 500 ms felt sluggish when navigating with arrow keys.
+// Still long enough to discard duplicate rapid-fire switch requests.
 let _lastSwitchTime = 0
+const SWITCH_DEBOUNCE_MS = 300
 
 async function doPlay(
   url: string,
@@ -82,7 +85,7 @@ async function doPlay(
     await Promise.race([
       Promise.resolve(ensurePlayerEmbedded()),
       new Promise<void>((_res, reject) =>
-        setTimeout(() => reject(new Error('embed timeout')), 5000)
+        setTimeout(() => reject(new Error('embed timeout')), 5000),
       ),
     ]).catch((e) => {
       console.warn('[play] embed timed out or failed:', e?.message)
@@ -134,7 +137,7 @@ export function registerPlaybackIpc() {
     // Debounce rapid channel switches (e.g. clicking two dead streams quickly)
     // to prevent concurrent VlcPlayer allocations that race on GPU surfaces.
     const now = Date.now()
-    if (now - _lastSwitchTime < 500) {
+    if (now - _lastSwitchTime < SWITCH_DEBOUNCE_MS) {
       console.log('[switch-channel] debounced, ignoring rapid switch')
       return { success: false }
     }
@@ -234,10 +237,10 @@ export function registerPlaybackIpc() {
       if (!state.pipWindow.isDestroyed()) state.pipWindow.close()
       state.pipWindow = null
     }
-      if (state.player) {
-        try { state.player.removeAllListeners() } catch (e) { console.error('[playback] removeAllListeners:', e) }
-        try { state.player.destroy() } catch (e) { console.error('[playback] destroy:', e) }
-        state.player = null
+    if (state.player) {
+      try { state.player.removeAllListeners() } catch (e) { console.error('[playback] removeAllListeners:', e) }
+      try { state.player.destroy() } catch (e) { console.error('[playback] destroy:', e) }
+      state.player = null
     }
     stopProxy()
   })
