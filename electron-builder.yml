@@ -13,6 +13,7 @@ asar: true
 asarUnpack:
   - node_modules/electron-vlc-player/**/*
 win:
+  artifactName: "${productName}-Setup-${version}.${ext}"
   target:
     - target: nsis
       arch:
