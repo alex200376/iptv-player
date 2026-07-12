@@ -58,9 +58,15 @@ module.exports = {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0.3' },
         },
+        'marquee-scroll': {
+          '0%, 15%': { transform: 'translateX(0)' },
+          '50%': { transform: 'translateX(var(--marquee-dist, -50px))' },
+          '85%, 100%': { transform: 'translateX(0)' },
+        },
       },
       animation: {
         'pulse-dot': 'pulse-dot 1.5s ease-in-out infinite',
+        'marquee-scroll': 'marquee-scroll var(--marquee-dur, 4s) ease-in-out infinite',
       },
     },
   },

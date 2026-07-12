@@ -466,6 +466,21 @@ html, body, #root {
   transform: translateX(-50%) scale(1);
 }
 
+/* ── Marquee text on hover ──────────────────────────────────────────── */
+.marquee-hover {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.marquee-container:hover .marquee-hover {
+  display: inline-block;
+  overflow: visible;
+  text-overflow: clip;
+  animation: marquee-scroll var(--marquee-dur, 4s) ease-in-out infinite;
+}
+
 /* ── Animations ──────────────────────────────────────────────────── */
 @keyframes fadeIn {
   from { opacity: 0; }

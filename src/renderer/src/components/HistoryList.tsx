@@ -5,6 +5,7 @@ import ContextMenu from './ContextMenu'
 import { usePlayChannel } from '../hooks/usePlayChannel'
 import { useTranslation } from 'react-i18next'
 import LogoImg from './LogoImg'
+import MarqueeText from './MarqueeText'
 
 export default function HistoryList() {
   const { t, i18n } = useTranslation()
@@ -78,7 +79,7 @@ export default function HistoryList() {
             </span>
           )}
           <div className="flex-1 min-w-0">
-            <div className="truncate">{entry.channel.name}</div>
+            <MarqueeText>{entry.channel.name}</MarqueeText>
             <div className="text-tv-xs opacity-60">{formatTime(entry.watchedAt)}</div>
           </div>
         </button>

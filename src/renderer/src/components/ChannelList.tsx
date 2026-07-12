@@ -8,6 +8,7 @@ import { useLogoUrl } from '../hooks/useLogoUrl'
 import type { Channel, ChannelGroup, EpgProgram } from '../types'
 import { useTranslation } from 'react-i18next'
 import { getGroupDisplayName } from '../utils/groupLabels'
+import MarqueeText from './MarqueeText'
 
 function getCurrentProgram(programs: EpgProgram[], channelTvgId?: string): EpgProgram | null {
   const now = Date.now()
@@ -518,9 +519,9 @@ const ChannelRowWrapper = memo(function ChannelRowWrapper({
             </span>
           )}
           <div className="flex-1 min-w-0 text-left">
-            <div className={`truncate font-medium ${isActive ? 'text-primary' : 'text-foreground'}`}>
+            <MarqueeText className={`font-medium ${isActive ? 'text-primary' : 'text-foreground'}`}>
               {ch.name}
-            </div>
+            </MarqueeText>
             {currentEpg && (
               <div className="text-xs text-muted-foreground truncate mt-0.5">
                 {currentEpg.title}

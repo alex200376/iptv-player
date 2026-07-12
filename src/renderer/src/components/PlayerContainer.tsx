@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { useStore } from '../stores/useStore'
 import EpgOverlay from './EpgOverlay'
 import LogoImg from './LogoImg'
+import MarqueeText from './MarqueeText'
 import type { Channel, EpgProgram } from '../types'
 import { useTranslation } from 'react-i18next'
 
@@ -355,9 +356,9 @@ export default function PlayerContainer() {
             {currentChannel.logo && (
               <LogoImg src={currentChannel.logo} className="w-5 h-5 rounded object-contain" />
             )}
-            <span className="text-sm font-medium text-white drop-shadow">
+            <MarqueeText className="text-sm font-medium text-white drop-shadow">
               {currentChannel.name}
-            </span>
+            </MarqueeText>
             {currentProgram && (
               <span className="text-xs text-white/60 ml-2 truncate">
                 {currentProgram.title}
@@ -457,9 +458,9 @@ export default function PlayerContainer() {
               )}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold text-foreground text-sm truncate">
+                  <MarqueeText className="font-semibold text-foreground text-sm">
                     {currentChannel.name}
-                  </span>
+                  </MarqueeText>
                   <span className="text-[10px] uppercase tracking-wider text-red-500 font-bold border border-red-500/30 px-1.5 py-0.5 rounded">
                     LIVE
                   </span>

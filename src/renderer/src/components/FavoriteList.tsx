@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef } from 'react'
 import { useStore } from '../stores/useStore'
 import ContextMenu from './ContextMenu'
 import { useState } from 'react'
+import MarqueeText from './MarqueeText'
 import { usePlayChannel } from '../hooks/usePlayChannel'
 import LogoImg from './LogoImg'
 import { useTranslation } from 'react-i18next'
@@ -64,7 +65,7 @@ export default function FavoriteList() {
               </svg>
             </span>
           )}
-          <span className="flex-1 truncate">{ch.name}</span>
+          <MarqueeText className="flex-1">{ch.name}</MarqueeText>
           <span className="flex-shrink-0 text-tv-accent">
             <svg className="w-3.5 h-3.5" viewBox="0 0 15 15" fill="currentColor">
               <path d="M7.5 1.5l2 4.5h4.5l-3.5 3 1.5 4.5-3.5-2.5-3.5 2.5 1.5-4.5-3.5-3h4.5z" />
