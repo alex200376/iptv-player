@@ -10,6 +10,8 @@ import { useTranslation } from 'react-i18next'
 import { getGroupDisplayName } from '../utils/groupLabels'
 import MarqueeText from './MarqueeText'
 
+const CHANNEL_ROW_HEIGHT = 48
+
 function getCurrentProgram(programs: EpgProgram[], channelTvgId?: string): EpgProgram | null {
   const now = Date.now()
   return programs.find((p) =>
@@ -170,8 +172,8 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
   const totalChannels = filteredGroups.reduce((s: number, g: ChannelGroup) => s + g.channels.length, 0)
 
   return (
-    <div>
-      <div className="flex items-center justify-between px-2 py-1 border-b border-border gap-1">
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between px-2 py-1 border-b border-border gap-1 flex-shrink-0">
         <span className="text-xs text-muted-foreground shrink-0">{t('channel.count', { count: totalChannels })}</span>
         <div className="flex items-center gap-2 ml-auto">
           {offlineCount > 0 && (
@@ -186,73 +188,75 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
           )}
         </div>
       </div>
-      <Accordion.Root type="multiple" className="flex flex-col" defaultValue={[]}>
-        {filteredGroups.map((group: ChannelGroup, i: number) => {
-          const showTopIndicator =
-            dropTargetGroupName === group.name && dropGroupPos === 'before'
-          const showBottomIndicator =
-            dropTargetGroupName === group.name && dropGroupPos === 'after'
-          return (
-            <div key={i} className="relative">
-              {showTopIndicator && (
-                <div className="absolute top-0 left-2 right-2 h-0.5 bg-primary z-10 rounded-full" />
-              )}
-              <Accordion.Item
-                value={`group-${i}`}
-                onDragOver={(e) => handleGroupDragOver(e, group.name)}
-                onDrop={(e) => handleGroupDrop(e, group.name)}
-                onDragEnd={handleGroupDragEnd}
-                className={dragGroupName === group.name ? 'opacity-40' : ''}
-              >
-                <Accordion.Header>
-                  <Accordion.Trigger className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted transition-colors group">
-                    <span
-                      draggable
-                      className="cursor-grab active:cursor-grabbing"
-                      onDragStart={(e) => handleGroupDragStart(e, group.name)}
-                    >
-                      <GripIcon />
-                    </span>
-                    <svg
-                      className="w-3 h-3 transition-transform duration-150 group-data-[state=closed]:-rotate-90 flex-shrink-0"
-                      viewBox="0 0 15 15"
-                      fill="none"
-                    >
-                      <path
-                        d="M4 6l3.5 3.5L11 6"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    <span className="font-medium text-foreground truncate text-sm">
-                      {getGroupDisplayName(group.name, t)}
-                    </span>
-                    <span className="ml-auto text-xs">{group.channels.length}</span>
-                  </Accordion.Trigger>
-                </Accordion.Header>
-                <Accordion.Content className="overflow-x-hidden data-[state=open]:animate-[slideDown_150ms_ease-out] data-[state=closed]:animate-[slideUp_150ms_ease-out]">
-                  <ChannelGroupChannels
-                    channels={group.channels}
-                    currentChannel={currentChannel}
-                    favoriteIds={favoriteIds}
-                    ctxMenu={ctxMenu}
-                    activeRef={activeRef}
-                    onPlay={handlePlay}
-                    onContextMenu={handleContextMenu}
-                    onToggleFav={handleToggleFav}
-                    epgCache={epgCache}
-                  />
-                </Accordion.Content>
-              </Accordion.Item>
-              {showBottomIndicator && (
-                <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-primary z-10 rounded-full" />
-              )}
-            </div>
-          )
-        })}
-      </Accordion.Root>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        <Accordion.Root type="multiple" className="flex flex-col" defaultValue={[]}>
+          {filteredGroups.map((group: ChannelGroup, i: number) => {
+            const showTopIndicator =
+              dropTargetGroupName === group.name && dropGroupPos === 'before'
+            const showBottomIndicator =
+              dropTargetGroupName === group.name && dropGroupPos === 'after'
+            return (
+              <div key={i} className="relative">
+                {showTopIndicator && (
+                  <div className="absolute top-0 left-2 right-2 h-0.5 bg-primary z-10 rounded-full" />
+                )}
+                <Accordion.Item
+                  value={`group-${i}`}
+                  onDragOver={(e) => handleGroupDragOver(e, group.name)}
+                  onDrop={(e) => handleGroupDrop(e, group.name)}
+                  onDragEnd={handleGroupDragEnd}
+                  className={dragGroupName === group.name ? 'opacity-40' : ''}
+                >
+                  <Accordion.Header>
+                    <Accordion.Trigger className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted transition-colors group">
+                      <span
+                        draggable
+                        className="cursor-grab active:cursor-grabbing"
+                        onDragStart={(e) => handleGroupDragStart(e, group.name)}
+                      >
+                        <GripIcon />
+                      </span>
+                      <svg
+                        className="w-3 h-3 transition-transform duration-150 group-data-[state=closed]:-rotate-90 flex-shrink-0"
+                        viewBox="0 0 15 15"
+                        fill="none"
+                      >
+                        <path
+                          d="M4 6l3.5 3.5L11 6"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                      <span className="font-medium text-foreground truncate text-sm">
+                        {getGroupDisplayName(group.name, t)}
+                      </span>
+                      <span className="ml-auto text-xs">{group.channels.length}</span>
+                    </Accordion.Trigger>
+                  </Accordion.Header>
+                  <Accordion.Content className="overflow-x-hidden data-[state=open]:animate-[slideDown_150ms_ease-out] data-[state=closed]:animate-[slideUp_150ms_ease-out]">
+                    <ChannelGroupChannels
+                      channels={group.channels}
+                      currentChannel={currentChannel}
+                      favoriteIds={favoriteIds}
+                      ctxMenu={ctxMenu}
+                      activeRef={activeRef}
+                      onPlay={handlePlay}
+                      onContextMenu={handleContextMenu}
+                      onToggleFav={handleToggleFav}
+                      epgCache={epgCache}
+                    />
+                  </Accordion.Content>
+                </Accordion.Item>
+                {showBottomIndicator && (
+                  <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-primary z-10 rounded-full" />
+                )}
+              </div>
+            )
+          })}
+        </Accordion.Root>
+      </div>
 
       {ctxMenu && (
         <ContextMenu
@@ -343,7 +347,7 @@ function ChannelGroupChannels({
   const virtualizer = useVirtualizer({
     count: channels.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 48,
+    estimateSize: () => CHANNEL_ROW_HEIGHT,
     overscan: 5,
   })
 
@@ -369,16 +373,20 @@ function ChannelGroupChannels({
             epgCache={epgCache}
             onDragStart={handleChDragStart}
             onDragOver={handleChDragOver}
-                    onDrop={handleChDrop}
-                    onDragEnd={handleChDragEnd}
-                  />
-                ))}
+            onDrop={handleChDrop}
+            onDragEnd={handleChDragEnd}
+          />
+        ))}
       </div>
     )
   }
 
   return (
-    <div ref={parentRef} className="overflow-y-auto overflow-x-hidden relative" style={{ maxHeight: '55vh' }}>
+    <div
+      ref={parentRef}
+      className="overflow-y-auto overflow-x-hidden relative"
+      style={{ height: `${Math.min(channels.length, 12) * CHANNEL_ROW_HEIGHT}px` }}
+    >
       <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
         {virtualizer.getVirtualItems().map((virtualRow) => {
           const ch = channels[virtualRow.index]
@@ -472,26 +480,26 @@ const ChannelRowWrapper = memo(function ChannelRowWrapper({
   }, [ch.tvgUrl, ch.tvgId, epgCache])
 
   return (
-    <div className="relative">
+    <div className="relative" style={{ height: `${CHANNEL_ROW_HEIGHT}px` }}>
       {showTopIndicator && (
         <div className="absolute top-0 left-8 right-2 h-0.5 bg-primary z-10 rounded-full" />
       )}
       <div
-        className={`flex items-center w-full min-w-0 overflow-hidden h-9 ${isDragging ? 'opacity-40' : ''}`}
+        className={`flex items-center w-full h-full min-w-0 overflow-hidden ${isDragging ? 'opacity-40' : ''}`}
         draggable
         onDragStart={(e) => onDragStart(e, ch.id)}
         onDragOver={(e) => onDragOver(e, ch.id)}
         onDrop={(e) => onDrop(e, ch.id)}
         onDragEnd={onDragEnd}
       >
-        <span className="pl-1 pr-0.5 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground">
+        <span className="pl-1 pr-0.5 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground flex-shrink-0">
           <GripIcon />
         </span>
         <button
           ref={isActive ? activeRef : undefined}
           onClick={() => onPlay(ch)}
           onContextMenu={(e) => onContextMenu(e, ch)}
-          className={`flex-1 flex items-center py-1 text-sm text-left transition-colors hover:bg-muted group overflow-hidden ${
+          className={`flex-1 flex items-center py-1 text-sm text-left transition-colors hover:bg-muted group overflow-hidden h-full ${
             isActive
               ? 'border-l-2 border-primary bg-primary/5'
               : ch.status === 'offline'

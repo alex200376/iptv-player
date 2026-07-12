@@ -16,6 +16,9 @@ const BUFFERING_GRACE_MS = 1500
 const BUFFER_TIMEOUT_MS = 20000
 // Maximum auto-reconnect attempts before giving up.
 const MAX_RETRIES = 5
+// Debounce delay (ms) before notifying VLC of layout change.
+// Must be long enough for the DOM to finish resizing.
+const LAYOUT_NOTIFY_DELAY_MS = 120
 
 // ─── helpers (no component state, defined outside so they are stable) ─────────
 function getCurrentProgram(programs: EpgProgram[], channelTvgId?: string): EpgProgram | null {
@@ -90,8 +93,6 @@ export default function PlayerContainer() {
   const { t } = useTranslation()
 
   // ── narrow Zustand selectors ─────────────────────────────────────────────
-  // Each selector is its own subscription so unrelated store changes
-  // (searchQuery, navTab, checkLogs…) do NOT trigger re-renders here.
   const currentChannel = useStore((s) => s.currentChannel)
   const epgCache = useStore((s) => s.epgCache)
   const loadEpg = useStore((s) => s.loadEpg)
@@ -109,7 +110,6 @@ export default function PlayerContainer() {
   })
 
   // ── switch token: incremented on every channel change ───────────────────
-  // Any async callback (timers, IPC events) checks this before mutating state.
   const switchTokenRef = useRef(0)
 
   // ── retry counter (reset on successful play) ─────────────────────────────
@@ -118,8 +118,8 @@ export default function PlayerContainer() {
   // ── timer refs ───────────────────────────────────────────────────────────
   const timerRef = useRef<ReturnType<typeof setTimeout>>()
   const epgTimerRef = useRef<ReturnType<typeof setTimeout>>()
-  const bufferGraceRef = useRef<ReturnType<typeof setTimeout>>()   // delayed spinner show
-  const bufferTimeoutRef = useRef<ReturnType<typeof setTimeout>>() // total stall timeout
+  const bufferGraceRef = useRef<ReturnType<typeof setTimeout>>()
+  const bufferTimeoutRef = useRef<ReturnType<typeof setTimeout>>()
   const errorTimerRef = useRef<ReturnType<typeof setTimeout>>()
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout>>()
   const layoutDebounceRef = useRef<ReturnType<typeof setTimeout>>()
@@ -152,13 +152,11 @@ export default function PlayerContainer() {
     () => (cachedPrograms ? getNextPrograms(cachedPrograms, currentChannel?.tvgId) : []),
     [cachedPrograms, currentChannel?.tvgId],
   )
-  // nextPrograms is consumed by EpgOverlay via props — keep it in scope.
   void nextPrograms
 
   // ── replay / retry ────────────────────────────────────────────────────────
   const handleReplay = useCallback(() => {
     if (!currentChannel) return
-    // Increment token so old pending async events are discarded.
     switchTokenRef.current += 1
     retryCountRef.current = 0
     setPlayerError(null)
@@ -182,26 +180,21 @@ export default function PlayerContainer() {
     const offBuffering = window.electronAPI.onPlayerBuffering(() => {
       const token = switchTokenRef.current
 
-      // Clear any previous timers so they do not fire with stale state.
       clearTimeout(bufferGraceRef.current)
       clearTimeout(bufferTimeoutRef.current)
       clearTimeout(errorTimerRef.current)
 
-      // Only show the spinner after BUFFERING_GRACE_MS of continuous buffering.
-      // This avoids a flash during normal sub-second startup.
       bufferGraceRef.current = setTimeout(() => {
         if (switchTokenRef.current !== token) return
         setIsBuffering(true)
         setPlayerError(null)
       }, BUFFERING_GRACE_MS)
 
-      // Raise an error if playback does not resume within BUFFER_TIMEOUT_MS.
       bufferTimeoutRef.current = setTimeout(() => {
         if (switchTokenRef.current !== token) return
         setPlayerError(t('player.bufferingTimeout'))
         setIsBuffering(false)
 
-        // Auto-reconnect on timeout if enabled and retries remain.
         const { autoReconnect, reconnectInterval } = settingsRef.current
         if (autoReconnect && retryCountRef.current < MAX_RETRIES) {
           retryCountRef.current += 1
@@ -226,7 +219,6 @@ export default function PlayerContainer() {
       clearTimeout(errorTimerRef.current)
       clearTimeout(reconnectTimerRef.current)
 
-      // Reset retry counter — stream is healthy again.
       retryCountRef.current = 0
 
       setPlayerError(null)
@@ -243,8 +235,6 @@ export default function PlayerContainer() {
 
       setIsBuffering(false)
 
-      // Delay the error UI slightly to avoid false-positive flash on
-      // slow streams that recover quickly.
       errorTimerRef.current = setTimeout(() => {
         if (switchTokenRef.current !== token) return
         setPlayerError(t('player.playError'))
@@ -276,28 +266,22 @@ export default function PlayerContainer() {
   useEffect(() => {
     if (!currentChannel) return
 
-    // Increment token → all in-flight async callbacks for the old channel become no-ops.
     switchTokenRef.current += 1
     const token = switchTokenRef.current
 
-    // Reset retry counter for the fresh channel.
     retryCountRef.current = 0
 
-    // Cancel all pending timers from the previous channel.
     clearAllTimers()
 
-    // Reset playback UI immediately.
     setIsBuffering(false)
     setPlayerError(null)
     setShowInfo(true)
 
-    // Hide info banner after INFO_HIDE_MS.
     timerRef.current = setTimeout(() => {
       if (switchTokenRef.current !== token) return
       setShowInfo(false)
     }, INFO_HIDE_MS)
 
-    // Debounce EPG load so rapid channel flicking doesn't spam fetchEpg.
     if (currentChannel.tvgUrl) {
       epgTimerRef.current = setTimeout(() => {
         if (switchTokenRef.current !== token) return
@@ -327,13 +311,12 @@ export default function PlayerContainer() {
   }, [currentChannel])
 
   // ── notify layout change when EPG panel opens/closes ─────────────────────
-  // Debounced + only fires when a player is actually embedded to avoid
-  // unnecessary VLC surface renegotiations.
+  // Wait for DOM to finish transitioning before renegotiating VLC surface.
   useEffect(() => {
     clearTimeout(layoutDebounceRef.current)
     layoutDebounceRef.current = setTimeout(() => {
       window.electronAPI.notifyLayoutChange()
-    }, 80)
+    }, LAYOUT_NOTIFY_DELAY_MS)
     return () => clearTimeout(layoutDebounceRef.current)
   }, [showEpg])
 
@@ -344,7 +327,7 @@ export default function PlayerContainer() {
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex-1 relative bg-black flex flex-col min-w-0">
+    <div className="flex-1 relative bg-black flex flex-col min-w-0 min-h-0">
       <div className="scanline-overlay" />
       {currentChannel && (
         <div
@@ -368,7 +351,8 @@ export default function PlayerContainer() {
         </div>
       )}
 
-      <div className={`${showEpg ? 'flex-1' : 'flex-1'} relative group min-h-0`} id="player-container">
+      {/* Player area — always fills remaining space; never compressed by EPG panel */}
+      <div className="flex-1 relative group min-h-0" id="player-container">
         <div id="player" className="w-full h-full" />
         {isBuffering && currentChannel && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
@@ -423,12 +407,9 @@ export default function PlayerContainer() {
         )}
       </div>
 
+      {/* Bottom info/EPG panel — flex-shrink-0 prevents it from eating into the player */}
       {currentChannel && (
-        <div
-          className={`${
-            showEpg ? 'max-h-[50vh] overflow-y-auto' : ''
-          } bg-card border-t border-border`}
-        >
+        <div className="flex-shrink-0 bg-card border-t border-border">
           <div className="px-4 pt-3 pb-2 space-y-3">
             {currentProgram && (
               <h1 className="text-lg font-bold text-foreground leading-tight">
@@ -491,7 +472,7 @@ export default function PlayerContainer() {
           </div>
 
           {showEpg && (
-            <div className="flex-1 min-h-0 overflow-y-auto border-t border-border">
+            <div className="max-h-[40vh] overflow-y-auto border-t border-border">
               <EpgOverlay onClose={() => setShowEpg(false)} />
             </div>
           )}
