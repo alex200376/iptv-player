@@ -94,14 +94,15 @@ const ipcStorage = {
   },
   setItem: async (name: string, value: string): Promise<void> => {
     if (name === 'iptv-player-store') {
-      const parsed = JSON.parse(value) as PersistedChannelData
+      const parsed = JSON.parse(value)
+      const state = parsed?.state ?? parsed
       await Promise.all([
-        window.electronAPI.saveChannels(parsed.channels),
+        window.electronAPI.saveChannels(state.channels ?? []),
         window.electronAPI.saveUserData({
-          favoriteIds: parsed.favoriteIds,
-          historyEntries: parsed.historyEntries,
-          playlists: parsed.playlists,
-          epgSources: parsed.epgSources,
+          favoriteIds: state.favoriteIds ?? [],
+          historyEntries: state.historyEntries ?? [],
+          playlists: state.playlists ?? [],
+          epgSources: state.epgSources ?? [],
         }),
       ])
     }

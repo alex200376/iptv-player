@@ -15,6 +15,7 @@ function getFilePath(): string {
 }
 
 export async function saveChannels(channels: Channel[]): Promise<void> {
+  if (!Array.isArray(channels)) channels = []
   await writeFile(getFilePath(), JSON.stringify(channels, null, 2), 'utf-8')
 }
 
