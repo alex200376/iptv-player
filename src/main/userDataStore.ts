@@ -37,7 +37,7 @@ function isValidUserData(data: unknown): data is UserData {
   return (
     Array.isArray(d.favoriteIds) &&
     Array.isArray(d.historyEntries) &&
-    Array.isArray(d.playlists)
+    (d.playlists === undefined || Array.isArray(d.playlists))
   )
 }
 
@@ -55,7 +55,15 @@ export async function saveUserData(data: UserData): Promise<void> {
     try { await copyFile(filePath, bakPath) } catch { /* best-effort */ }
   }
 
-  await writeFile(tmpPath, JSON.stringify(data, null, 2), 'utf-8')
+  // Ensure playlists is always an array so the key is never omitted from JSON.
+  // A missing playlists key would fail isValidUserData on next load,
+  // causing all playlist metadata to be silently lost after restart.
+  const dataToSave = {
+    ...data,
+    playlists: Array.isArray(data.playlists) ? data.playlists : [],
+  }
+
+  await writeFile(tmpPath, JSON.stringify(dataToSave, null, 2), 'utf-8')
   await rename(tmpPath, filePath)
 }
 
@@ -78,7 +86,11 @@ export async function loadUserData(): Promise<UserData> {
     try {
       const raw = await readFile(filePath, 'utf-8')
       const parsed = JSON.parse(raw)
-      if (isValidUserData(parsed)) return { ...DEFAULTS, ...parsed }
+      if (isValidUserData(parsed)) {
+        const safe = { ...DEFAULTS, ...parsed }
+        if (!Array.isArray(safe.playlists)) safe.playlists = DEFAULTS.playlists
+        return safe
+      }
     } catch { /* fall through to backup */ }
   }
 
@@ -88,9 +100,11 @@ export async function loadUserData(): Promise<UserData> {
       const raw = await readFile(bakPath, 'utf-8')
       const parsed = JSON.parse(raw)
       if (isValidUserData(parsed)) {
+        const safe = { ...DEFAULTS, ...parsed }
+        if (!Array.isArray(safe.playlists)) safe.playlists = DEFAULTS.playlists
         // Restore backup as main file.
-        await writeFile(filePath, JSON.stringify(parsed, null, 2), 'utf-8')
-        return { ...DEFAULTS, ...parsed }
+        await writeFile(filePath, JSON.stringify(safe, null, 2), 'utf-8')
+        return safe
       }
     } catch { /* ignore */ }
   }

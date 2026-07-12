@@ -635,18 +635,28 @@ export function registerPlaylistIpc() {
     return await refreshPlaylistUrl(playlistId, url)
   })
 
+  // ── Serialisation lock for save-user-data ───────────────────────────
+  // Guards against a race where concurrent IPC calls can overwrite
+  // playlists with stale empty data (setChannels + addPlaylist in quick
+  // succession both trigger setItem → save-user-data).
+  let saveUserDataQueue = Promise.resolve()
+
   ipcMain.handle('save-user-data', async (_event, data: unknown) => {
-    const incoming = data as import('../userDataStore').UserData
-    // Guard: never overwrite persisted playlists with an empty array
-    // that arrives before Zustand has finished hydrating.
-    if (!incoming.playlists || incoming.playlists.length === 0) {
-      const existing = await loadUserData()
-      if (existing.playlists && existing.playlists.length > 0) {
-        incoming.playlists = existing.playlists
+    const current = saveUserDataQueue.then(async () => {
+      const incoming = data as import('../userDataStore').UserData
+      // Guard: never overwrite persisted playlists with an empty array
+      // that arrives before Zustand has finished hydrating.
+      const hasInvalidPlaylists = !incoming.playlists || !Array.isArray(incoming.playlists) || incoming.playlists.length === 0
+      if (hasInvalidPlaylists) {
+        const existing = await loadUserData()
+        if (Array.isArray(existing.playlists) && existing.playlists.length > 0) {
+          incoming.playlists = existing.playlists
+        }
       }
-    }
-    await saveUserData(incoming)
-    return true
+      await saveUserData(incoming)
+    })
+    saveUserDataQueue = current.catch(() => {})
+    return current
   })
 
   ipcMain.handle('load-user-data', async () => {

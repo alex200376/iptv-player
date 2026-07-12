@@ -85,7 +85,10 @@ const ipcStorage = {
           playlists: (userData as UserData)?.playlists || [],
           epgSources: (userData as UserData)?.epgSources || [],
         }
-        return JSON.stringify(persisted)
+        // Zustand v5 persist expects { state: ..., version: ... } format.
+        // createJSONStorage wraps our storage, so we return a JSON string
+        // matching the expected shape after its JSON.parse round-trip.
+        return JSON.stringify({ state: persisted, version: 0 })
       }
       return null
     } catch {
