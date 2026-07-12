@@ -10,8 +10,31 @@ import { readSettings, writeSettings } from '../settingsStore'
 import type { Channel } from '../m3uParser'
 import { getState } from './shared'
 
+// ── Playlist ID counter ──────────────────────────────────────────────
+// Seeded from persisted data on first use so IDs never repeat across
+// restarts and never collide with existing playlists.
 let playlistIdCounter = 0
-function nextPlaylistId(): string {
+let playlistIdSeeded = false
+
+async function seedPlaylistIdCounter(): Promise<void> {
+  if (playlistIdSeeded) return
+  playlistIdSeeded = true
+  try {
+    const userData = await loadUserData()
+    for (const p of userData.playlists || []) {
+      const match = p.id?.match(/^pl-(\d+)$/)
+      if (match) {
+        const n = parseInt(match[1], 10)
+        if (n > playlistIdCounter) playlistIdCounter = n
+      }
+    }
+  } catch {
+    // If loading fails, start from 0 — harmless.
+  }
+}
+
+async function nextPlaylistId(): Promise<string> {
+  await seedPlaylistIdCounter()
   return `pl-${++playlistIdCounter}`
 }
 
@@ -125,10 +148,6 @@ type ProbeResult = 'online' | 'offline' | 'unknown'
 type ProtocolType = 'hls' | 'http' | 'm3u' | 'ts' | 'rtmp' | 'rtsp' | 'udp' | 'unknown'
 
 // ── Protocol detection ───────────────────────────────────────────────
-/**
- * Detect whether an HTTP(S) URL is a raw MPEG-TS stream.
- * Must stay in sync with isHttpTsStream() in streamProxy.ts.
- */
 function isHttpTsUrl(url: string): boolean {
   if (!/^https?:\/\//i.test(url)) return false
   try {
@@ -147,8 +166,6 @@ function detectProtocol(url: string): ProtocolType {
   if (/m3u8/i.test(url)) return 'hls'
   if (/^https?:\/\//i.test(url)) {
     if (/\.m3u(?:[^8]|$)/i.test(url)) return 'm3u'
-    // Use the same TS detection logic as streamProxy so probe and playback
-    // agree on whether a URL is a raw MPEG-TS stream.
     if (isHttpTsUrl(url)) return 'ts'
     return 'http'
   }
@@ -159,15 +176,6 @@ function detectProtocol(url: string): ProtocolType {
 }
 
 // ── Retry helper ─────────────────────────────────────────────────────
-/**
- * Run `fn` up to `maxAttempts` times.
- * Returns on the first 'online' result.
- * If all attempts return 'offline', returns 'offline'.
- * 'unknown' results short-circuit immediately (UDP/RTP — no point retrying).
- *
- * A short delay between retries gives slow-starting or Stalker portal
- * streams time to recover from a transient session reset.
- */
 async function withRetry(
   fn: () => Promise<ProbeResult>,
   maxAttempts: number = 3,
@@ -212,7 +220,6 @@ async function probeHls(url: string): Promise<ProbeResult> {
     const body = await res.text()
     if (!body.includes('#EXTM3U') && !body.includes('#EXT-X')) return 'offline'
 
-    // Variant playlist — fetch first media segment
     if (body.includes('#EXT-X-STREAM-INF')) {
       const lines = body.split('\n')
       let mediaUrl = ''
@@ -254,14 +261,12 @@ function validateTs(bytes: Uint8Array): boolean {
     if (off < bytes.length && bytes[off] === 0x47) syncCount++
   }
   if (syncCount < 3) return false
-  // Check for PAT (PID 0x0000) or PMT (PID 0x1000) in first 5 packets
   for (let p = 0; p < 5; p++) {
     const off = p * TS_PACKET + 1
     if (off + 1 >= bytes.length) break
     const pid = ((bytes[off] & 0x1F) << 8) | bytes[off + 1]
     if (pid === 0x0000 || pid === 0x1000) return true
   }
-  // No PAT/PMT found but sync is consistent — likely valid
   return syncCount >= 4
 }
 
@@ -269,7 +274,6 @@ function validateMp4(bytes: Uint8Array): boolean {
   if (bytes.length < 12) return false
   const tag = String.fromCharCode(bytes[4], bytes[5], bytes[6], bytes[7])
   if (tag !== 'ftyp' && tag !== 'moov') return false
-  // Check for 'moov' (movie box) or 'mdat' (media data) within first 64KB
   const sample = String.fromCharCode(...Array.from(bytes.slice(0, Math.min(bytes.length, 65536))))
   return sample.includes('moov') || sample.includes('mdat')
 }
@@ -277,7 +281,6 @@ function validateMp4(bytes: Uint8Array): boolean {
 function validateFlv(bytes: Uint8Array): boolean {
   if (bytes[0] !== 0x46 || bytes[1] !== 0x4C || bytes[2] !== 0x56) return false
   if (bytes.length < 13) return false
-  // FLV header: "FLV" + version(1) + flags(1) + headerSize(4)
   const hasAudio = !!(bytes[4] & 4)
   const hasVideo = !!(bytes[4] & 1)
   return hasAudio || hasVideo
@@ -299,8 +302,6 @@ async function probeHttp(url: string): Promise<ProbeResult> {
       signal: controller.signal,
     })
 
-    // Read first available chunk for magic-byte analysis.
-    // Do NOT loop — live streams trickle data slowly and would block.
     let bytes = new Uint8Array(0)
     try {
       const reader = res.body?.getReader()
@@ -329,15 +330,10 @@ async function probeHttp(url: string): Promise<ProbeResult> {
 
     if (bytes.length < 4) return 'offline'
 
-    // FLV
     if (validateFlv(bytes)) return 'online'
-    // MPEG-TS — validate sync byte structure
     if (validateTs(bytes)) return 'online'
-    // MP4 / QuickTime
     if (bytes.length >= 8 && validateMp4(bytes)) return 'online'
-    // MPEG-PS / VOB
     if (bytes[0] === 0x00 && bytes[1] === 0x00 && bytes[2] === 0x01 && bytes[3] === 0xBA) return 'online'
-    // WebM / Matroska
     if (bytes[0] === 0x1A && bytes[1] === 0x45 && bytes[2] === 0xDF && bytes[3] === 0xA3) return 'online'
 
     return 'offline'
@@ -377,14 +373,12 @@ async function probeM3u(url: string, depth: number = 0): Promise<ProbeResult> {
     const body = await res.text()
     if (!body.includes('#EXTM3U')) return 'offline'
 
-    // More than 5 data lines -> channel list, not a single stream playlist
     const dataLines = body.split('\n').filter((l) => {
       const t = l.trim()
       return t && !t.startsWith('#')
     })
     if (dataLines.length > 5) return 'online'
 
-    // Recursive probe (max depth 1)
     if (depth >= 1) return 'online'
 
     const firstUrl = dataLines[0]
@@ -402,18 +396,6 @@ async function probeM3u(url: string, depth: number = 0): Promise<ProbeResult> {
 }
 
 // ── Multi-protocol channel probe (with retry) ─────────────────────────
-/**
- * Probe a single channel URL.
- * Each protocol-specific probe is retried up to 3 times (with a 1.5s gap
- * between attempts) before the channel is marked offline.
- *
- * Retry rationale:
- *  - HTTP .ts / Stalker portal streams may reject the first request while
- *    a session is being negotiated by the server.
- *  - HLS CDNs occasionally return transient 5xx errors.
- *  - TCP probes can timeout on the first try for slow WAN links.
- * UDP streams are never retried (they cannot be probed meaningfully).
- */
 async function probeChannel(url: string): Promise<{ result: ProbeResult; skipped?: boolean }> {
   const protocol = detectProtocol(url)
 
@@ -429,8 +411,6 @@ async function probeChannel(url: string): Promise<{ result: ProbeResult; skipped
       return { result }
     }
     case 'ts': {
-      // .ts streams use a browser UA and benefit most from retry —
-      // Stalker portal servers often need a moment before accepting a probe.
       const result = await withRetry(() => probeHttp(url), 3, 2000)
       console.log('[probe]', 'ts', url.slice(0, 60), result)
       return { result }
@@ -455,7 +435,6 @@ async function probeChannel(url: string): Promise<{ result: ProbeResult; skipped
       return { result }
     }
     case 'udp':
-      // UDP/RTP multicast cannot be probed — skip without retry.
       console.log('[probe]', 'udp', url.slice(0, 60), 'skipped')
       return { result: 'unknown', skipped: true }
     default:
@@ -535,7 +514,6 @@ export function registerPlaylistIpc() {
         }
       }
 
-      // Save every 10 batches (50 channels) to reduce disk I/O
       if (batchCount % 10 === 0) {
         await saveChannels(channels)
       }
@@ -549,7 +527,6 @@ export function registerPlaylistIpc() {
       }
     }
 
-    // Final save for any unsaved batches
     await saveChannels(channels)
 
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
@@ -559,10 +536,6 @@ export function registerPlaylistIpc() {
     return { total: channels.length, channels }
   })
 
-  /**
-   * Remove all channels whose status is 'offline'.
-   * Returns the updated channel list so the renderer can sync immediately.
-   */
   ipcMain.handle('remove-offline-channels', async () => {
     const channels: Channel[] = await loadChannels()
     const kept = channels.filter((ch) => ch.status !== 'offline')
@@ -583,7 +556,7 @@ export function registerPlaylistIpc() {
     try {
       const filePath = result.filePaths[0]
       const content = readFileSync(filePath, 'utf-8')
-      const playlistId = nextPlaylistId()
+      const playlistId = await nextPlaylistId()
       const playlistName = playlistNameFromPath(filePath)
       const channels = await parseM3U(content, playlistId)
       queueCacheLogos(channels.map((ch) => ch.logo).filter((l): l is string => !!l))
@@ -596,7 +569,7 @@ export function registerPlaylistIpc() {
   ipcMain.handle('import-m3u-from-file', async (_event, filePath: string) => {
     try {
       const content = readFileSync(filePath, 'utf-8')
-      const playlistId = nextPlaylistId()
+      const playlistId = await nextPlaylistId()
       const playlistName = playlistNameFromPath(filePath)
       const channels = await parseM3U(content, playlistId)
       queueCacheLogos(channels.map((ch) => ch.logo).filter((l): l is string => !!l))
@@ -621,12 +594,9 @@ export function registerPlaylistIpc() {
       if (!res.ok) return { channels: [], error: `HTTP ${res.status}: ${res.statusText}` }
       const content = await res.text()
       if (!content.trim()) return { channels: [], error: '\u54cd\u5e94\u5185\u5bb9\u4e3a\u7a7a' }
-      const playlistId = nextPlaylistId()
+      const playlistId = await nextPlaylistId()
       const channels = await parseM3U(content, playlistId)
 
-      // If no channels were parsed, the response is not an IPTV M3U
-      // playlist. Treat the URL as a single playable stream — this
-      // covers direct .ts streams, HLS manifests, and other URLs.
       if (channels.length === 0) {
         const name = url.split('/').pop()?.split('?')[0] || url.slice(0, 40)
         channels.push({
@@ -666,7 +636,16 @@ export function registerPlaylistIpc() {
   })
 
   ipcMain.handle('save-user-data', async (_event, data: unknown) => {
-    await saveUserData(data as import('../userDataStore').UserData)
+    const incoming = data as import('../userDataStore').UserData
+    // Guard: never overwrite persisted playlists with an empty array
+    // that arrives before Zustand has finished hydrating.
+    if (!incoming.playlists || incoming.playlists.length === 0) {
+      const existing = await loadUserData()
+      if (existing.playlists && existing.playlists.length > 0) {
+        incoming.playlists = existing.playlists
+      }
+    }
+    await saveUserData(incoming)
     return true
   })
 
@@ -774,6 +753,9 @@ export function registerPlaylistIpc() {
         snoozeUpdateUntil: 0,
         language: 'zh-CN',
       })
+      // Reset counter so IDs start fresh after a full clear.
+      playlistIdCounter = 0
+      playlistIdSeeded = false
       return { success: true }
     } catch (e) {
       return { success: false, error: (e as Error).message }
