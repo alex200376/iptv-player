@@ -32,11 +32,9 @@ interface PlayerStore extends PersistedChannelData {
   searchQuery: string
   navTab: string
   settingsOpen: boolean
-
   epgCache: Record<string, EpgProgram[]>
-
   setChannels: (channels: Channel[]) => void
-  reorderGroup: (groupId: string, targetGroupId: string) => void
+  reorderGroup: (groupId: string, targetGroupId: string, position?: 'before' | 'after') => void
   reorderChannel: (channelId: string, targetChannelId: string, position?: 'before' | 'after') => void
   setCurrentChannel: (channel: Channel) => void
   setIsPlaying: (playing: boolean) => void
@@ -46,19 +44,15 @@ interface PlayerStore extends PersistedChannelData {
   removeChannel: (id: string) => void
   setSettingsOpen: (open: boolean) => void
   setActivePlaylistId: (id: string | null) => void
-
   toggleFavorite: (id: string) => void
   addHistoryEntry: (channel: Channel) => void
   clearHistory: () => void
   addPlaylist: (meta: PlaylistMeta) => void
   removePlaylist: (id: string) => void
-
   loadUserData: (data: { favoriteIds: string[]; historyEntries: HistoryEntry[]; playlists: PlaylistMeta[] }) => void
-
   loadEpg: (tvgUrl: string) => Promise<void>
   importEpgFromUrl: (url: string) => Promise<{ success: boolean; count: number; error?: string }>
   removeEpgSource: (url: string) => void
-
   checkLogs: Array<{ name: string; url: string; protocol: string; result: string; checked: number; total: number }>
   checkRunning: boolean
   checkTotal: number
@@ -85,9 +79,6 @@ const ipcStorage = {
           playlists: (userData as UserData)?.playlists || [],
           epgSources: (userData as UserData)?.epgSources || [],
         }
-        // Zustand v5 persist expects { state: ..., version: ... } format.
-        // createJSONStorage wraps our storage, so we return a JSON string
-        // matching the expected shape after its JSON.parse round-trip.
         return JSON.stringify({ state: persisted, version: 0 })
       }
       return null
@@ -122,8 +113,13 @@ const ipcStorage = {
 }
 
 const PARTIALIZE_KEYS: (keyof PersistedChannelData)[] = [
-  'channels', 'directStreams', 'activePlaylistId',
-  'favoriteIds', 'historyEntries', 'playlists', 'epgSources',
+  'channels',
+  'directStreams',
+  'activePlaylistId',
+  'favoriteIds',
+  'historyEntries',
+  'playlists',
+  'epgSources',
 ]
 
 export const useStore = create<PlayerStore>()(
@@ -138,7 +134,6 @@ export const useStore = create<PlayerStore>()(
       directStreams: [],
       settingsOpen: false,
       activePlaylistId: null,
-
       favoriteIds: [],
       historyEntries: [],
       playlists: [],
@@ -149,51 +144,56 @@ export const useStore = create<PlayerStore>()(
 
       setChannels: (channels) => set({ groups: groupChannels(channels), channels }),
 
-      reorderGroup: (groupId: string, targetGroupId: string) => set((s) => {
-        const groups = [...s.groups]
-        const fromIdx = groups.findIndex((g) => g.name === groupId)
-        let toIdx = groups.findIndex((g) => g.name === targetGroupId)
-        if (fromIdx === -1 || toIdx === -1) return s
-        const [moved] = groups.splice(fromIdx, 1)
-        if (fromIdx < toIdx) toIdx--
-        groups.splice(toIdx, 0, moved)
-        const allChannels = groups.flatMap((g) => g.channels)
-        return { groups, channels: allChannels }
-      }),
+      // Fix: accept position so drop-after works correctly for groups
+      reorderGroup: (groupId: string, targetGroupId: string, position: 'before' | 'after' = 'before') =>
+        set((s) => {
+          const groups = [...s.groups]
+          const fromIdx = groups.findIndex((g) => g.name === groupId)
+          if (fromIdx === -1) return s
+          const [moved] = groups.splice(fromIdx, 1)
+          // Recalculate toIdx after splice
+          const toIdx = groups.findIndex((g) => g.name === targetGroupId)
+          if (toIdx === -1) return s
+          const insertIdx = position === 'after' ? toIdx + 1 : toIdx
+          groups.splice(insertIdx, 0, moved)
+          const allChannels = groups.flatMap((g) => g.channels)
+          return { groups, channels: allChannels }
+        }),
 
-      reorderChannel: (channelId: string, targetChannelId: string, position?: 'before' | 'after') => set((s) => {
-        const groups = s.groups.map((g) => ({ ...g, channels: [...g.channels] }))
-        let sourceGroupIdx = -1, sourceIdx = -1
-        let targetGroupIdx = -1, targetIdx = -1
-        for (let gi = 0; gi < groups.length; gi++) {
-          const ci = groups[gi].channels.findIndex((c) => c.id === channelId)
-          if (ci !== -1) { sourceGroupIdx = gi; sourceIdx = ci }
-          const tj = groups[gi].channels.findIndex((c) => c.id === targetChannelId)
-          if (tj !== -1) { targetGroupIdx = gi; targetIdx = tj }
-        }
-        if (sourceGroupIdx === -1 || targetGroupIdx === -1) return s
-
-        const sourceChs = groups[sourceGroupIdx].channels
-        const [moved] = sourceChs.splice(sourceIdx, 1)
-
-        if (sourceGroupIdx === targetGroupIdx) {
-          if (position === 'after') {
-            const insertIdx = targetIdx > sourceIdx ? targetIdx : targetIdx + 1
-            sourceChs.splice(insertIdx, 0, moved)
+      reorderChannel: (channelId: string, targetChannelId: string, position?: 'before' | 'after') =>
+        set((s) => {
+          const groups = s.groups.map((g) => ({ ...g, channels: [...g.channels] }))
+          let sourceGroupIdx = -1, sourceIdx = -1
+          let targetGroupIdx = -1, targetIdx = -1
+          for (let gi = 0; gi < groups.length; gi++) {
+            const ci = groups[gi].channels.findIndex((c) => c.id === channelId)
+            if (ci !== -1) { sourceGroupIdx = gi; sourceIdx = ci }
+            const tj = groups[gi].channels.findIndex((c) => c.id === targetChannelId)
+            if (tj !== -1) { targetGroupIdx = gi; targetIdx = tj }
+          }
+          if (sourceGroupIdx === -1 || targetGroupIdx === -1) return s
+          const sourceChs = groups[sourceGroupIdx].channels
+          const [moved] = sourceChs.splice(sourceIdx, 1)
+          if (sourceGroupIdx === targetGroupIdx) {
+            // Recalculate targetIdx after splice from same array
+            const newTargetIdx = sourceChs.findIndex((c) => c.id === targetChannelId)
+            if (newTargetIdx === -1) {
+              sourceChs.push(moved)
+            } else {
+              const insertIdx = position === 'after' ? newTargetIdx + 1 : newTargetIdx
+              sourceChs.splice(insertIdx, 0, moved)
+            }
           } else {
-            const adjust = targetIdx > sourceIdx ? targetIdx - 1 : targetIdx
-            sourceChs.splice(adjust, 0, moved)
+            const insertIdx = position === 'after' ? targetIdx + 1 : targetIdx
+            groups[targetGroupIdx].channels.splice(insertIdx, 0, moved)
+            if (sourceChs.length === 0) {
+              groups.splice(sourceGroupIdx, 1)
+            }
           }
-        } else {
-          const insertIdx = position === 'after' ? targetIdx + 1 : targetIdx
-          groups[targetGroupIdx].channels.splice(insertIdx, 0, moved)
-          if (sourceChs.length === 0) {
-            groups.splice(sourceGroupIdx, 1)
-          }
-        }
-        const allChannels = groups.flatMap((g) => g.channels)
-        return { groups, channels: allChannels }
-      }),
+          const allChannels = groups.flatMap((g) => g.channels)
+          return { groups, channels: allChannels }
+        }),
+
       setCurrentChannel: (channel) => set({ currentChannel: channel }),
       setIsPlaying: (playing) => set({ isPlaying: playing }),
       setSearchQuery: (q) => set({ searchQuery: q }),
@@ -216,62 +216,70 @@ export const useStore = create<PlayerStore>()(
         return ch
       },
 
-      removeChannel: (id: string) => set((s) => {
-        const filtered = s.channels.filter((ch) => ch.id !== id)
-        const directStreams = s.directStreams.filter((ch) => ch.id !== id)
-        const favoriteIds = s.favoriteIds.filter((fid) => fid !== id)
-        return {
-          groups: groupChannels(filtered),
-          channels: filtered,
-          directStreams,
-          currentChannel: s.currentChannel?.id === id ? null : s.currentChannel,
-          favoriteIds,
-        }
-      }),
+      removeChannel: (id: string) =>
+        set((s) => {
+          const filtered = s.channels.filter((ch) => ch.id !== id)
+          const directStreams = s.directStreams.filter((ch) => ch.id !== id)
+          const favoriteIds = s.favoriteIds.filter((fid) => fid !== id)
+          return {
+            groups: groupChannels(filtered),
+            channels: filtered,
+            directStreams,
+            currentChannel: s.currentChannel?.id === id ? null : s.currentChannel,
+            favoriteIds,
+          }
+        }),
 
-      toggleFavorite: (id) => set((s) => {
-        const exists = s.favoriteIds.includes(id)
-        const favoriteIds = exists
-          ? s.favoriteIds.filter((fid) => fid !== id)
-          : [...s.favoriteIds, id]
-        return { favoriteIds }
-      }),
+      toggleFavorite: (id) =>
+        set((s) => {
+          const exists = s.favoriteIds.includes(id)
+          const favoriteIds = exists
+            ? s.favoriteIds.filter((fid) => fid !== id)
+            : [...s.favoriteIds, id]
+          return { favoriteIds }
+        }),
 
-      addHistoryEntry: (channel) => set((s) => {
-        const { _groupName: _unused, ...cleanChannel } = channel as Channel & { _groupName?: string }
-        const filtered = s.historyEntries.filter((e) => e.channel.id !== cleanChannel.id)
-        const historyEntries = [{ channel: cleanChannel, watchedAt: Date.now() }, ...filtered].slice(0, 100)
-        return { historyEntries }
-      }),
+      addHistoryEntry: (channel) =>
+        set((s) => {
+          const { _groupName: _unused, ...cleanChannel } = channel as Channel & { _groupName?: string }
+          const filtered = s.historyEntries.filter((e) => e.channel.id !== cleanChannel.id)
+          const historyEntries = [{ channel: cleanChannel, watchedAt: Date.now() }, ...filtered].slice(0, 100)
+          return { historyEntries }
+        }),
 
       clearHistory: () => set({ historyEntries: [] }),
 
-      addPlaylist: (meta) => set((s) => {
-        const playlists = [meta, ...s.playlists.filter((p) => p.id !== meta.id)]
-        return { playlists }
-      }),
-
-      removePlaylist: (id) => set((s) => {
-        const playlists = s.playlists.filter((p) => p.id !== id)
-        const filtered = s.channels.filter((ch) => ch.playlistId !== id)
-        return {
-          playlists,
-          groups: groupChannels(filtered),
-          channels: filtered,
-          activePlaylistId: s.activePlaylistId === id ? null : s.activePlaylistId,
-          currentChannel: filtered.some((ch) => ch.id === s.currentChannel?.id) ? s.currentChannel : null,
-        }
-      }),
-
-      loadUserData: (data) => set({
-        favoriteIds: data.favoriteIds || [],
-        historyEntries: (data.historyEntries || []).map((entry) => {
-          const { _groupName: _unused, ...cleanChannel } = (entry.channel as Channel & { _groupName?: string })
-          return { ...entry, channel: cleanChannel as Channel }
+      addPlaylist: (meta) =>
+        set((s) => {
+          const playlists = [meta, ...s.playlists.filter((p) => p.id !== meta.id)]
+          return { playlists }
         }),
-        playlists: data.playlists || [],
-        epgSources: (data as UserData).epgSources || [],
-      }),
+
+      removePlaylist: (id) =>
+        set((s) => {
+          const playlists = s.playlists.filter((p) => p.id !== id)
+          const filtered = s.channels.filter((ch) => ch.playlistId !== id)
+          return {
+            playlists,
+            groups: groupChannels(filtered),
+            channels: filtered,
+            activePlaylistId: s.activePlaylistId === id ? null : s.activePlaylistId,
+            currentChannel: filtered.some((ch) => ch.id === s.currentChannel?.id)
+              ? s.currentChannel
+              : null,
+          }
+        }),
+
+      loadUserData: (data) =>
+        set({
+          favoriteIds: data.favoriteIds || [],
+          historyEntries: (data.historyEntries || []).map((entry) => {
+            const { _groupName: _unused, ...cleanChannel } = (entry.channel as Channel & { _groupName?: string })
+            return { ...entry, channel: cleanChannel as Channel }
+          }),
+          playlists: data.playlists || [],
+          epgSources: (data as UserData).epgSources || [],
+        }),
 
       epgCache: {},
 
@@ -291,7 +299,7 @@ export const useStore = create<PlayerStore>()(
             const exists = s.epgSources.find((es) => es.url === url)
             const newSource: EpgSource = { url, importedAt: Date.now(), programCount: result.count, tvgIds: result.tvgIds }
             const epgSources = exists
-              ? s.epgSources.map((es) => es.url === url ? newSource : es)
+              ? s.epgSources.map((es) => (es.url === url ? newSource : es))
               : [...s.epgSources, newSource]
             return { epgSources, epgCache: { ...s.epgCache, [url]: programs as EpgProgram[] } }
           })
@@ -299,26 +307,29 @@ export const useStore = create<PlayerStore>()(
         return result
       },
 
-      removeEpgSource: (url) => set((s) => {
-        const epgSources = s.epgSources.filter((es) => es.url !== url)
-        const { [url]: _, ...epgCache } = s.epgCache
-        return { epgSources, epgCache }
-      }),
+      removeEpgSource: (url) =>
+        set((s) => {
+          const epgSources = s.epgSources.filter((es) => es.url !== url)
+          const { [url]: _, ...epgCache } = s.epgCache
+          return { epgSources, epgCache }
+        }),
 
-      appendCheckLog: (log) => set((s) => ({ checkLogs: [...s.checkLogs, log], checkTotal: log.total })),
+      appendCheckLog: (log) =>
+        set((s) => ({ checkLogs: [...s.checkLogs, log], checkTotal: log.total })),
       setCheckRunning: (v) => set({ checkRunning: v }),
       resetCheck: () => set({ checkLogs: [], checkRunning: false, checkTotal: 0 }),
 
-      updateChannelStatus: (id, status, lastCheckedAt) => set((s) => {
-        const groups = s.groups.map((g) => ({
-          ...g,
-          channels: g.channels.map((ch) =>
-            ch.id === id ? { ...ch, status, lastCheckedAt } : ch,
-          ),
-        }))
-        const allChannels = groups.flatMap((g) => g.channels)
-        return { groups, channels: allChannels }
-      }),
+      updateChannelStatus: (id, status, lastCheckedAt) =>
+        set((s) => {
+          const groups = s.groups.map((g) => ({
+            ...g,
+            channels: g.channels.map((ch) =>
+              ch.id === id ? { ...ch, status, lastCheckedAt } : ch,
+            ),
+          }))
+          const allChannels = groups.flatMap((g) => g.channels)
+          return { groups, channels: allChannels }
+        }),
     }),
     {
       name: 'iptv-player-store',

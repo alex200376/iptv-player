@@ -26,13 +26,19 @@ function getCurrentProgram(programs: EpgProgram[], channelTvgId?: string): EpgPr
 
 function GripIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
-      <circle cx="4.5" cy="3.5" r="1.2" />
-      <circle cx="9.5" cy="3.5" r="1.2" />
-      <circle cx="4.5" cy="7" r="1.2" />
-      <circle cx="9.5" cy="7" r="1.2" />
-      <circle cx="4.5" cy="10.5" r="1.2" />
-      <circle cx="9.5" cy="10.5" r="1.2" />
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+    >
+      <circle cx="9" cy="6" r="1.5" />
+      <circle cx="15" cy="6" r="1.5" />
+      <circle cx="9" cy="12" r="1.5" />
+      <circle cx="15" cy="12" r="1.5" />
+      <circle cx="9" cy="18" r="1.5" />
+      <circle cx="15" cy="18" r="1.5" />
     </svg>
   )
 }
@@ -102,6 +108,7 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
   }, [currentChannel, ctxMenu])
 
   const handlePlay = usePlayChannel()
+
   const handleContextMenu = useCallback((e: React.MouseEvent, ch: Channel) => {
     e.preventDefault()
     setCtxMenu({ x: e.clientX, y: e.clientY, channel: ch })
@@ -136,9 +143,9 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
     [toggleFavorite],
   )
 
-  // ── Group drag handlers ────────────────────────────────────────────────────
+  // Group drag handlers
   const handleGroupDragStart = useCallback(
-    (e: React.DragEvent<HTMLDivElement>, groupName: string) => {
+    (e: React.DragEvent, groupName: string) => {
       e.stopPropagation()
       e.dataTransfer.effectAllowed = 'move'
       e.dataTransfer.setData('application/x-group', groupName)
@@ -148,11 +155,10 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
   )
 
   const handleGroupDragOver = useCallback(
-    (e: React.DragEvent<HTMLDivElement>, groupName: string) => {
+    (e: React.DragEvent, groupName: string) => {
       if (!e.dataTransfer.types.includes('application/x-group')) return
       e.preventDefault()
       e.dataTransfer.dropEffect = 'move'
-      // Determine before/after based on mouse position
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
       const midY = rect.top + rect.height / 2
       setDropTargetGroupName(groupName)
@@ -162,11 +168,14 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
   )
 
   const handleGroupDrop = useCallback(
-    (e: React.DragEvent<HTMLDivElement>, targetGroupName: string) => {
+    (e: React.DragEvent, targetGroupName: string) => {
       e.preventDefault()
       const sourceGroupName = e.dataTransfer.getData('application/x-group')
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+      const midY = rect.top + rect.height / 2
+      const position: 'before' | 'after' = e.clientY < midY ? 'before' : 'after'
       if (sourceGroupName && sourceGroupName !== targetGroupName) {
-        reorderGroup(sourceGroupName, targetGroupName)
+        reorderGroup(sourceGroupName, targetGroupName, position)
       }
       setDragGroupName(null)
       setDropTargetGroupName(null)
@@ -181,7 +190,7 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
 
   if (filteredGroups.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-muted-foreground text-sm p-4 text-center">
+      <div className="flex items-center justify-center h-full text-muted-foreground text-xs p-4 text-center">
         {useStore.getState().searchQuery
           ? t('channel.emptySearch')
           : useStore.getState().activePlaylistId
@@ -198,35 +207,25 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border flex-shrink-0">
-        <span className="text-xs text-muted-foreground">
-          {t('channel.count', { count: totalChannels })}
-        </span>
+      <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground border-b border-border flex-shrink-0">
+        <span>{t('channel.count', { count: totalChannels })}</span>
+        &nbsp;
         {offlineCount > 0 && (
           <button
             onClick={handleRemoveOffline}
-            disabled={removing}
-            className="text-xs text-red-400 hover:text-red-300 transition-colors"
+            className="ml-auto text-xs text-destructive hover:text-destructive/80 transition-colors"
           >
-            {removing
-              ? t('channel.deleting')
-              : t('channel.deleteOffline', { count: offlineCount })}
+            {removing ? t('channel.deleting') : t('channel.deleteOffline', { count: offlineCount })}
           </button>
         )}
       </div>
 
-      <Accordion.Root type="multiple" className="flex-1 overflow-y-auto overflow-x-hidden">
+      <Accordion.Root type="multiple" className="flex-1 overflow-y-auto">
         {filteredGroups.map((group: ChannelGroup, i: number) => {
-          const showTopIndicator =
-            dropTargetGroupName === group.name && dropGroupPos === 'before'
-          const showBottomIndicator =
-            dropTargetGroupName === group.name && dropGroupPos === 'after'
+          const showTopIndicator = dropTargetGroupName === group.name && dropGroupPos === 'before'
+          const showBottomIndicator = dropTargetGroupName === group.name && dropGroupPos === 'after'
           return (
-            <Accordion.Item
-              key={group.name}
-              value={group.name}
-              className="border-b border-border/50 last:border-0"
-            >
+            <Accordion.Item key={group.name} value={group.name}>
               {showTopIndicator && (
                 <div className="h-0.5 bg-primary mx-2 rounded-full" />
               )}
@@ -239,19 +238,17 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
                 className={dragGroupName === group.name ? 'opacity-40' : ''}
               >
                 <Accordion.Header>
-                  <Accordion.Trigger className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium hover:bg-muted/60 transition-colors group">
-                    <span
-                      className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground flex-shrink-0"
-                      onMouseDown={(e) => e.stopPropagation()}
-                    >
+                  <Accordion.Trigger
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center w-full gap-2 px-2 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors group"
+                  >
+                    <span className="cursor-grab active:cursor-grabbing" onMouseDown={(e) => e.stopPropagation()}>
                       <GripIcon />
                     </span>
                     <span className="flex-1 text-left truncate">
                       {getGroupDisplayName(group.name, t)}
                     </span>
-                    <span className="text-xs text-muted-foreground flex-shrink-0">
-                      {group.channels.length}
-                    </span>
+                    <span className="text-muted-foreground/60">{group.channels.length}</span>
                   </Accordion.Trigger>
                 </Accordion.Header>
                 <Accordion.Content>
@@ -343,14 +340,14 @@ function ChannelGroupChannels({
   const [dropTargetId, setDropTargetId] = useState<string | null>(null)
   const [dropPosition, setDropPosition] = useState<'before' | 'after'>('before')
 
-  const handleChDragStart = useCallback((e: React.DragEvent<HTMLDivElement>, chId: string) => {
-    // Allow the drag to start from the row itself, not just the grip
+  // Fix Bug 3: ensure draggable is set on each row and handlers work correctly
+  const handleChDragStart = useCallback((e: React.DragEvent, chId: string) => {
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('application/x-channel', chId)
     setDragChId(chId)
   }, [])
 
-  const handleChDragOver = useCallback((e: React.DragEvent<HTMLDivElement>, chId: string) => {
+  const handleChDragOver = useCallback((e: React.DragEvent, chId: string) => {
     if (!e.dataTransfer.types.includes('application/x-channel')) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
@@ -361,7 +358,7 @@ function ChannelGroupChannels({
   }, [])
 
   const handleChDrop = useCallback(
-    (e: React.DragEvent<HTMLDivElement>, targetChId: string) => {
+    (e: React.DragEvent, targetChId: string) => {
       e.preventDefault()
       const sourceChId = e.dataTransfer.getData('application/x-channel')
       if (sourceChId && sourceChId !== targetChId) {
@@ -392,7 +389,7 @@ function ChannelGroupChannels({
 
   if (!needsVirtual) {
     return (
-      <div className="">
+      <div>
         {channels.map((ch, idx) => (
           <ChannelRowWrapper
             key={ch.id}
@@ -419,8 +416,18 @@ function ChannelGroupChannels({
   }
 
   return (
-    <div ref={parentRef} className="overflow-auto" style={{ height: `${Math.min(channels.length, 10) * CHANNEL_ROW_HEIGHT}px` }}>
-      <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
+    <div
+      ref={parentRef}
+      className="overflow-y-auto"
+      style={{ height: Math.min(channels.length * CHANNEL_ROW_HEIGHT, 400) }}
+    >
+      <div
+        style={{
+          height: `${virtualizer.getTotalSize()}px`,
+          width: '100%',
+          position: 'relative',
+        }}
+      >
         {virtualizer.getVirtualItems().map((virtualRow) => {
           const ch = channels[virtualRow.index]
           return (
@@ -431,8 +438,8 @@ function ChannelGroupChannels({
                 top: 0,
                 left: 0,
                 width: '100%',
+                height: `${virtualRow.size}px`,
                 transform: `translateY(${virtualRow.start}px)`,
-                height: `${CHANNEL_ROW_HEIGHT}px`,
               }}
             >
               <ChannelRowWrapper
@@ -491,9 +498,9 @@ const ChannelRowWrapper = memo(function ChannelRowWrapper({
   onContextMenu: (e: React.MouseEvent, ch: Channel) => void
   onToggleFav: (id: string) => void
   epgCache: Record<string, EpgProgram[]>
-  onDragStart: (e: React.DragEvent<HTMLDivElement>, chId: string) => void
-  onDragOver: (e: React.DragEvent<HTMLDivElement>, chId: string) => void
-  onDrop: (e: React.DragEvent<HTMLDivElement>, chId: string) => void
+  onDragStart: (e: React.DragEvent, chId: string) => void
+  onDragOver: (e: React.DragEvent, chId: string) => void
+  onDrop: (e: React.DragEvent, chId: string) => void
   onDragEnd: () => void
 }) {
   const { t } = useTranslation()
@@ -528,7 +535,7 @@ const ChannelRowWrapper = memo(function ChannelRowWrapper({
 
       {/* Grip handle */}
       <div
-        className="pl-1 pr-0.5 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground flex-shrink-0"
+        className="flex-shrink-0 px-1 cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground/80 transition-colors"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <GripIcon />
@@ -546,27 +553,27 @@ const ChannelRowWrapper = memo(function ChannelRowWrapper({
               : 'text-foreground'
         }`}
       >
-        <span className="w-6 text-center text-xs text-muted-foreground flex-shrink-0">
+        <span className="text-xs text-muted-foreground/60 w-7 shrink-0 text-center tabular-nums">
           {ch.tvgChno || ''}
         </span>
         {ch.logo ? (
           <img
             src={logoUrl}
             alt={ch.name}
-            className="w-6 h-6 rounded object-contain flex-shrink-0 mr-1.5"
+            className="h-5 w-8 object-contain shrink-0 mx-1"
             onError={(e) => {
               ;(e.target as HTMLImageElement).style.display = 'none'
             }}
           />
         ) : (
-          <div className="w-6 h-6 rounded bg-muted flex-shrink-0 mr-1.5" />
+          <div className="h-5 w-8 shrink-0 mx-1" />
         )}
-        <div className="flex-1 min-w-0">
-          <div className="truncate text-sm leading-tight">{ch.name}</div>
+        <div className="flex flex-col min-w-0 flex-1">
+          <MarqueeText text={ch.name} active={isActive} className="text-xs font-medium" />
           {currentEpg && (
-            <div className="truncate text-xs text-muted-foreground leading-tight">
+            <span className="text-[10px] text-muted-foreground truncate">
               {currentEpg.title}
-            </div>
+            </span>
           )}
         </div>
       </button>
@@ -597,7 +604,7 @@ export default memo(ChannelList)
 
 function PlayIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
       <polygon points="5,3 19,12 5,21" />
     </svg>
   )
@@ -605,7 +612,7 @@ function PlayIcon() {
 
 function CopyIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <rect x="9" y="9" width="13" height="13" rx="2" />
       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
     </svg>
@@ -614,8 +621,8 @@ function CopyIcon() {
 
 function TrashIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <polyline points="3,6 5,6 21,6" />
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <polyline points="3 6 5 6 21 6" />
       <path d="M19 6l-1 14H6L5 6" />
       <path d="M10 11v6M14 11v6" />
       <path d="M9 6V4h6v2" />
@@ -625,16 +632,24 @@ function TrashIcon() {
 
 function StarIcon({ filled }: { filled: boolean }) {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
-      <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill={filled ? 'currentColor' : 'none'}
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
     </svg>
   )
 }
 
 function CheckIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <polyline points="20,6 9,17 4,12" />
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <polyline points="20 6 9 17 4 12" />
     </svg>
   )
 }
