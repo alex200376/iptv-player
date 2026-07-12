@@ -72,7 +72,7 @@ export default function EpgOverlay({ onClose }: { onClose: () => void }) {
   }, [tvgUrl, hasData, loadEpg])
 
   return (
-    <div className="bg-background overflow-hidden">
+    <div className="bg-background max-h-[40vh] overflow-y-auto overflow-x-hidden">
       <div className="px-4 py-3 space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-foreground">

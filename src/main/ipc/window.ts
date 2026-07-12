@@ -12,19 +12,21 @@ let _lastLayoutW = 0
 let _lastLayoutH = 0
 const LAYOUT_DEBOUNCE_MS = 120
 
-function debouncedNotifyLayout() {
+function debouncedNotifyLayout(force?: boolean) {
   if (_layoutChangeTimer) return
   _layoutChangeTimer = setTimeout(() => {
     _layoutChangeTimer = null
     const state = getState()
     if (!state.player || state.player.destroyed) return
-    // Only forward to VLC when the window bounds actually changed.
-    const win = state.mainWindow
-    if (win && !win.isDestroyed()) {
-      const [w, h] = win.getContentSize()
-      if (Math.abs(w - _lastLayoutW) < 4 && Math.abs(h - _lastLayoutH) < 4) return
-      _lastLayoutW = w
-      _lastLayoutH = h
+    if (!force) {
+      // Only forward to VLC when the window bounds actually changed (for window resize events).
+      const win = state.mainWindow
+      if (win && !win.isDestroyed()) {
+        const [w, h] = win.getContentSize()
+        if (Math.abs(w - _lastLayoutW) < 4 && Math.abs(h - _lastLayoutH) < 4) return
+        _lastLayoutW = w
+        _lastLayoutH = h
+      }
     }
     try { state.player.notifyLayoutChange() } catch (e) { console.error('[window] notifyLayoutChange:', e) }
   }, LAYOUT_DEBOUNCE_MS)
@@ -92,8 +94,21 @@ export function registerWindowIpc() {
 
   // Debounced + dimension-checked so sidebar/EPG panel toggles don't
   // trigger a full VLC surface renegotiation on every React render.
-  ipcMain.handle('notify-layout-change', () => {
-    debouncedNotifyLayout()
+  // When `force` is true (internal layout toggle like EPG), skip dimension check.
+  ipcMain.handle('notify-layout-change', (_event, force?: boolean) => {
+    debouncedNotifyLayout(force)
+  })
+
+  // Immediate, no-check notification for EPG toggle where we know the layout
+  // actually changed and VLC must resize right away.
+  ipcMain.handle('notify-layout-change-now', () => {
+    const state = getState()
+    if (!state.player || state.player.destroyed) return
+    try {
+      state.player.notifyLayoutChange()
+    } catch (e) {
+      console.error('[window] notifyLayoutChange-now:', e)
+    }
   })
 
   ipcMain.handle('exit-fullscreen', () => {

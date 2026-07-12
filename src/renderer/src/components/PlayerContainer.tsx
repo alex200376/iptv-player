@@ -139,14 +139,17 @@ export default function PlayerContainer() {
   )
   void nextPrograms
 
-  const handleReplay = useCallback(() => {
+  const handleReplay = useCallback(async () => {
     if (!currentChannel) return
     switchTokenRef.current += 1
     retryCountRef.current = 0
     setPlayerError(null)
     setIsBuffering(false)
-    window.electronAPI.switchChannel(currentChannel.url)
-  }, [currentChannel])
+    const result = await window.electronAPI.switchChannel(currentChannel.url)
+    if (!result.success) {
+      setPlayerError(result.error || t('player.playError'))
+    }
+  }, [currentChannel, t])
 
   useEffect(() => {
     window.electronAPI.getSettings().then((s: any) => {
@@ -312,7 +315,7 @@ export default function PlayerContainer() {
     if (rafRef.current !== undefined) cancelAnimationFrame(rafRef.current)
     rafRef.current = requestAnimationFrame(() => {
       rafRef.current = requestAnimationFrame(() => {
-        window.electronAPI.notifyLayoutChange()
+        window.electronAPI.notifyLayoutChangeNow()
       })
     })
   }, [showEpg])
@@ -323,7 +326,7 @@ export default function PlayerContainer() {
     const observer = new ResizeObserver(() => {
       clearTimeout(layoutDebounceRef.current)
       layoutDebounceRef.current = setTimeout(() => {
-        window.electronAPI.notifyLayoutChange()
+        window.electronAPI.notifyLayoutChange(true)
       }, LAYOUT_NOTIFY_DELAY_MS)
     })
     observer.observe(el)
@@ -345,12 +348,10 @@ export default function PlayerContainer() {
           {currentChannel.logo && (
             <LogoImg src={currentChannel.logo} alt={currentChannel.name} className="h-5 w-auto" />
           )}
-          &nbsp;
           <span className="font-medium truncate">{currentChannel.name}</span>
-          &nbsp;
           {currentProgram && (
             <>
-              &nbsp;&middot;&nbsp;
+              <span className="text-muted-foreground">·</span>
               <span className="text-muted-foreground truncate">{currentProgram.title}</span>
             </>
           )}
@@ -358,7 +359,9 @@ export default function PlayerContainer() {
       )}
 
       {/* Player area - flex-1 + min-h-0 ensures it fills remaining space and shrinks correctly */}
-      <div ref={playerContainerRef} className="flex-1 min-h-0 relative bg-black">
+      <div id="player-container" ref={playerContainerRef} className="flex-1 min-h-0 relative bg-black">
+        <div id="player" className="w-full h-full" />
+        <div className="scanline-overlay" />
         {isBuffering && currentChannel && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-10">
             <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary" />
@@ -371,7 +374,7 @@ export default function PlayerContainer() {
               onClick={handleReplay}
               className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-xs hover:bg-primary/90 transition-colors"
             >
-              &nbsp;{t('player.retry')}
+              {t('player.retry')}
             </button>
           </div>
         )}
@@ -396,7 +399,9 @@ export default function PlayerContainer() {
             ) : (
               <div className="h-5 w-5 rounded bg-muted flex-shrink-0" />
             )}
-            &nbsp;
+            <div className="flex-1 min-w-0">
+              <MarqueeText className="text-sm font-medium truncate">{currentChannel.name}</MarqueeText>
+            </div>
             <span className="text-xs font-semibold text-red-500 flex-shrink-0">LIVE</span>
             <button
               onClick={() => setShowEpg((v) => !v)}

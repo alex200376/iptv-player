@@ -37,6 +37,7 @@
   "player.emptyHint": "Ctrl+I Import · Ctrl+B Toggle channel list",
   "player.bufferingTimeout": "Connection timeout, no response",
   "player.playError": "Playback error, click to retry",
+  "player.retry": "Retry",
   "player.epgButton": "EPG",
   "player.epgHeader": "EPG - {{name}}",
   "player.live": "LIVE",

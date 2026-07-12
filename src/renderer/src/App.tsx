@@ -224,6 +224,8 @@ export default function App() {
   }, [])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
+    const types = e.dataTransfer.types
+    if (!types || Array.prototype.indexOf.call(types, 'Files') === -1) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'copy'
   }, [])

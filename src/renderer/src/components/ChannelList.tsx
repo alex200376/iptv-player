@@ -520,22 +520,22 @@ const ChannelRowWrapper = memo(function ChannelRowWrapper({
 
   return (
     <div
-      draggable
-      onDragStart={(e) => onDragStart(e, ch.id)}
       onDragOver={(e) => onDragOver(e, ch.id)}
       onDrop={(e) => onDrop(e, ch.id)}
       onDragEnd={onDragEnd}
-      className={`relative flex items-center h-[48px] overflow-hidden select-none ${
-        isDragging ? 'opacity-40' : ''
+      className={`relative flex items-center h-[48px] overflow-hidden select-none transition-all duration-150 ${
+        isDragging ? 'opacity-40 scale-[0.98]' : 'opacity-100'
       }`}
     >
       {showTopIndicator && (
-        <div className="absolute top-0 left-0 right-0 h-0.5 bg-primary z-10" />
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-primary z-10 rounded-full" />
       )}
 
-      {/* Grip handle */}
+      {/* Grip handle is the ONLY draggable handle so it doesn't conflict with click-to-play */}
       <div
-        className="flex-shrink-0 px-1 cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground/80 transition-colors"
+        draggable
+        onDragStart={(e) => onDragStart(e, ch.id)}
+        className="flex-shrink-0 w-5 flex items-center justify-center px-0.5 cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-muted-foreground/70 transition-colors rounded-sm hover:bg-muted/50"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <GripIcon />
@@ -545,33 +545,37 @@ const ChannelRowWrapper = memo(function ChannelRowWrapper({
         ref={isActive ? activeRef : undefined}
         onClick={() => onPlay(ch)}
         onContextMenu={(e) => onContextMenu(e, ch)}
-        className={`flex-1 flex items-center py-1 text-sm text-left transition-colors hover:bg-muted group overflow-hidden h-full ${
+        className={`flex-1 flex items-center gap-1 py-1.5 text-sm text-left transition-all duration-150 group overflow-hidden h-full border-l-2 ${
           isActive
-            ? 'border-l-2 border-primary bg-primary/5'
+            ? 'border-primary bg-primary/10'
             : ch.status === 'offline'
-              ? 'opacity-50 text-muted-foreground'
-              : 'text-foreground'
+              ? 'border-transparent opacity-50 text-muted-foreground'
+              : 'border-transparent hover:bg-muted/60 text-foreground'
         }`}
       >
-        <span className="text-xs text-muted-foreground/60 w-7 shrink-0 text-center tabular-nums">
+        <span className="text-[11px] text-muted-foreground/50 w-4 shrink-0 text-center tabular-nums font-medium">
           {ch.tvgChno || ''}
         </span>
         {ch.logo ? (
           <img
             src={logoUrl}
             alt={ch.name}
-            className="h-5 w-8 object-contain shrink-0 mx-1"
+            className="h-5 w-8 object-contain shrink-0"
             onError={(e) => {
               ;(e.target as HTMLImageElement).style.display = 'none'
             }}
           />
         ) : (
-          <div className="h-5 w-8 shrink-0 mx-1" />
+          <div className="h-5 w-8 shrink-0 flex items-center justify-center">
+            <div className="w-4 h-4 rounded bg-muted/50" />
+          </div>
         )}
-        <div className="flex flex-col min-w-0 flex-1">
-          <MarqueeText text={ch.name} active={isActive} className="text-xs font-medium" />
+        <div className="flex flex-col min-w-0 flex-1 gap-0.5">
+          <div className="overflow-hidden whitespace-nowrap min-w-0 w-full text-xs font-semibold truncate">
+            <MarqueeText className={isActive ? 'text-primary' : 'text-foreground'}>{ch.name}</MarqueeText>
+          </div>
           {currentEpg && (
-            <span className="text-[10px] text-muted-foreground truncate">
+            <span className="text-[10px] text-muted-foreground/80 truncate leading-tight">
               {currentEpg.title}
             </span>
           )}
@@ -583,10 +587,10 @@ const ChannelRowWrapper = memo(function ChannelRowWrapper({
           e.stopPropagation()
           onToggleFav(ch.id)
         }}
-        className={`p-1 rounded-md transition-all flex-shrink-0 ${
+        className={`p-1.5 rounded-md transition-all flex-shrink-0 ${
           isFav
-            ? 'text-yellow-400 opacity-100'
-            : 'text-muted-foreground opacity-60 group-hover:opacity-100 hover:opacity-100'
+            ? 'text-yellow-500 opacity-100'
+            : 'text-muted-foreground/50 opacity-70 group-hover:opacity-100 hover:opacity-100 hover:bg-muted/50'
         }`}
         title={isFav ? t('channel.unfavoriteTitle') : t('channel.favoriteTitle')}
       >
@@ -594,7 +598,7 @@ const ChannelRowWrapper = memo(function ChannelRowWrapper({
       </button>
 
       {showBottomIndicator && (
-        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary z-10" />
+        <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary z-10 rounded-full" />
       )}
     </div>
   )
