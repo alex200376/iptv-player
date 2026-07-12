@@ -33,7 +33,7 @@ export function buildMediaOptions(settings: Settings): string[] {
     `:live-caching=${cache}`,
     `:file-caching=${Math.min(cache, 1000)}`,
     `:h264-threads=${settings.h264Threads}`,
-    ':tcp-timeout=4000',
+    ':tcp-timeout=10000',
     ':http-reconnect',
     ':rtsp-tcp',
     ':sout-mux-caching=100',

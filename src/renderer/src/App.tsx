@@ -2,10 +2,13 @@ import { useState, useEffect, useCallback } from 'react'
 import Sidebar from './components/Sidebar'
 import PlayerContainer from './components/PlayerContainer'
 import NavBar from './components/NavBar'
+import TitleBar from './components/TitleBar'
 import SettingsPage from './components/SettingsPage'
 import EpgPage from './components/EpgPage'
 import Onboarding from './components/Onboarding'
 import UpdateDialog from './components/UpdateDialog'
+import ImportDialog from './components/ImportDialog'
+import OpenStreamDialog from './components/OpenStreamDialog'
 import { useStore } from './stores/useStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { applyTheme } from './themes'
@@ -18,11 +21,15 @@ export default function App() {
     return !localStorage.getItem('iptv-player-onboarded')
   })
   const [showUpdateDialog, setShowUpdateDialog] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [streamOpen, setStreamOpen] = useState(false)
+  const [isDraggingFile, setIsDraggingFile] = useState(false)
   const currentChannel = useStore((s) => s.currentChannel)
   const setChannels = useStore((s) => s.setChannels)
+  const groups = useStore((s) => s.groups)
+  const addPlaylist = useStore((s) => s.addPlaylist)
   const settingsOpen = useStore((s) => s.settingsOpen)
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
-  const loadUserData = useStore((s) => s.loadUserData)
   const epgSources = useStore((s) => s.epgSources)
   const loadEpg = useStore((s) => s.loadEpg)
   const { loadSettings, settings } = useSettingsStore()
@@ -45,13 +52,14 @@ export default function App() {
     document.documentElement.setAttribute('data-font-size', settings.fontSize)
   }, [settings.theme, settings.fontSize])
 
+  const [hydrated, setHydrated] = useState(() => useStore.persist.hasHydrated())
   useEffect(() => {
-    window.electronAPI.loadChannels().then((channels) => {
-      if (channels.length > 0) setChannels(channels)
-    })
-    window.electronAPI.loadUserData().then((data) => {
-      loadUserData(data)
-    })
+    const unsub = useStore.persist.onFinishHydration(() => setHydrated(true))
+    return unsub
+  }, [])
+
+  useEffect(() => {
+    if (!hydrated) return
 
     const offRefreshed = window.electronAPI.onPlaylistsRefreshed((channels) => {
       if (channels.length > 0) setChannels(channels as Channel[])
@@ -69,7 +77,7 @@ export default function App() {
       offCheckDone?.()
       offCheckLog?.()
     }
-  }, [setChannels, loadUserData])
+  }, [hydrated, setChannels])
 
   useEffect(() => {
     document.title = currentChannel
@@ -93,6 +101,33 @@ export default function App() {
   }, [epgSources, loadEpg])
 
   const toggleSidebar = useCallback(() => setSidebarOpen((v) => !v), [])
+
+  useEffect(() => {
+    const off = window.electronAPI.onMenuAction((action) => {
+      switch (action) {
+        case 'import-m3u':
+          setImportOpen(true)
+          break
+        case 'open-stream':
+          setStreamOpen(true)
+          break
+        case 'open-settings':
+          setSettingsOpen(true)
+          break
+        case 'toggle-sidebar':
+          toggleSidebar()
+          break
+        case 'open-epg':
+          window.electronAPI.hidePlayer()
+          setEpgPageOpen(true)
+          break
+        case 'check-update':
+          setShowUpdateDialog(true)
+          break
+      }
+    })
+    return off
+  }, [setSettingsOpen, toggleSidebar])
 
   useEffect(() => {
     const timer = setTimeout(() => window.electronAPI.notifyLayoutChange(), 100)
@@ -214,26 +249,88 @@ export default function App() {
     setShowOnboarding(false)
   }, [])
 
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+  }, [])
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDraggingFile(true)
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDraggingFile(false)
+  }, [])
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDraggingFile(false)
+    const files = Array.from(e.dataTransfer.files).filter(
+      (f) => f.name.endsWith('.m3u') || f.name.endsWith('.m3u8'),
+    )
+    if (files.length === 0) return
+    for (const file of files) {
+      const result = await window.electronAPI.importM3UFromFile(file.path)
+      if (result.channels && result.channels.length > 0) {
+        const allChannels = [...groups.flatMap((g) => g.channels), ...result.channels]
+        setChannels(allChannels)
+        addPlaylist({
+          id: result.playlistId,
+          name: result.playlistName,
+          source: 'file',
+          path: result.filePath,
+          importedAt: Date.now(),
+          channelCount: result.channels.length,
+        })
+      }
+    }
+  }, [groups, setChannels, addPlaylist])
+
   return (
-    <div className="flex w-full h-full bg-background text-foreground">
-      <NavBar onOpenSettings={openSettings} />
-      <div
-        className="flex-shrink-0 overflow-hidden transition-[width] duration-200 ease-in-out border-r border-border"
-        style={{ width: sidebarOpen ? 220 : 56 }}
-      >
-        <Sidebar collapsed={!sidebarOpen} />
-      </div>
-      <div className="flex-1 flex flex-col min-w-0">
-        {settingsOpen ? (
-          <SettingsPage variant="page" onClose={closeSettings} />
-        ) : epgPageOpen ? (
-          <EpgPage onClose={closeEpgPage} />
-        ) : (
-          <PlayerContainer />
-        )}
+    <div
+      className="flex flex-col w-full h-full bg-background text-foreground"
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {isDraggingFile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="px-10 py-8 bg-card border-2 border-dashed border-primary rounded-xl text-center">
+            <svg className="w-12 h-12 mx-auto mb-3 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <p className="text-lg font-semibold text-foreground">放開以匯入 M3U 播放列表</p>
+          </div>
+        </div>
+      )}
+      <TitleBar sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} />
+      <div className="flex flex-1 min-h-0">
+        <NavBar onOpenSettings={openSettings} onImport={() => setImportOpen(true)} onOpenStream={() => setStreamOpen(true)} />
+        <div
+          className="flex-shrink-0 overflow-hidden transition-[width] duration-200 ease-in-out border-r border-border"
+          style={{ width: sidebarOpen ? 220 : 64 }}
+        >
+          <Sidebar collapsed={!sidebarOpen} />
+        </div>
+        <div className="flex-1 flex flex-col min-w-0">
+          {settingsOpen ? (
+            <SettingsPage variant="page" onClose={closeSettings} />
+          ) : epgPageOpen ? (
+            <EpgPage onClose={closeEpgPage} />
+          ) : (
+            <PlayerContainer />
+          )}
+        </div>
       </div>
       {showOnboarding && <Onboarding onDone={handleOnboardingDone} />}
       {showUpdateDialog && <UpdateDialog onClose={() => setShowUpdateDialog(false)} />}
+      <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
+      {streamOpen && <OpenStreamDialog onClose={() => { setStreamOpen(false); window.electronAPI.showPlayerWindow() }} />}
     </div>
   )
 }

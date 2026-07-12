@@ -1,6 +1,6 @@
 import { createServer, IncomingMessage, ServerResponse } from 'http'
 import { AddressInfo } from 'net'
-import { spawn, ChildProcess } from 'child_process'
+import { spawn, execFile, ChildProcess } from 'child_process'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { app } from 'electron'
@@ -53,7 +53,6 @@ let _gpuEncoderProbe: Promise<string | null> | null = null
 async function probeGpuEncoder(ffmpegPath: string): Promise<string | null> {
   for (const enc of ['h264_nvenc', 'h264_amf']) {
     try {
-      const { execFile } = require('child_process')
       await new Promise<void>((resolve, reject) => {
         execFile(ffmpegPath, [
           '-f', 'lavfi', '-i', 'nullsrc=s=1280x720:duration=0.1',
@@ -134,7 +133,6 @@ async function probeFfmpeg(vlcDir?: string | null): Promise<boolean> {
   const ffmpegPath = findFfmpeg(vlcDir)
   if (ffmpegPath === 'ffmpeg' && !ffmpegPath.includes('\\') && !ffmpegPath.includes('/')) {
     try {
-      const { execFile } = require('child_process')
       await new Promise<void>((resolve, reject) => {
         execFile(ffmpegPath, ['-version'], { timeout: 3000 }, (err) => {
           if (err) reject(err)
@@ -298,11 +296,11 @@ async function handleProxyRequest(
     'Access-Control-Allow-Origin': '*',
   })
 
-  // Watchdog: if ffmpeg doesn't output any data within 8 seconds, kill it.
+  // Watchdog: if ffmpeg doesn't output any data within 10 seconds, kill it.
   // Prevents VLC from blocking indefinitely when the upstream is dead.
   const outputTimeout = setTimeout(() => {
     if (currentProcess === proc) {
-      console.warn('[stream-proxy] ffmpeg no output for 8s, killing')
+      console.warn('[stream-proxy] ffmpeg no output for 10s, killing')
       const p = proc
       currentProcess = null
       safeKill(p)
@@ -310,7 +308,7 @@ async function handleProxyRequest(
         try { res.destroy() } catch (e) { console.error('[stream-proxy] destroy response:', e) }
       }
     }
-  }, 8000)
+  }, 10000)
 
   proc.stdout?.pipe(res)
 

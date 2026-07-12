@@ -1,4 +1,4 @@
-import { BrowserWindow, app, dialog } from 'electron'
+import { BrowserWindow, app, dialog, session } from 'electron'
 import { join } from 'path'
 import { VlcPlayer, probeDefaultVlcDir, initLibVlc } from 'electron-vlc-player'
 import { getState } from './ipc/shared'
@@ -22,6 +22,7 @@ async function createWindow() {
     minWidth: 900,
     minHeight: 500,
     title: 'IPTV Player',
+    frame: false,
     backgroundColor: '#0f0f1a',
     icon: iconPath,
     // Prevent Electron from throttling the renderer when window is hidden/minimised
@@ -68,6 +69,26 @@ async function createWindow() {
       }
     }, 150)
   })
+  mainWindow.on('maximize', () => {
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+      state.mainWindow.webContents.send('window-maximized', true)
+    }
+  })
+  mainWindow.on('unmaximize', () => {
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+      state.mainWindow.webContents.send('window-maximized', false)
+    }
+  })
+  mainWindow.on('enter-full-screen', () => {
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+      state.mainWindow.webContents.send('fullscreen-changed', true)
+    }
+  })
+  mainWindow.on('leave-full-screen', () => {
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+      state.mainWindow.webContents.send('fullscreen-changed', false)
+    }
+  })
   mainWindow.on('closed', () => {
     if (resizeTimer) { clearTimeout(resizeTimer); resizeTimer = null }
   })
@@ -93,6 +114,24 @@ function setupIPC() {
 }
 
 app.whenReady().then(async () => {
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          "default-src 'self'; " +
+          "script-src 'self' 'unsafe-inline'; " +
+          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+          "font-src 'self' https://fonts.gstatic.com; " +
+          "img-src 'self' data: blob: https: http:; " +
+          "media-src 'self' http: https:; " +
+          "connect-src 'self' http://127.0.0.1:* https:; " +
+          "frame-src 'none'"
+        ]
+      }
+    })
+  })
+
   setupIPC()
   await createWindow()
 

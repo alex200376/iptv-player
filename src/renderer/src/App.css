@@ -496,3 +496,86 @@ html, body, #root {
   .video-controls-overlay .controls-btn { width: 26px; height: 26px; }
   .video-controls-overlay .controls-btn svg { width: 12px; height: 12px; }
 }
+
+/* ── Titlebar ────────────────────────────────────────────────────── */
+.titlebar {
+  height: 36px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  background: var(--tv-bg-secondary);
+  border-bottom: 1px solid var(--tv-border);
+  -webkit-app-region: drag;
+  user-select: none;
+  z-index: 50;
+}
+.titlebar button {
+  -webkit-app-region: no-drag;
+}
+.titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 4px;
+  min-width: 140px;
+}
+.titlebar-app-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tv-text-primary);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.titlebar-center {
+  flex: 1;
+}
+.titlebar-right {
+  display: flex;
+  align-items: center;
+  min-width: 138px;
+}
+.titlebar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--tv-text-secondary);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+}
+.titlebar-btn:active {
+  opacity: 0.8;
+}
+.titlebar-icon-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+}
+.titlebar-icon-btn:hover {
+  background: var(--tv-bg-surface);
+  color: var(--tv-text-primary);
+}
+.titlebar-ctrl-btn {
+  width: 46px;
+  height: 36px;
+  border-radius: 0;
+}
+.titlebar-ctrl-btn:hover {
+  background: var(--tv-bg-surface);
+  color: var(--tv-text-primary);
+}
+.titlebar-close-btn {
+  width: 46px;
+  height: 36px;
+  border-radius: 0;
+}
+.titlebar-close-btn:hover {
+  background: #c00;
+  color: #fff;
+}
+

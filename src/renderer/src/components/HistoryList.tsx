@@ -4,6 +4,7 @@ import { useState } from 'react'
 import ContextMenu from './ContextMenu'
 import { usePlayChannel } from '../hooks/usePlayChannel'
 import { useTranslation } from 'react-i18next'
+import LogoImg from './LogoImg'
 
 export default function HistoryList() {
   const { t, i18n } = useTranslation()
@@ -68,7 +69,7 @@ export default function HistoryList() {
           }`}
         >
           {entry.channel.logo ? (
-            <img src={entry.channel.logo} alt="" loading="lazy" className="w-5 h-5 rounded-tv-sm object-contain flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+            <LogoImg src={entry.channel.logo} className="w-5 h-5 rounded-tv-sm object-contain flex-shrink-0" />
           ) : (
             <span className="w-5 h-5 rounded-tv-sm flex items-center justify-center flex-shrink-0">
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

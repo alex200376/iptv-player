@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../stores/useStore'
 import type { Channel, EpgProgram } from '../types'
 import { useTranslation } from 'react-i18next'
+import LogoImg from './LogoImg'
 import { getGroupDisplayName } from '../utils/groupLabels'
 
 function getCurrentProgram(programs: EpgProgram[], channelTvgId?: string): EpgProgram | null {
@@ -178,7 +179,7 @@ export default function EpgPage({ onClose }: { onClose: () => void }) {
                     }`}
                   >
                       {ch.logo && (
-                        <img src={ch.logo} alt="" className="w-7 h-7 mt-0.5 rounded-tv-sm object-contain shrink-0" loading="lazy" />
+                        <LogoImg src={ch.logo} className="w-7 h-7 mt-0.5 rounded-tv-sm object-contain shrink-0" />
                       )}
                     <div className="flex-1 min-w-0">
                       <div className={`text-tv-sm ${isActive ? 'text-tv-accent font-medium' : 'text-tv-text-primary'}`}>

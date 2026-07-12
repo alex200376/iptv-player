@@ -1,40 +1,39 @@
 import { create } from 'zustand'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import i18n from '../i18n'
 import type { Channel, ChannelGroup, PlaylistMeta, HistoryEntry, EpgProgram, EpgSource, UserData } from '../types'
 
 let directIdCounter = 0
-let saveTimer: ReturnType<typeof setTimeout> | null = null
-function debouncedSave(channels: Channel[]) {
-  if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => {
-    window.electronAPI.saveChannels(channels)
-    saveTimer = null
-  }, 500)
+
+export function groupChannels(channels: Channel[]): ChannelGroup[] {
+  const map = new Map<string, Channel[]>()
+  for (const ch of channels) {
+    const g = ch.group || i18n.t('group.ungrouped')
+    if (!map.has(g)) map.set(g, [])
+    map.get(g)!.push(ch)
+  }
+  return Array.from(map.entries()).map(([name, channels]) => ({ name, channels }))
 }
 
-let userDataTimer: ReturnType<typeof setTimeout> | null = null
-function debouncedSaveUserData(data: { favoriteIds: string[]; historyEntries: HistoryEntry[]; playlists: PlaylistMeta[]; epgSources?: EpgSource[] }) {
-  if (userDataTimer) clearTimeout(userDataTimer)
-  userDataTimer = setTimeout(() => {
-    window.electronAPI.saveUserData(data)
-    userDataTimer = null
-  }, 500)
+interface PersistedChannelData {
+  channels: Channel[]
+  directStreams: Channel[]
+  activePlaylistId: string | null
+  favoriteIds: string[]
+  historyEntries: HistoryEntry[]
+  playlists: PlaylistMeta[]
+  epgSources: EpgSource[]
 }
 
-interface PlayerStore {
+interface PlayerStore extends PersistedChannelData {
   groups: ChannelGroup[]
   currentChannel: Channel | null
   isPlaying: boolean
   searchQuery: string
   navTab: string
-  directStreams: Channel[]
   settingsOpen: boolean
-  activePlaylistId: string | null
 
-  favoriteIds: string[]
-  historyEntries: HistoryEntry[]
-  playlists: PlaylistMeta[]
-  epgSources: EpgSource[]
+  epgCache: Record<string, EpgProgram[]>
 
   setChannels: (channels: Channel[]) => void
   reorderGroup: (groupId: string, targetGroupId: string) => void
@@ -56,7 +55,6 @@ interface PlayerStore {
 
   loadUserData: (data: { favoriteIds: string[]; historyEntries: HistoryEntry[]; playlists: PlaylistMeta[] }) => void
 
-  epgCache: Record<string, EpgProgram[]>
   loadEpg: (tvgUrl: string) => Promise<void>
   importEpgFromUrl: (url: string) => Promise<{ success: boolean; count: number; error?: string }>
   removeEpgSource: (url: string) => void
@@ -70,210 +68,267 @@ interface PlayerStore {
   updateChannelStatus: (id: string, status: 'online' | 'offline', lastCheckedAt: number) => void
 }
 
-export function groupChannels(channels: Channel[]): ChannelGroup[] {
-  const map = new Map<string, Channel[]>()
-  for (const ch of channels) {
-    const g = ch.group || i18n.t('group.ungrouped')
-    if (!map.has(g)) map.set(g, [])
-    map.get(g)!.push(ch)
-  }
-  return Array.from(map.entries()).map(([name, channels]) => ({ name, channels }))
+const ipcStorage = {
+  getItem: async (name: string): Promise<string | null> => {
+    try {
+      if (name === 'iptv-player-store') {
+        const [channels, userData] = await Promise.all([
+          window.electronAPI.loadChannels(),
+          window.electronAPI.loadUserData(),
+        ])
+        const persisted: PersistedChannelData = {
+          channels: channels || [],
+          directStreams: (channels || []).filter((ch: Channel) => ch.id.startsWith('direct-')),
+          activePlaylistId: null,
+          favoriteIds: (userData as UserData)?.favoriteIds || [],
+          historyEntries: (userData as UserData)?.historyEntries || [],
+          playlists: (userData as UserData)?.playlists || [],
+          epgSources: (userData as UserData)?.epgSources || [],
+        }
+        return JSON.stringify(persisted)
+      }
+      return null
+    } catch {
+      return null
+    }
+  },
+  setItem: async (name: string, value: string): Promise<void> => {
+    if (name === 'iptv-player-store') {
+      const parsed = JSON.parse(value) as PersistedChannelData
+      await Promise.all([
+        window.electronAPI.saveChannels(parsed.channels),
+        window.electronAPI.saveUserData({
+          favoriteIds: parsed.favoriteIds,
+          historyEntries: parsed.historyEntries,
+          playlists: parsed.playlists,
+          epgSources: parsed.epgSources,
+        }),
+      ])
+    }
+  },
+  removeItem: async (name: string): Promise<void> => {
+    if (name === 'iptv-player-store') {
+      await Promise.all([
+        window.electronAPI.saveChannels([]),
+        window.electronAPI.saveUserData({ favoriteIds: [], historyEntries: [], playlists: [] }),
+      ])
+    }
+  },
 }
 
-export const useStore = create<PlayerStore>((set) => ({
-  groups: [],
-  currentChannel: null,
-  isPlaying: false,
-  searchQuery: '',
-  navTab: 'channels',
-  directStreams: [],
-  settingsOpen: false,
-  activePlaylistId: null,
+const PARTIALIZE_KEYS: (keyof PersistedChannelData)[] = [
+  'channels', 'directStreams', 'activePlaylistId',
+  'favoriteIds', 'historyEntries', 'playlists', 'epgSources',
+]
 
-  favoriteIds: [],
-  historyEntries: [],
-  playlists: [],
-  epgSources: [],
-  checkLogs: [],
-  checkRunning: false,
-  checkTotal: 0,
+export const useStore = create<PlayerStore>()(
+  persist(
+    (set, get) => ({
+      groups: [],
+      channels: [],
+      currentChannel: null,
+      isPlaying: false,
+      searchQuery: '',
+      navTab: 'channels',
+      directStreams: [],
+      settingsOpen: false,
+      activePlaylistId: null,
 
-  setChannels: (channels) => set({ groups: groupChannels(channels) }),
+      favoriteIds: [],
+      historyEntries: [],
+      playlists: [],
+      epgSources: [],
+      checkLogs: [],
+      checkRunning: false,
+      checkTotal: 0,
 
-  reorderGroup: (groupId: string, targetGroupId: string) => set((s) => {
-    const groups = [...s.groups]
-    const fromIdx = groups.findIndex((g) => g.name === groupId)
-    let toIdx = groups.findIndex((g) => g.name === targetGroupId)
-    if (fromIdx === -1 || toIdx === -1) return s
-    const [moved] = groups.splice(fromIdx, 1)
-    if (fromIdx < toIdx) toIdx--
-    groups.splice(toIdx, 0, moved)
-    const allChannels = groups.flatMap((g) => g.channels)
-    debouncedSave(allChannels)
-    return { groups }
-  }),
+      setChannels: (channels) => set({ groups: groupChannels(channels), channels }),
 
-  reorderChannel: (channelId: string, targetChannelId: string) => set((s) => {
-    const groups = s.groups.map((g) => ({ ...g, channels: [...g.channels] }))
-    let sourceGroupIdx = -1, sourceIdx = -1
-    let targetGroupIdx = -1, targetIdx = -1
-    for (let gi = 0; gi < groups.length; gi++) {
-      const ci = groups[gi].channels.findIndex((c) => c.id === channelId)
-      if (ci !== -1) { sourceGroupIdx = gi; sourceIdx = ci }
-      const tj = groups[gi].channels.findIndex((c) => c.id === targetChannelId)
-      if (tj !== -1) { targetGroupIdx = gi; targetIdx = tj }
-    }
-    if (sourceGroupIdx === -1 || targetGroupIdx === -1) return s
+      reorderGroup: (groupId: string, targetGroupId: string) => set((s) => {
+        const groups = [...s.groups]
+        const fromIdx = groups.findIndex((g) => g.name === groupId)
+        let toIdx = groups.findIndex((g) => g.name === targetGroupId)
+        if (fromIdx === -1 || toIdx === -1) return s
+        const [moved] = groups.splice(fromIdx, 1)
+        if (fromIdx < toIdx) toIdx--
+        groups.splice(toIdx, 0, moved)
+        const allChannels = groups.flatMap((g) => g.channels)
+        return { groups, channels: allChannels }
+      }),
 
-    const sourceChs = groups[sourceGroupIdx].channels
-    const [moved] = sourceChs.splice(sourceIdx, 1)
+      reorderChannel: (channelId: string, targetChannelId: string) => set((s) => {
+        const groups = s.groups.map((g) => ({ ...g, channels: [...g.channels] }))
+        let sourceGroupIdx = -1, sourceIdx = -1
+        let targetGroupIdx = -1, targetIdx = -1
+        for (let gi = 0; gi < groups.length; gi++) {
+          const ci = groups[gi].channels.findIndex((c) => c.id === channelId)
+          if (ci !== -1) { sourceGroupIdx = gi; sourceIdx = ci }
+          const tj = groups[gi].channels.findIndex((c) => c.id === targetChannelId)
+          if (tj !== -1) { targetGroupIdx = gi; targetIdx = tj }
+        }
+        if (sourceGroupIdx === -1 || targetGroupIdx === -1) return s
 
-    if (sourceGroupIdx === targetGroupIdx) {
-      const adjust = targetIdx > sourceIdx ? targetIdx - 1 : targetIdx
-      sourceChs.splice(adjust, 0, moved)
-    } else {
-      groups[targetGroupIdx].channels.splice(targetIdx, 0, moved)
-      if (sourceChs.length === 0) {
-        groups.splice(sourceGroupIdx, 1)
-      }
-    }
-    const allChannels = groups.flatMap((g) => g.channels)
-    debouncedSave(allChannels)
-    return { groups }
-  }),
-  setCurrentChannel: (channel) => set({ currentChannel: channel }),
-  setIsPlaying: (playing) => set({ isPlaying: playing }),
-  setSearchQuery: (q) => set({ searchQuery: q }),
-  setNavTab: (tab) => set({ navTab: tab }),
-  setSettingsOpen: (open) => set({ settingsOpen: open }),
-  setActivePlaylistId: (id) => set({ activePlaylistId: id }),
+        const sourceChs = groups[sourceGroupIdx].channels
+        const [moved] = sourceChs.splice(sourceIdx, 1)
 
-  addDirectStream: (url: string) => {
-    const id = `direct-${++directIdCounter}`
-    const label = url.length > 50 ? url.slice(0, 47) + '...' : url
-    const ch: Channel = { id, name: label, url, group: i18n.t('group.directPlay') }
-    set((s) => {
-      const allChannels = [...s.groups.flatMap((g) => g.channels), ch]
-      debouncedSave(allChannels)
-      return { directStreams: [...s.directStreams, ch], groups: groupChannels(allChannels) }
-    })
-    return ch
-  },
+        if (sourceGroupIdx === targetGroupIdx) {
+          const adjust = targetIdx > sourceIdx ? targetIdx - 1 : targetIdx
+          sourceChs.splice(adjust, 0, moved)
+        } else {
+          groups[targetGroupIdx].channels.splice(targetIdx, 0, moved)
+          if (sourceChs.length === 0) {
+            groups.splice(sourceGroupIdx, 1)
+          }
+        }
+        const allChannels = groups.flatMap((g) => g.channels)
+        return { groups, channels: allChannels }
+      }),
+      setCurrentChannel: (channel) => set({ currentChannel: channel }),
+      setIsPlaying: (playing) => set({ isPlaying: playing }),
+      setSearchQuery: (q) => set({ searchQuery: q }),
+      setNavTab: (tab) => set({ navTab: tab }),
+      setSettingsOpen: (open) => set({ settingsOpen: open }),
+      setActivePlaylistId: (id) => set({ activePlaylistId: id }),
 
-  removeChannel: (id: string) => set((s) => {
-    const allChannels = s.groups.flatMap((g) => g.channels)
-    const filtered = allChannels.filter((ch) => ch.id !== id)
-    const directStreams = s.directStreams.filter((ch) => ch.id !== id)
-    const favoriteIds = s.favoriteIds.filter((fid) => fid !== id)
-    debouncedSave(filtered)
-    debouncedSaveUserData({ favoriteIds, historyEntries: s.historyEntries, playlists: s.playlists })
-    return {
-      groups: groupChannels(filtered),
-      directStreams,
-      currentChannel: s.currentChannel?.id === id ? null : s.currentChannel,
-      favoriteIds,
-    }
-  }),
+      addDirectStream: (url: string) => {
+        const id = `direct-${++directIdCounter}`
+        const label = url.length > 50 ? url.slice(0, 47) + '...' : url
+        const ch: Channel = { id, name: label, url, group: i18n.t('group.directPlay') }
+        set((s) => {
+          const allChannels = [...s.channels, ch]
+          return {
+            directStreams: [...s.directStreams, ch],
+            groups: groupChannels(allChannels),
+            channels: allChannels,
+          }
+        })
+        return ch
+      },
 
-  toggleFavorite: (id) => set((s) => {
-    const exists = s.favoriteIds.includes(id)
-    const favoriteIds = exists
-      ? s.favoriteIds.filter((fid) => fid !== id)
-      : [...s.favoriteIds, id]
-    debouncedSaveUserData({ favoriteIds, historyEntries: s.historyEntries, playlists: s.playlists, epgSources: s.epgSources })
-    return { favoriteIds }
-  }),
+      removeChannel: (id: string) => set((s) => {
+        const filtered = s.channels.filter((ch) => ch.id !== id)
+        const directStreams = s.directStreams.filter((ch) => ch.id !== id)
+        const favoriteIds = s.favoriteIds.filter((fid) => fid !== id)
+        return {
+          groups: groupChannels(filtered),
+          channels: filtered,
+          directStreams,
+          currentChannel: s.currentChannel?.id === id ? null : s.currentChannel,
+          favoriteIds,
+        }
+      }),
 
-  addHistoryEntry: (channel) => set((s) => {
-    const { _groupName: _unused, ...cleanChannel } = channel as Channel & { _groupName?: string }
-    const filtered = s.historyEntries.filter((e) => e.channel.id !== cleanChannel.id)
-    const historyEntries = [{ channel: cleanChannel, watchedAt: Date.now() }, ...filtered].slice(0, 100)
-    debouncedSaveUserData({ favoriteIds: s.favoriteIds, historyEntries, playlists: s.playlists, epgSources: s.epgSources })
-    return { historyEntries }
-  }),
+      toggleFavorite: (id) => set((s) => {
+        const exists = s.favoriteIds.includes(id)
+        const favoriteIds = exists
+          ? s.favoriteIds.filter((fid) => fid !== id)
+          : [...s.favoriteIds, id]
+        return { favoriteIds }
+      }),
 
-  clearHistory: () => set((s) => {
-    debouncedSaveUserData({ favoriteIds: s.favoriteIds, historyEntries: [], playlists: s.playlists, epgSources: s.epgSources })
-    return { historyEntries: [] }
-  }),
+      addHistoryEntry: (channel) => set((s) => {
+        const { _groupName: _unused, ...cleanChannel } = channel as Channel & { _groupName?: string }
+        const filtered = s.historyEntries.filter((e) => e.channel.id !== cleanChannel.id)
+        const historyEntries = [{ channel: cleanChannel, watchedAt: Date.now() }, ...filtered].slice(0, 100)
+        return { historyEntries }
+      }),
 
-  addPlaylist: (meta) => set((s) => {
-    const playlists = [meta, ...s.playlists.filter((p) => p.id !== meta.id)]
-    debouncedSaveUserData({ favoriteIds: s.favoriteIds, historyEntries: s.historyEntries, playlists, epgSources: s.epgSources })
-    return { playlists }
-  }),
+      clearHistory: () => set({ historyEntries: [] }),
 
-  removePlaylist: (id) => set((s) => {
-    const playlists = s.playlists.filter((p) => p.id !== id)
-    const allChannels = s.groups.flatMap((g) => g.channels)
-    const filtered = allChannels.filter((ch) => ch.playlistId !== id)
-    debouncedSave(filtered)
-    debouncedSaveUserData({ favoriteIds: s.favoriteIds, historyEntries: s.historyEntries, playlists, epgSources: s.epgSources })
-    return {
-      playlists,
-      groups: groupChannels(filtered),
-      activePlaylistId: s.activePlaylistId === id ? null : s.activePlaylistId,
-      currentChannel: filtered.some((ch) => ch.id === s.currentChannel?.id) ? s.currentChannel : null,
-    }
-  }),
+      addPlaylist: (meta) => set((s) => {
+        const playlists = [meta, ...s.playlists.filter((p) => p.id !== meta.id)]
+        return { playlists }
+      }),
 
-  loadUserData: (data) => set({
-    favoriteIds: data.favoriteIds || [],
-    historyEntries: (data.historyEntries || []).map((entry) => {
-      const { _groupName: _unused, ...cleanChannel } = (entry.channel as Channel & { _groupName?: string })
-      return { ...entry, channel: cleanChannel as Channel }
+      removePlaylist: (id) => set((s) => {
+        const playlists = s.playlists.filter((p) => p.id !== id)
+        const filtered = s.channels.filter((ch) => ch.playlistId !== id)
+        return {
+          playlists,
+          groups: groupChannels(filtered),
+          channels: filtered,
+          activePlaylistId: s.activePlaylistId === id ? null : s.activePlaylistId,
+          currentChannel: filtered.some((ch) => ch.id === s.currentChannel?.id) ? s.currentChannel : null,
+        }
+      }),
+
+      loadUserData: (data) => set({
+        favoriteIds: data.favoriteIds || [],
+        historyEntries: (data.historyEntries || []).map((entry) => {
+          const { _groupName: _unused, ...cleanChannel } = (entry.channel as Channel & { _groupName?: string })
+          return { ...entry, channel: cleanChannel as Channel }
+        }),
+        playlists: data.playlists || [],
+        epgSources: (data as UserData).epgSources || [],
+      }),
+
+      epgCache: {},
+
+      loadEpg: async (tvgUrl) => {
+        if (!tvgUrl) return
+        const programs = await window.electronAPI.fetchEpg(tvgUrl)
+        if (programs.length > 0) {
+          set((s) => ({ epgCache: { ...s.epgCache, [tvgUrl]: programs as EpgProgram[] } }))
+        }
+      },
+
+      importEpgFromUrl: async (url) => {
+        const result = await window.electronAPI.importEpgFromUrl(url)
+        if (result.success) {
+          const programs = await window.electronAPI.fetchEpg(url)
+          set((s) => {
+            const exists = s.epgSources.find((es) => es.url === url)
+            const newSource: EpgSource = { url, importedAt: Date.now(), programCount: result.count, tvgIds: result.tvgIds }
+            const epgSources = exists
+              ? s.epgSources.map((es) => es.url === url ? newSource : es)
+              : [...s.epgSources, newSource]
+            return { epgSources, epgCache: { ...s.epgCache, [url]: programs as EpgProgram[] } }
+          })
+        }
+        return result
+      },
+
+      removeEpgSource: (url) => set((s) => {
+        const epgSources = s.epgSources.filter((es) => es.url !== url)
+        const { [url]: _, ...epgCache } = s.epgCache
+        return { epgSources, epgCache }
+      }),
+
+      appendCheckLog: (log) => set((s) => ({ checkLogs: [...s.checkLogs, log], checkTotal: log.total })),
+      setCheckRunning: (v) => set({ checkRunning: v }),
+      resetCheck: () => set({ checkLogs: [], checkRunning: false, checkTotal: 0 }),
+
+      updateChannelStatus: (id, status, lastCheckedAt) => set((s) => {
+        const groups = s.groups.map((g) => ({
+          ...g,
+          channels: g.channels.map((ch) =>
+            ch.id === id ? { ...ch, status, lastCheckedAt } : ch,
+          ),
+        }))
+        const allChannels = groups.flatMap((g) => g.channels)
+        return { groups, channels: allChannels }
+      }),
     }),
-    playlists: data.playlists || [],
-    epgSources: (data as UserData).epgSources || [],
-  }),
-
-  epgCache: {},
-
-  loadEpg: async (tvgUrl) => {
-    if (!tvgUrl) return
-    const programs = await window.electronAPI.fetchEpg(tvgUrl)
-    if (programs.length > 0) {
-      set((s) => ({ epgCache: { ...s.epgCache, [tvgUrl]: programs as EpgProgram[] } }))
-    }
-  },
-
-  importEpgFromUrl: async (url) => {
-    const result = await window.electronAPI.importEpgFromUrl(url)
-    if (result.success) {
-      const programs = await window.electronAPI.fetchEpg(url)
-      set((s) => {
-        const exists = s.epgSources.find((es) => es.url === url)
-        const newSource: EpgSource = { url, importedAt: Date.now(), programCount: result.count, tvgIds: result.tvgIds }
-        const epgSources = exists
-          ? s.epgSources.map((es) => es.url === url ? newSource : es)
-          : [...s.epgSources, newSource]
-        debouncedSaveUserData({ favoriteIds: s.favoriteIds, historyEntries: s.historyEntries, playlists: s.playlists, epgSources })
-        return { epgSources, epgCache: { ...s.epgCache, [url]: programs as EpgProgram[] } }
-      })
-    }
-    return result
-  },
-
-  removeEpgSource: (url) => set((s) => {
-    const epgSources = s.epgSources.filter((es) => es.url !== url)
-    const { [url]: _, ...epgCache } = s.epgCache
-    debouncedSaveUserData({ favoriteIds: s.favoriteIds, historyEntries: s.historyEntries, playlists: s.playlists, epgSources })
-    return { epgSources, epgCache }
-  }),
-
-  appendCheckLog: (log) => set((s) => ({ checkLogs: [...s.checkLogs, log], checkTotal: log.total })),
-  setCheckRunning: (v) => set({ checkRunning: v }),
-  resetCheck: () => set({ checkLogs: [], checkRunning: false, checkTotal: 0 }),
-
-  updateChannelStatus: (id, status, lastCheckedAt) => set((s) => {
-    const groups = s.groups.map((g) => ({
-      ...g,
-      channels: g.channels.map((ch) =>
-        ch.id === id ? { ...ch, status, lastCheckedAt } : ch,
-      ),
-    }))
-    const allChannels = groups.flatMap((g) => g.channels)
-    debouncedSave(allChannels)
-    return { groups }
-  }),
-}))
+    {
+      name: 'iptv-player-store',
+      storage: createJSONStorage(() => ipcStorage),
+      partialize: (state) => {
+        const partial: Record<string, unknown> = {}
+        for (const key of PARTIALIZE_KEYS) {
+          partial[key] = state[key]
+        }
+        return partial as PersistedChannelData
+      },
+      merge: (persistedState, currentState) => {
+        const data = persistedState as Partial<PersistedChannelData>
+        const channels = data.channels || []
+        return {
+          ...currentState,
+          ...data,
+          groups: groupChannels(channels),
+          channels,
+        }
+      },
+    },
+  ),
+)

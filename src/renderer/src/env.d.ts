@@ -122,6 +122,17 @@ interface ElectronAPI {
   clearAllData: () => Promise<{ success: boolean; error?: string }>
   backupData: () => Promise<{ success: boolean; error?: string }>
   restoreData: () => Promise<{ success: boolean; info?: { channels: number; playlists: number }; error?: string }>
+  getLogoUrl: (url: string) => Promise<string>
+  cacheLogos: (urls: string[]) => Promise<boolean>
+  minimizeWindow: () => Promise<void>
+  maximizeWindow: () => Promise<void>
+  closeWindow: () => Promise<void>
+  isWindowMaximized: () => Promise<boolean>
+  showAppMenu: (menuName: string, x: number, y: number) => Promise<void>
+  onWindowMaximized: (callback: (maximized: boolean) => void) => () => void
+  onFullscreenChanged: (callback: (fullscreen: boolean) => void) => () => void
+  onMenuAction: (callback: (action: string) => void) => () => void
+  onMenuClosed: (callback: () => void) => () => void
   onChannelsCheckProgress: (callback: (progress: { checked: number; total: number }) => void) => void
   onChannelsCheckLog: (callback: (log: { name: string; url: string; protocol: string; result: string; checked: number; total: number }) => void) => void
   onChannelsCheckDone: (callback: (channels: Channel[]) => void) => void

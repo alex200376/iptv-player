@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { parseM3U, urlToId } from '../m3uParser'
 import { saveChannels, loadChannels } from '../channelStore'
+import { getLocalLogoUrl, queueCacheLogos } from '../logoCache'
 import { saveUserData, loadUserData } from '../userDataStore'
 import { readSettings, writeSettings } from '../settingsStore'
 import type { Channel } from '../m3uParser'
@@ -495,8 +496,10 @@ export function registerPlaylistIpc() {
     const state = getState()
     const myToken = ++_checkCancelToken
 
+    let batchCount = 0
     for (let i = 0; i < channels.length; i += batchSize) {
       if (myToken !== _checkCancelToken) break
+      batchCount++
 
       const batch = channels.slice(i, i + batchSize)
 
@@ -532,7 +535,10 @@ export function registerPlaylistIpc() {
         }
       }
 
-      await saveChannels(channels)
+      // Save every 10 batches (50 channels) to reduce disk I/O
+      if (batchCount % 10 === 0) {
+        await saveChannels(channels)
+      }
 
       if (state.mainWindow && !state.mainWindow.isDestroyed()) {
         state.mainWindow.webContents.send('channels-check-progress', {
@@ -542,6 +548,9 @@ export function registerPlaylistIpc() {
         })
       }
     }
+
+    // Final save for any unsaved batches
+    await saveChannels(channels)
 
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
       state.mainWindow.webContents.send('channels-check-done', channels)
@@ -577,9 +586,23 @@ export function registerPlaylistIpc() {
       const playlistId = nextPlaylistId()
       const playlistName = playlistNameFromPath(filePath)
       const channels = await parseM3U(content, playlistId)
+      queueCacheLogos(channels.map((ch) => ch.logo).filter((l): l is string => !!l))
       return { channels, playlistId, playlistName, filePath }
     } catch (e) {
       return { channels: [], error: `\u8bfb\u53d6\u6587\u4ef6\u5931\u8d25: ${(e as Error).message}` }
+    }
+  })
+
+  ipcMain.handle('import-m3u-from-file', async (_event, filePath: string) => {
+    try {
+      const content = readFileSync(filePath, 'utf-8')
+      const playlistId = nextPlaylistId()
+      const playlistName = playlistNameFromPath(filePath)
+      const channels = await parseM3U(content, playlistId)
+      queueCacheLogos(channels.map((ch) => ch.logo).filter((l): l is string => !!l))
+      return { channels, playlistId, playlistName, filePath }
+    } catch (e) {
+      return { channels: [], error: `讀取檔案失敗: ${(e as Error).message}` }
     }
   })
 
@@ -614,6 +637,8 @@ export function registerPlaylistIpc() {
           playlistId,
         })
       }
+
+      queueCacheLogos(channels.map((ch) => ch.logo).filter((l): l is string => !!l))
 
       return {
         channels,
@@ -670,7 +695,6 @@ export function registerPlaylistIpc() {
         if (ch.group) attrs.push(`group-title="${ch.group}"`)
         m3u += `#EXTINF:-1 ${attrs.join(' ')},${ch.name || '\u672a\u77e5'}\n${ch.url}\n`
       }
-      const { writeFileSync } = require('fs')
       writeFileSync(result.filePath, m3u, 'utf-8')
       return { success: true }
     } catch (e) {
@@ -754,5 +778,14 @@ export function registerPlaylistIpc() {
     } catch (e) {
       return { success: false, error: (e as Error).message }
     }
+  })
+
+  ipcMain.handle('get-logo-url', async (_event, url: string) => {
+    return getLocalLogoUrl(url) || url
+  })
+
+  ipcMain.handle('cache-logos', async (_event, urls: string[]) => {
+    queueCacheLogos(urls)
+    return true
   })
 }

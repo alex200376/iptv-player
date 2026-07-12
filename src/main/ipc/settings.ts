@@ -18,6 +18,11 @@ export function registerSettingsIpc() {
   ipcMain.handle('save-settings', (_event, s: Record<string, unknown>) => {
     writeSettings(s as any)
     startPlaylistRefreshTimer()
+    const state = getState()
+    const lang = (s as any).language
+    if (lang && state.player && !state.player.destroyed) {
+      try { state.player.setLocale(lang === 'zh-CN' ? 'zh-CN' : 'en') } catch (e) { console.error('[settings] setLocale:', e) }
+    }
     return true
   })
 

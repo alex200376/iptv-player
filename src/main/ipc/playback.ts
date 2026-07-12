@@ -67,11 +67,12 @@ async function doPlay(
   }
 
   async function createPlayer(): Promise<{ success: boolean; error?: string }> {
+    const vlcLocale = settings.language === 'zh-CN' ? 'zh-CN' : 'en'
     state.player = new VlcPlayer({
       window: state.mainWindow!,
       container: '#player',
       vlcDir: state.vlcDir!,
-      locale: 'zh-CN',
+      locale: vlcLocale,
       hardwareAcceleration: settings.hardwareAcceleration,
     })
     if (currentPlayId !== _playId) return { success: false }
@@ -94,11 +95,11 @@ async function doPlay(
     state.player.play()
     state.currentUrl = url
 
-    // Watchdog: if playing event doesn't fire within 12s, kill player and report error.
-    // This bounds the worst-case freeze to ~12s instead of VLC's default 20-30s.
+    // Watchdog: if playing event doesn't fire within 15s, kill player and report error.
+    // This bounds the worst-case freeze to ~15s instead of VLC's default 20-30s.
     watchdogTimer = setTimeout(() => {
       if (currentPlayId !== _playId) return
-      console.warn('[play] watchdog: no playing event within 12s, killing player')
+      console.warn('[play] watchdog: no playing event within 15s, killing player')
       if (state.player) {
         try { state.player.removeAllListeners(); state.player.destroy() } catch (e) { console.error('[playback] watchdog kill failed:', e) }
         state.player = null
@@ -106,7 +107,7 @@ async function doPlay(
       if (state.mainWindow && !state.mainWindow.isDestroyed()) {
         state.mainWindow.webContents.send('player-error')
       }
-    }, 12000)
+    }, 15000)
 
     return { success: true }
   }

@@ -29,7 +29,7 @@ interface SettingsStore {
 const DEFAULTS: Settings = {
   theme: 'dark',
   hardwareAcceleration: 'd3d11va',
-  networkCache: 2000,
+  networkCache: 400,
   fontSize: 'normal',
   compatibilityMode: false,
   autoReconnect: true,

@@ -81,6 +81,7 @@ const api = {
 
   importM3U: () => ipcRenderer.invoke('import-m3u'),
   importM3UFromUrl: (url: string) => ipcRenderer.invoke('import-m3u-url', url),
+  importM3UFromFile: (filePath: string) => ipcRenderer.invoke('import-m3u-from-file', filePath),
   hidePlayer: () => ipcRenderer.invoke('hide-player'),
   hidePlayerWindow: () => ipcRenderer.invoke('hide-player-window'),
   showPlayerWindow: () => ipcRenderer.invoke('show-player-window'),
@@ -127,6 +128,8 @@ const api = {
   clearAllData: () => ipcRenderer.invoke('clear-all-data'),
   backupData: () => ipcRenderer.invoke('backup-data'),
   restoreData: () => ipcRenderer.invoke('restore-data'),
+  getLogoUrl: (url: string) => ipcRenderer.invoke('get-logo-url', url),
+  cacheLogos: (urls: string[]) => ipcRenderer.invoke('cache-logos', urls),
   onChannelsCheckProgress: (
     callback: (progress: { checked: number; total: number }) => void,
   ) => on('channels-check-progress', callback),
@@ -141,6 +144,22 @@ const api = {
   togglePip: () => ipcRenderer.invoke('toggle-pip'),
   onPipStateChange: (callback: (active: boolean) => void) =>
     on<boolean>('pip-state-changed', callback),
+
+  // Window controls
+  minimizeWindow: () => ipcRenderer.invoke('minimize-window'),
+  maximizeWindow: () => ipcRenderer.invoke('maximize-window'),
+  closeWindow: () => ipcRenderer.invoke('close-window'),
+  isWindowMaximized: () => ipcRenderer.invoke('is-window-maximized'),
+  showAppMenu: (menuName: string, x: number, y: number) =>
+    ipcRenderer.invoke('show-app-menu', menuName, x, y),
+  onWindowMaximized: (callback: (maximized: boolean) => void) =>
+    on<boolean>('window-maximized', callback),
+  onFullscreenChanged: (callback: (fullscreen: boolean) => void) =>
+    on<boolean>('fullscreen-changed', callback),
+  onMenuAction: (callback: (action: string) => void) =>
+    on<string>('menu-action', callback),
+  onMenuClosed: (callback: () => void) =>
+    on<void>('menu-closed', callback),
 
   // Player state events — all return unsubscribe functions.
   onPlayerBuffering: (callback: () => void): (() => void) => {

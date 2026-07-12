@@ -395,7 +395,8 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                          const newSettings = useSettingsStore.getState().settings
                          i18n.changeLanguage(newSettings.language)
                          document.documentElement.lang = newSettings.language
-                         alert(t('settings.restoreSuccess', { channels: info.channels, playlists: info.playlists }))
+                          const restored = result.info
+                          alert(t('settings.restoreSuccess', { channels: restored.channels, playlists: restored.playlists }))
                          onClose?.()
                        } else if (result.error) {
                          alert(result.error)

@@ -2,6 +2,7 @@ import { ipcMain, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { getBinding } from 'electron-vlc-player'
 import { getState, ensureEmbedded } from './shared'
+import { showMenuPopup } from '../menu'
 import { t } from '../i18n'
 
 export function registerWindowIpc() {
@@ -32,6 +33,31 @@ export function registerWindowIpc() {
 
   ipcMain.on('hide-overlay', () => { try { getState().player?.hideOverlay() } catch (e) { console.error('[window] hideOverlay:', e) } })
   ipcMain.on('show-overlay', () => { try { getState().player?.showOverlay() } catch (e) { console.error('[window] showOverlay:', e) } })
+
+  ipcMain.handle('minimize-window', () => {
+    getState().mainWindow?.minimize()
+  })
+
+  ipcMain.handle('maximize-window', () => {
+    const win = getState().mainWindow
+    if (!win) return
+    if (win.isMaximized()) win.unmaximize()
+    else win.maximize()
+  })
+
+  ipcMain.handle('close-window', () => {
+    getState().mainWindow?.close()
+  })
+
+  ipcMain.handle('is-window-maximized', () => {
+    return getState().mainWindow?.isMaximized() ?? false
+  })
+
+  ipcMain.handle('show-app-menu', (_event, menuName: string, x: number, y: number) => {
+    const win = getState().mainWindow
+    if (!win) return
+    showMenuPopup(menuName, win, x, y)
+  })
 
   ipcMain.handle('toggle-fullscreen', () => {
     const state = getState()

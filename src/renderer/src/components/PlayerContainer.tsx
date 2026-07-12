@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { useStore } from '../stores/useStore'
 import EpgOverlay from './EpgOverlay'
+import LogoImg from './LogoImg'
 import type { Channel, EpgProgram } from '../types'
 import { useTranslation } from 'react-i18next'
 
@@ -110,7 +111,7 @@ export default function PlayerContainer() {
       errorTimerRef.current = setTimeout(() => {
         setPlayerError(t('player.bufferingTimeout'))
         setIsBuffering(false)
-      }, 8000)
+      }, 20000)
     })
 
     const offPlaying = window.electronAPI.onPlayerPlaying(() => {
@@ -187,7 +188,7 @@ export default function PlayerContainer() {
         >
           <div className="flex items-center gap-2">
             {currentChannel.logo && (
-              <img src={currentChannel.logo} alt="" className="w-5 h-5 rounded object-contain" />
+              <LogoImg src={currentChannel.logo} className="w-5 h-5 rounded object-contain" />
             )}
             <span className="text-sm font-medium text-white drop-shadow">
               {currentChannel.name}
@@ -267,11 +268,9 @@ export default function PlayerContainer() {
 
             <div className="flex items-center gap-3">
               {currentChannel.logo ? (
-                <img
+                <LogoImg
                   src={currentChannel.logo}
-                  alt=""
                   className="w-9 h-9 rounded-full object-contain flex-shrink-0 bg-background"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
                 />
               ) : (
                 <span className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-muted text-muted-foreground">

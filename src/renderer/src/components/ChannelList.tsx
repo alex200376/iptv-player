@@ -4,6 +4,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useStore, groupChannels } from '../stores/useStore'
 import ContextMenu from './ContextMenu'
 import { usePlayChannel } from '../hooks/usePlayChannel'
+import { useLogoUrl } from '../hooks/useLogoUrl'
 import type { Channel, ChannelGroup, EpgProgram } from '../types'
 import { useTranslation } from 'react-i18next'
 import { getGroupDisplayName } from '../utils/groupLabels'
@@ -229,7 +230,7 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
                     <span className="ml-auto text-xs">{group.channels.length}</span>
                   </Accordion.Trigger>
                 </Accordion.Header>
-                <Accordion.Content className="data-[state=open]:animate-[slideDown_150ms_ease-out] data-[state=closed]:animate-[slideUp_150ms_ease-out]">
+                <Accordion.Content className="overflow-x-hidden data-[state=open]:animate-[slideDown_150ms_ease-out] data-[state=closed]:animate-[slideUp_150ms_ease-out]">
                   <ChannelGroupChannels
                     channels={group.channels}
                     currentChannel={currentChannel}
@@ -347,7 +348,7 @@ function ChannelGroupChannels({
 
   if (!needsVirtual) {
     return (
-      <div>
+      <div className="overflow-x-hidden">
         {channels.map((ch, idx) => (
           <ChannelRowWrapper
             key={ch.id}
@@ -374,7 +375,7 @@ function ChannelGroupChannels({
   }
 
   return (
-    <div ref={parentRef} className="overflow-y-auto relative" style={{ maxHeight: '55vh' }}>
+    <div ref={parentRef} className="overflow-y-auto overflow-x-hidden relative" style={{ maxHeight: '55vh' }}>
       <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
         {virtualizer.getVirtualItems().map((virtualRow) => {
           const ch = channels[virtualRow.index]
@@ -416,7 +417,7 @@ function ChannelGroupChannels({
   )
 }
 
-function ChannelRowWrapper({
+const ChannelRowWrapper = memo(function ChannelRowWrapper({
   ch,
   idx,
   dragChId,
@@ -457,6 +458,7 @@ function ChannelRowWrapper({
 
   const isFav = favoriteIds.includes(ch.id)
   const isActive = currentChannel?.id === ch.id
+  const logoUrl = useLogoUrl(ch.logo)
   const isDragging = dragChId === ch.id
 
   const currentEpg = useMemo(() => {
@@ -499,7 +501,7 @@ function ChannelRowWrapper({
           </span>
           {ch.logo ? (
             <img
-              src={ch.logo}
+              src={logoUrl}
               alt=""
               loading="lazy"
               className="w-7 h-7 rounded-full object-contain flex-shrink-0 ml-0.5"
@@ -554,7 +556,7 @@ function ChannelRowWrapper({
       )}
     </div>
   )
-}
+})
 
 export default memo(ChannelList)
 

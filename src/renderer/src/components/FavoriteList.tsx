@@ -3,6 +3,7 @@ import { useStore } from '../stores/useStore'
 import ContextMenu from './ContextMenu'
 import { useState } from 'react'
 import { usePlayChannel } from '../hooks/usePlayChannel'
+import LogoImg from './LogoImg'
 import { useTranslation } from 'react-i18next'
 
 export default function FavoriteList() {
@@ -55,7 +56,7 @@ export default function FavoriteList() {
           }`}
         >
           {ch.logo ? (
-            <img src={ch.logo} alt="" loading="lazy" className="w-5 h-5 rounded-tv-sm object-contain flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+            <LogoImg src={ch.logo} className="w-5 h-5 rounded-tv-sm object-contain flex-shrink-0" />
           ) : (
             <span className="w-5 h-5 rounded-tv-sm flex items-center justify-center flex-shrink-0">
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
