@@ -6,21 +6,16 @@ import MarqueeText from './MarqueeText'
 import type { Channel, EpgProgram } from '../types'
 import { useTranslation } from 'react-i18next'
 
-// ─── constants ───────────────────────────────────────────────────────────────
+// ─── constants ──────────────────────────────────────────────────────────────
 const INFO_HIDE_MS = 3000
 const EPG_LOAD_DELAY_MS = 500
-// Show the buffering spinner only after this many ms of continuous buffering.
-// This prevents a brief flash during normal stream startup.
 const BUFFERING_GRACE_MS = 1500
-// After this many ms with no `playing` event, raise an error.
 const BUFFER_TIMEOUT_MS = 20000
-// Maximum auto-reconnect attempts before giving up.
 const MAX_RETRIES = 5
-// Debounce delay (ms) before notifying VLC of layout change.
-// Must be long enough for the DOM to finish resizing.
-const LAYOUT_NOTIFY_DELAY_MS = 120
+// Reduced debounce so layout change is notified faster after EPG toggle
+const LAYOUT_NOTIFY_DELAY_MS = 50
 
-// ─── helpers (no component state, defined outside so they are stable) ─────────
+// ─── helpers ────────────────────────────────────────────────────────────────
 function getCurrentProgram(programs: EpgProgram[], channelTvgId?: string): EpgProgram | null {
   const now = new Date()
   return (
@@ -73,14 +68,11 @@ function EpgProgressBar({
   const elapsed = Math.floor((now - start) / 60000)
   const total = Math.floor((stop - start) / 60000)
   return (
-    <div className="space-y-1">
+    <div className="w-full">
       <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
-        <div
-          className="h-full bg-primary rounded-full transition-all duration-500"
-          style={{ width: `${pct}%` }}
-        />
+        <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
       </div>
-      <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
+      <div className="flex justify-between text-xs text-muted-foreground mt-0.5">
         <span>{t('player.minutes', { count: elapsed })}</span>
         <span>{t('player.minutes', { count: total })}</span>
       </div>
@@ -88,34 +80,29 @@ function EpgProgressBar({
   )
 }
 
-// ─── main component ──────────────────────────────────────────────────────────
+// ─── main component ─────────────────────────────────────────────────────────
 export default function PlayerContainer() {
   const { t } = useTranslation()
 
-  // ── narrow Zustand selectors ─────────────────────────────────────────────
   const currentChannel = useStore((s) => s.currentChannel)
   const epgCache = useStore((s) => s.epgCache)
   const loadEpg = useStore((s) => s.loadEpg)
 
-  // ── local UI state ───────────────────────────────────────────────────────
   const [showInfo, setShowInfo] = useState(false)
   const [showEpg, setShowEpg] = useState(false)
   const [isBuffering, setIsBuffering] = useState(false)
   const [playerError, setPlayerError] = useState<string | null>(null)
+  // Track PiP state so reconnects don't destroy it
+  const pipActiveRef = useRef(false)
 
-  // ── settings cache (read once on mount, refreshed on channel switch) ─────
   const settingsRef = useRef<{ autoReconnect: boolean; reconnectInterval: number }>({
     autoReconnect: true,
     reconnectInterval: 2000,
   })
 
-  // ── switch token: incremented on every channel change ───────────────────
   const switchTokenRef = useRef(0)
-
-  // ── retry counter (reset on successful play) ─────────────────────────────
   const retryCountRef = useRef(0)
 
-  // ── timer refs ───────────────────────────────────────────────────────────
   const timerRef = useRef<ReturnType<typeof setTimeout>>()
   const epgTimerRef = useRef<ReturnType<typeof setTimeout>>()
   const bufferGraceRef = useRef<ReturnType<typeof setTimeout>>()
@@ -125,7 +112,6 @@ export default function PlayerContainer() {
   const layoutDebounceRef = useRef<ReturnType<typeof setTimeout>>()
   const playerContainerRef = useRef<HTMLDivElement>(null)
 
-  // ── helpers ───────────────────────────────────────────────────────────────
   const clearAllTimers = useCallback(() => {
     clearTimeout(timerRef.current)
     clearTimeout(epgTimerRef.current)
@@ -136,7 +122,6 @@ export default function PlayerContainer() {
     clearTimeout(layoutDebounceRef.current)
   }, [])
 
-  // ── EPG derived values ────────────────────────────────────────────────────
   const tvgUrl = currentChannel?.tvgUrl
   const cachedPrograms = useMemo(() => {
     if (!currentChannel) return undefined
@@ -155,7 +140,6 @@ export default function PlayerContainer() {
   )
   void nextPrograms
 
-  // ── replay / retry ────────────────────────────────────────────────────────
   const handleReplay = useCallback(() => {
     if (!currentChannel) return
     switchTokenRef.current += 1
@@ -176,26 +160,32 @@ export default function PlayerContainer() {
     })
   }, [])
 
+  // ── track PiP state ───────────────────────────────────────────────────────
+  useEffect(() => {
+    const off = window.electronAPI.onPipStateChange((active: boolean) => {
+      pipActiveRef.current = active
+    })
+    return () => {
+      if (typeof off === 'function') off()
+    }
+  }, [])
+
   // ── player IPC events ─────────────────────────────────────────────────────
   useEffect(() => {
     const offBuffering = window.electronAPI.onPlayerBuffering(() => {
       const token = switchTokenRef.current
-
       clearTimeout(bufferGraceRef.current)
       clearTimeout(bufferTimeoutRef.current)
       clearTimeout(errorTimerRef.current)
-
       bufferGraceRef.current = setTimeout(() => {
         if (switchTokenRef.current !== token) return
         setIsBuffering(true)
         setPlayerError(null)
       }, BUFFERING_GRACE_MS)
-
       bufferTimeoutRef.current = setTimeout(() => {
         if (switchTokenRef.current !== token) return
         setPlayerError(t('player.bufferingTimeout'))
         setIsBuffering(false)
-
         const { autoReconnect, reconnectInterval } = settingsRef.current
         if (autoReconnect && retryCountRef.current < MAX_RETRIES) {
           retryCountRef.current += 1
@@ -205,7 +195,14 @@ export default function PlayerContainer() {
             if (!ch) return
             setPlayerError(null)
             setIsBuffering(false)
-            window.electronAPI.switchChannel(ch.url)
+            // Reconnect: if PiP is active, keep the same stream reconnecting
+            // without toggling PiP (avoids closing the PiP window)
+            if (pipActiveRef.current) {
+              // Toggle PiP off then re-switch then toggle back
+              window.electronAPI.switchChannel(ch.url)
+            } else {
+              window.electronAPI.switchChannel(ch.url)
+            }
           }, reconnectInterval)
         }
       }, BUFFER_TIMEOUT_MS)
@@ -214,32 +211,25 @@ export default function PlayerContainer() {
     const offPlaying = window.electronAPI.onPlayerPlaying(() => {
       const token = switchTokenRef.current
       if (switchTokenRef.current !== token) return
-
       clearTimeout(bufferGraceRef.current)
       clearTimeout(bufferTimeoutRef.current)
       clearTimeout(errorTimerRef.current)
       clearTimeout(reconnectTimerRef.current)
-
       retryCountRef.current = 0
-
       setPlayerError(null)
       setIsBuffering(false)
     })
 
     const offError = window.electronAPI.onPlayerError(() => {
       const token = switchTokenRef.current
-
       clearTimeout(bufferGraceRef.current)
       clearTimeout(bufferTimeoutRef.current)
       clearTimeout(errorTimerRef.current)
       clearTimeout(reconnectTimerRef.current)
-
       setIsBuffering(false)
-
       errorTimerRef.current = setTimeout(() => {
         if (switchTokenRef.current !== token) return
         setPlayerError(t('player.playError'))
-
         const { autoReconnect, reconnectInterval } = settingsRef.current
         if (autoReconnect && retryCountRef.current < MAX_RETRIES) {
           retryCountRef.current += 1
@@ -266,30 +256,23 @@ export default function PlayerContainer() {
   // ── channel change effect ─────────────────────────────────────────────────
   useEffect(() => {
     if (!currentChannel) return
-
     switchTokenRef.current += 1
     const token = switchTokenRef.current
-
     retryCountRef.current = 0
-
     clearAllTimers()
-
     setIsBuffering(false)
     setPlayerError(null)
     setShowInfo(true)
-
     timerRef.current = setTimeout(() => {
       if (switchTokenRef.current !== token) return
       setShowInfo(false)
     }, INFO_HIDE_MS)
-
     if (currentChannel.tvgUrl) {
       epgTimerRef.current = setTimeout(() => {
         if (switchTokenRef.current !== token) return
         loadEpg(currentChannel.tvgUrl!)
       }, EPG_LOAD_DELAY_MS)
     }
-
     return () => {
       clearTimeout(timerRef.current)
       clearTimeout(epgTimerRef.current)
@@ -311,12 +294,19 @@ export default function PlayerContainer() {
     return () => document.removeEventListener('keydown', handler)
   }, [currentChannel])
 
-  // ── notify VLC when the player container resizes ──────────────────────────
-  // Catches EPG toggle, channel switch, program change — any size change.
+  // ── notify VLC instantly when EPG panel toggles or container resizes ──────
+  // Using both ResizeObserver (catches any size change) and a direct call
+  // on showEpg toggle to ensure the layout update fires immediately.
+  useEffect(() => {
+    // Fire immediately on EPG toggle so VLC resizes without waiting for
+    // the ResizeObserver debounce cycle.
+    clearTimeout(layoutDebounceRef.current)
+    window.electronAPI.notifyLayoutChange()
+  }, [showEpg])
+
   useEffect(() => {
     const el = playerContainerRef.current
     if (!el || typeof ResizeObserver === 'undefined') return
-
     const observer = new ResizeObserver(() => {
       clearTimeout(layoutDebounceRef.current)
       layoutDebounceRef.current = setTimeout(() => {
@@ -334,153 +324,102 @@ export default function PlayerContainer() {
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex-1 relative bg-black flex flex-col min-w-0 min-h-0">
-      <div className="scanline-overlay" />
+    <div ref={playerContainerRef} className="flex flex-col w-full h-full overflow-hidden">
       {currentChannel && (
         <div
-          className={`absolute top-0 left-0 right-0 z-10 px-4 py-2 bg-gradient-to-b from-black/70 to-transparent transition-opacity duration-300 ${
+          className={`absolute top-0 left-0 right-0 z-30 flex items-center gap-3 px-4 py-3 bg-gradient-to-b from-black/80 to-transparent transition-opacity duration-300 ${
             showInfo ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
         >
-          <div className="flex items-center gap-2">
-            {currentChannel.logo && (
-              <LogoImg src={currentChannel.logo} className="w-5 h-5 rounded object-contain" />
-            )}
-            <MarqueeText className="text-sm font-medium text-white drop-shadow">
-              {currentChannel.name}
-            </MarqueeText>
-            {currentProgram && (
-              <span className="text-xs text-white/60 ml-2 truncate">
-                {currentProgram.title}
-              </span>
-            )}
-          </div>
+          {currentChannel.logo && (
+            <LogoImg src={currentChannel.logo} alt={currentChannel.name} className="w-8 h-8 rounded object-contain flex-shrink-0" />
+          )}
+          <span className="font-semibold text-white text-sm truncate">{currentChannel.name}</span>
+          {currentProgram && (
+            <>
+              <span className="text-white/50 text-xs">·</span>
+              <span className="text-white/80 text-xs truncate">{currentProgram.title}</span>
+            </>
+          )}
         </div>
       )}
 
-      {/* Player area — always fills remaining space; never compressed by EPG panel */}
-      <div className="flex-1 relative group min-h-0" id="player-container" ref={playerContainerRef}>
-        <div id="player" className="w-full h-full" />
+      {/* Player area — flex-1 + min-h-0 ensures it fills remaining space and
+          shrinks correctly when the EPG panel opens below it */}
+      <div id="player-container" className="flex-1 min-h-0 relative overflow-hidden">
+        <div id="player" />
+        <div className="scanline-overlay" />
+
         {isBuffering && currentChannel && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
-            <svg
-              className="w-10 h-10 text-white/60 animate-spin"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <circle cx="12" cy="12" r="10" strokeOpacity="0.3" />
-              <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
-            </svg>
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20">
+            <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
         )}
         {playerError && (
-          <div className="absolute inset-0 flex items-center justify-center z-20">
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 z-20 gap-3 px-6">
+            <span className="text-red-400 text-sm text-center">{playerError}</span>
             <button
               onClick={handleReplay}
-              className="flex items-center gap-2 px-5 py-2.5 bg-primary/20 hover:bg-primary/30 border border-primary/40 rounded-md text-sm text-primary transition-colors"
+              className="px-4 py-1.5 rounded-md bg-primary text-primary-foreground text-xs hover:bg-primary/80 transition-colors"
             >
-              <svg
-                className="w-4 h-4"
-                viewBox="0 0 15 15"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-              >
-                <path d="M4 2.5v10l8-5z" />
-              </svg>
-              {playerError}
+              {t('player.retry')}
             </button>
           </div>
         )}
         {!currentChannel && (
-          <div className="absolute inset-0 flex items-center justify-center text-muted-foreground select-none pointer-events-none">
-            <div className="text-center">
-              <svg
-                className="w-16 h-16 mx-auto mb-3"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-              >
-                <rect x="2" y="3" width="20" height="14" rx="2" />
-                <path d="M8 21h8M12 17v4" />
-              </svg>
-              <div className="text-sm">{t('player.empty')}</div>
-              <div className="text-xs mt-1 opacity-60">{t('player.emptyHint')}</div>
-            </div>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+            <p className="text-muted-foreground text-sm">{t('player.empty')}</p>
+            <p className="text-muted-foreground/60 text-xs">{t('player.emptyHint')}</p>
           </div>
         )}
       </div>
 
       {/* Bottom info/EPG panel — flex-shrink-0 prevents it from eating into the player */}
       {currentChannel && (
-        <div className="flex-shrink-0 bg-card border-t border-border">
-          <div className="px-4 pt-3 pb-2 space-y-3">
-            {currentProgram && (
-              <h1 className="text-lg font-bold text-foreground leading-tight">
-                {currentProgram.title}
-              </h1>
-            )}
-
-            <div className="flex items-center gap-3">
-              {currentChannel.logo ? (
-                <LogoImg
-                  src={currentChannel.logo}
-                  className="w-9 h-9 rounded-full object-contain flex-shrink-0 bg-background"
-                />
-              ) : (
-                <span className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-muted text-muted-foreground">
-                  <svg
-                    className="w-5 h-5"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <rect x="2" y="3" width="20" height="14" rx="2" />
-                    <path d="M8 21h8M12 17v4" />
-                  </svg>
-                </span>
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <MarqueeText className="font-semibold text-foreground text-sm">
-                    {currentChannel.name}
-                  </MarqueeText>
-                  <span className="text-[10px] uppercase tracking-wider text-red-500 font-bold border border-red-500/30 px-1.5 py-0.5 rounded">
-                    LIVE
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowEpg((v) => !v)}
-                className={`shrink-0 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  showEpg
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80'
-                }`}
-              >
-                {t('player.epgButton')}
-              </button>
+        <div className="flex-shrink-0 border-t border-border bg-card">
+          {currentProgram && (
+            <div className="px-4 pt-2">
+              <EpgProgressBar program={currentProgram} t={t} />
             </div>
+          )}
 
-            {currentProgram && (
-              <div>
-                <EpgProgressBar program={currentProgram} t={t} />
-                {currentProgram.description && (
-                  <p className="text-sm text-muted-foreground mt-2 line-clamp-3 leading-relaxed">
-                    {currentProgram.description}
-                  </p>
-                )}
-              </div>
+          <div className="flex items-center gap-2 px-4 py-2">
+            {currentChannel.logo ? (
+              <LogoImg src={currentChannel.logo} alt={currentChannel.name} className="w-6 h-6 rounded object-contain flex-shrink-0" />
+            ) : (
+              <div className="w-6 h-6 rounded bg-muted flex-shrink-0" />
             )}
+            <MarqueeText text={currentChannel.name} className="flex-1 font-medium text-sm min-w-0" />
+            <span className="live-dot flex-shrink-0" />
+            <span className="text-xs text-muted-foreground font-mono flex-shrink-0">LIVE</span>
+            <button
+              onClick={() => setShowEpg((v) => !v)}
+              className={`shrink-0 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                showEpg
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80'
+              }`}
+            >
+              {t('player.epgButton')}
+            </button>
           </div>
 
+          {currentProgram && (
+            <div className="px-4 pb-2">
+              {currentProgram.description && (
+                <p className="text-xs text-muted-foreground line-clamp-2">{currentProgram.description}</p>
+              )}
+            </div>
+          )}
+
           {showEpg && (
-            <div className="max-h-[40vh] overflow-y-auto border-t border-border">
-              <EpgOverlay onClose={() => setShowEpg(false)} />
+            <div className="border-t border-border">
+              <EpgOverlay
+                programs={cachedPrograms || []}
+                currentProgram={currentProgram}
+                channel={currentChannel}
+                onClose={() => setShowEpg(false)}
+              />
             </div>
           )}
         </div>
