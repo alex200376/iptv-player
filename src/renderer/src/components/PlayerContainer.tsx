@@ -426,7 +426,7 @@ export default function PlayerContainer() {
       {currentChannel && (
         <div
           className={`${
-            showEpg ? 'flex-1 flex flex-col min-h-0' : ''
+            showEpg ? 'max-h-[50vh] overflow-y-auto' : ''
           } bg-card border-t border-border`}
         >
           <div className="px-4 pt-3 pb-2 space-y-3">

@@ -79,7 +79,7 @@ const ipcStorage = {
         const persisted: PersistedChannelData = {
           channels: channels || [],
           directStreams: (channels || []).filter((ch: Channel) => ch.id.startsWith('direct-')),
-          activePlaylistId: null,
+          activePlaylistId: (userData as any)?.activePlaylistId ?? null,
           favoriteIds: (userData as UserData)?.favoriteIds || [],
           historyEntries: (userData as UserData)?.historyEntries || [],
           playlists: (userData as UserData)?.playlists || [],
@@ -103,6 +103,7 @@ const ipcStorage = {
           historyEntries: state.historyEntries ?? [],
           playlists: state.playlists ?? [],
           epgSources: state.epgSources ?? [],
+          activePlaylistId: state.activePlaylistId ?? null,
         }),
       ])
     }

@@ -50,7 +50,7 @@ export default function FavoriteList() {
           ref={currentChannel?.id === ch.id ? activeRef : undefined}
           onClick={() => handlePlay(ch)}
           onContextMenu={(e) => handleContextMenu(e, ch)}
-          className={`channel-card w-full flex items-center gap-2.5 px-3 py-1.5 text-tv-sm text-left transition-colors ${
+          className={`channel-card w-full flex items-center gap-2.5 px-3 py-1.5 text-tv-sm text-left transition-colors min-w-0 overflow-hidden ${
             currentChannel?.id === ch.id
               ? 'active'
               : 'text-tv-text-secondary hover:text-tv-text-primary'

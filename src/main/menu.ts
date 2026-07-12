@@ -34,7 +34,6 @@ function buildEditMenu(): MenuItemConstructorOptions[] {
 
 function buildViewMenu(): MenuItemConstructorOptions[] {
   return [
-    { label: 'Toggle Sidebar', accelerator: 'CmdOrCtrl+B', click: () => sendToRenderer('toggle-sidebar') },
     { label: 'Toggle Fullscreen', accelerator: 'F', click: () => {
       const state = getState()
       if (state.mainWindow) state.mainWindow.setFullScreen(!state.mainWindow.isFullScreen())

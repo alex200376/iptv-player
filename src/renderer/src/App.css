@@ -466,19 +466,38 @@ html, body, #root {
   transform: translateX(-50%) scale(1);
 }
 
-/* ── Marquee text on hover ──────────────────────────────────────────── */
-.marquee-hover {
+/* ── Marquee text on hover (pure CSS, no JS) ───────────────────────── */
+.marquee-text {
   display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow: hidden;
-  white-space: nowrap;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.marquee-container:hover .marquee-hover {
-  display: inline-block;
-  overflow: visible;
-  text-overflow: clip;
-  animation: marquee-scroll var(--marquee-dur, 4s) ease-in-out infinite;
+.marquee-container:hover .marquee-text {
+  display: none;
+}
+
+.marquee-animated {
+  display: none;
+  width: max-content;
+  animation: marquee-scroll 4s linear infinite;
+}
+
+.marquee-animated span {
+  white-space: nowrap;
+}
+
+.marquee-container:hover .marquee-animated {
+  display: flex;
+}
+
+@keyframes marquee-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
 }
 
 /* ── Animations ──────────────────────────────────────────────────── */

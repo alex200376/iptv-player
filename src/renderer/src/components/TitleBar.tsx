@@ -1,11 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 
-interface TitleBarProps {
-  sidebarOpen: boolean
-  onToggleSidebar: () => void
-}
+interface TitleBarProps {}
 
-export default function TitleBar({ sidebarOpen, onToggleSidebar }: TitleBarProps) {
+export default function TitleBar(_props: TitleBarProps) {
   const [maximized, setMaximized] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
   const [showOverlay, setShowOverlay] = useState(false)
@@ -78,15 +75,6 @@ export default function TitleBar({ sidebarOpen, onToggleSidebar }: TitleBarProps
           style={{ WebkitAppRegion: 'drag' as unknown as string }}
         >
           <div className="flex items-center gap-1 pl-1 min-w-0" style={{ WebkitAppRegion: 'no-drag' as unknown as string }}>
-            <button
-              className="flex items-center justify-center w-7 h-7 rounded hover:bg-white/10 text-white/70 hover:text-white transition-colors"
-              onClick={onToggleSidebar}
-              title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </button>
             <span className="text-xs font-semibold text-white/80 uppercase tracking-wider ml-1 select-none">IPTV Player</span>
           </div>
 
@@ -142,15 +130,6 @@ export default function TitleBar({ sidebarOpen, onToggleSidebar }: TitleBarProps
       onDoubleClick={handleDoubleClick}
     >
       <div className="titlebar-left">
-        <button
-          className="titlebar-btn titlebar-icon-btn"
-          onClick={onToggleSidebar}
-          title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-        </button>
         <span className="titlebar-app-name">IPTV Player</span>
       </div>
 

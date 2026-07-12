@@ -8,6 +8,7 @@ export interface UserData {
   historyEntries: { channel: Record<string, unknown>; watchedAt: number }[]
   playlists: { id: string; name: string; source: string; path?: string; url?: string; importedAt: number; channelCount: number }[]
   epgSources?: { url: string; importedAt: number; programCount: number; tvgIds: string[] }[]
+  activePlaylistId?: string | null
 }
 
 const FILE = 'iptv-player-user-data.json'

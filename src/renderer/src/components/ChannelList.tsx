@@ -126,6 +126,7 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
   )
 
   const handleGroupDragStart = useCallback((e: React.DragEvent, groupName: string) => {
+    e.stopPropagation()
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('application/x-group', groupName)
     setDragGroupName(groupName)
@@ -308,6 +309,7 @@ function ChannelGroupChannels({
   const [dropPosition, setDropPosition] = useState<'before' | 'after'>('before')
 
   const handleChDragStart = useCallback((e: React.DragEvent, chId: string) => {
+    e.stopPropagation()
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('application/x-channel', chId)
     setDragChId(chId)
@@ -475,7 +477,7 @@ const ChannelRowWrapper = memo(function ChannelRowWrapper({
         <div className="absolute top-0 left-8 right-2 h-0.5 bg-primary z-10 rounded-full" />
       )}
       <div
-        className={`flex items-center w-full min-w-0 ${isDragging ? 'opacity-40' : ''}`}
+        className={`flex items-center w-full min-w-0 overflow-hidden h-9 ${isDragging ? 'opacity-40' : ''}`}
         draggable
         onDragStart={(e) => onDragStart(e, ch.id)}
         onDragOver={(e) => onDragOver(e, ch.id)}
@@ -489,7 +491,7 @@ const ChannelRowWrapper = memo(function ChannelRowWrapper({
           ref={isActive ? activeRef : undefined}
           onClick={() => onPlay(ch)}
           onContextMenu={(e) => onContextMenu(e, ch)}
-          className={`flex-1 flex items-center py-1.5 text-sm text-left transition-colors hover:bg-muted group ${
+          className={`flex-1 flex items-center py-1 text-sm text-left transition-colors hover:bg-muted group overflow-hidden ${
             isActive
               ? 'border-l-2 border-primary bg-primary/5'
               : ch.status === 'offline'
@@ -518,7 +520,7 @@ const ChannelRowWrapper = memo(function ChannelRowWrapper({
               </svg>
             </span>
           )}
-          <div className="flex-1 min-w-0 text-left">
+          <div className="flex-1 min-w-0 text-left overflow-hidden px-0.5">
             <MarqueeText className={`font-medium ${isActive ? 'text-primary' : 'text-foreground'}`}>
               {ch.name}
             </MarqueeText>
@@ -528,28 +530,30 @@ const ChannelRowWrapper = memo(function ChannelRowWrapper({
               </div>
             )}
           </div>
-          <span
-            onClick={(e) => {
-              e.stopPropagation()
-              onToggleFav(ch.id)
-            }}
-            className={`flex-shrink-0 p-1 rounded-md transition-all ml-0.5 ${
-              isFav
-                ? 'text-yellow-400 opacity-100'
-                : 'text-muted-foreground opacity-0 group-hover:opacity-100 hover:opacity-100'
-            }`}
-            title={isFav ? t('channel.unfavoriteTitle') : t('channel.favoriteTitle')}
-          >
-            <svg
-              className="w-3.5 h-3.5"
-              viewBox="0 0 15 15"
-              fill={isFav ? 'currentColor' : 'none'}
-              stroke="currentColor"
-              strokeWidth="1.5"
+          <div className="flex-shrink-0 w-7 flex items-center justify-center ml-1">
+            <span
+              onClick={(e) => {
+                e.stopPropagation()
+                onToggleFav(ch.id)
+              }}
+              className={`p-1 rounded-md transition-all ${
+                isFav
+                  ? 'text-yellow-400 opacity-100'
+                  : 'text-muted-foreground opacity-60 group-hover:opacity-100 hover:opacity-100'
+              }`}
+              title={isFav ? t('channel.unfavoriteTitle') : t('channel.favoriteTitle')}
             >
-              <path d="M7.5 1.5l2 4.5h4.5l-3.5 3 1.5 4.5-3.5-2.5-3.5 2.5 1.5-4.5-3.5-3h4.5z" />
-            </svg>
-          </span>
+              <svg
+                className="w-3.5 h-3.5"
+                viewBox="0 0 15 15"
+                fill={isFav ? 'currentColor' : 'none'}
+                stroke="currentColor"
+                strokeWidth="1.5"
+              >
+                <path d="M7.5 1.5l2 4.5h4.5l-3.5 3 1.5 4.5-3.5-2.5-3.5 2.5 1.5-4.5-3.5-3h4.5z" />
+              </svg>
+            </span>
+          </div>
         </button>
       </div>
       {showBottomIndicator && (

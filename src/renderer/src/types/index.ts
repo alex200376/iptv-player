@@ -54,4 +54,5 @@ export interface UserData {
   historyEntries: HistoryEntry[]
   playlists: PlaylistMeta[]
   epgSources?: EpgSource[]
+  activePlaylistId?: string | null
 }

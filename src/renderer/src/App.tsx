@@ -15,7 +15,6 @@ import { applyTheme } from './themes'
 import type { Channel } from './types'
 
 export default function App() {
-  const [sidebarOpen, setSidebarOpen] = useState(true)
   const [epgPageOpen, setEpgPageOpen] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(() => {
     return !localStorage.getItem('iptv-player-onboarded')
@@ -33,17 +32,6 @@ export default function App() {
   const epgSources = useStore((s) => s.epgSources)
   const loadEpg = useStore((s) => s.loadEpg)
   const { loadSettings, settings } = useSettingsStore()
-
-  useEffect(() => {
-    const ro = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.contentRect.width < 860) setSidebarOpen(false)
-      }
-    })
-    const root = document.getElementById('root')
-    if (root) ro.observe(root)
-    return () => ro.disconnect()
-  }, [])
 
   useEffect(() => { loadSettings() }, [loadSettings])
 
@@ -100,8 +88,6 @@ export default function App() {
     return () => clearInterval(interval)
   }, [epgSources, loadEpg])
 
-  const toggleSidebar = useCallback(() => setSidebarOpen((v) => !v), [])
-
   useEffect(() => {
     const off = window.electronAPI.onMenuAction((action) => {
       switch (action) {
@@ -114,9 +100,6 @@ export default function App() {
         case 'open-settings':
           setSettingsOpen(true)
           break
-        case 'toggle-sidebar':
-          toggleSidebar()
-          break
         case 'open-epg':
           window.electronAPI.hidePlayer()
           setEpgPageOpen(true)
@@ -127,12 +110,7 @@ export default function App() {
       }
     })
     return off
-  }, [setSettingsOpen, toggleSidebar])
-
-  useEffect(() => {
-    const timer = setTimeout(() => window.electronAPI.notifyLayoutChange(), 100)
-    return () => clearTimeout(timer)
-  }, [sidebarOpen])
+  }, [setSettingsOpen])
 
   const openSettings = useCallback(async () => {
     await window.electronAPI.hidePlayer()
@@ -224,10 +202,6 @@ export default function App() {
 
       if (e.ctrlKey || e.metaKey) {
         switch (e.key) {
-          case 'b':
-            e.preventDefault()
-            toggleSidebar()
-            break
           case ',':
             e.preventDefault()
             if (settingsOpen) closeSettings()
@@ -242,7 +216,7 @@ export default function App() {
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [toggleSidebar, settingsOpen, openSettings, closeSettings])
+  }, [settingsOpen, openSettings, closeSettings])
 
   const handleOnboardingDone = useCallback(() => {
     localStorage.setItem('iptv-player-onboarded', '1')
@@ -255,6 +229,8 @@ export default function App() {
   }, [])
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
+    const types = e.dataTransfer.types
+    if (!types || Array.prototype.indexOf.call(types, 'Files') === -1) return
     e.preventDefault()
     setIsDraggingFile(true)
   }, [])
@@ -308,14 +284,11 @@ export default function App() {
           </div>
         </div>
       )}
-      <TitleBar sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} />
+      <TitleBar />
       <div className="flex flex-1 min-h-0">
         <NavBar onOpenSettings={openSettings} onImport={() => setImportOpen(true)} onOpenStream={() => setStreamOpen(true)} />
-        <div
-          className="flex-shrink-0 overflow-hidden transition-[width] duration-200 ease-in-out border-r border-border"
-          style={{ width: sidebarOpen ? 220 : 64 }}
-        >
-          <Sidebar collapsed={!sidebarOpen} />
+        <div className="flex-shrink-0 w-[220px] overflow-hidden border-r border-border">
+          <Sidebar />
         </div>
         <div className="flex-1 flex flex-col min-w-0">
           {settingsOpen ? (
