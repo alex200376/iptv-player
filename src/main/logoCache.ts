@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import { join } from 'path'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { rm } from 'fs/promises'
 import { createHash } from 'crypto'
 import { net } from 'electron'
 
@@ -102,4 +103,10 @@ export function queueCacheLogos(urls: string[]): void {
     queue.push(url)
   }
   processQueue()
+}
+
+export async function clearLogoCache(): Promise<void> {
+  try {
+    await rm(getLogoDir(), { recursive: true, force: true })
+  } catch { /* ignore */ }
 }

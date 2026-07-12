@@ -31,6 +31,11 @@ const DEFAULTS: UserData = {
   playlists: [],
 }
 
+// ── Serialisation lock ───────────────────────────────────────────
+// Prevents concurrent saveUserData calls from interfering with each
+// other through the shared .tmp filename (writeFile → rename).
+let saveQueue = Promise.resolve()
+
 function isValidUserData(data: unknown): data is UserData {
   if (!data || typeof data !== 'object') return false
   const d = data as Record<string, unknown>
@@ -44,42 +49,54 @@ function isValidUserData(data: unknown): data is UserData {
 /**
  * Atomic write + backup: write to .tmp, rename over target.
  * Previous file is copied to .bak before each save.
+ *
+ * Serialised so two concurrent calls never step on each other's .tmp.
  */
 export async function saveUserData(data: UserData): Promise<void> {
-  const filePath = getFilePath()
-  const tmpPath = getTmpPath()
-  const bakPath = getBakPath()
+  const current = saveQueue.then(async () => {
+    const filePath = getFilePath()
+    const tmpPath = getTmpPath()
+    const bakPath = getBakPath()
 
-  // Backup current file.
-  if (existsSync(filePath)) {
-    try { await copyFile(filePath, bakPath) } catch { /* best-effort */ }
-  }
+    // Clean up stale .tmp left from a previous crash before starting.
+    // Safe because the queue guarantees only one save runs at a time.
+    if (existsSync(tmpPath)) {
+      try { await unlink(tmpPath) } catch { /* ignore */ }
+    }
 
-  // Ensure playlists is always an array so the key is never omitted from JSON.
-  // A missing playlists key would fail isValidUserData on next load,
-  // causing all playlist metadata to be silently lost after restart.
-  const dataToSave = {
-    ...data,
-    playlists: Array.isArray(data.playlists) ? data.playlists : [],
-  }
+    // Backup current file.
+    if (existsSync(filePath)) {
+      try { await copyFile(filePath, bakPath) } catch { /* best-effort */ }
+    }
 
-  await writeFile(tmpPath, JSON.stringify(dataToSave, null, 2), 'utf-8')
-  await rename(tmpPath, filePath)
+    // Ensure playlists is always an array so the key is never omitted from JSON.
+    // A missing playlists key would fail isValidUserData on next load,
+    // causing all playlist metadata to be silently lost after restart.
+    const dataToSave = {
+      ...data,
+      playlists: Array.isArray(data.playlists) ? data.playlists : [],
+    }
+
+    await writeFile(tmpPath, JSON.stringify(dataToSave, null, 2), 'utf-8')
+    await rename(tmpPath, filePath)
+  })
+  saveQueue = current.catch(() => {})
+  return current
 }
 
 /**
  * Load user data. Falls back to backup if main file is missing/corrupt.
- * Cleans up orphaned .tmp on startup.
+ *
+ * NOTE: This function intentionally does NOT clean up orphaned .tmp
+ * files.  Doing so would race with a concurrent saveUserData that is
+ * mid-write to .tmp — the unlink would delete the file before rename
+ * finishes, producing an ENOENT crash.  .tmp cleanup is handled at
+ * the start of saveUserData instead.
  */
 export async function loadUserData(): Promise<UserData> {
   const filePath = getFilePath()
   const tmpPath = getTmpPath()
   const bakPath = getBakPath()
-
-  // Remove leftover .tmp from a previous crash.
-  if (existsSync(tmpPath)) {
-    try { await unlink(tmpPath) } catch { /* ignore */ }
-  }
 
   // Try main file.
   if (existsSync(filePath)) {

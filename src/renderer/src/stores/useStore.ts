@@ -37,7 +37,7 @@ interface PlayerStore extends PersistedChannelData {
 
   setChannels: (channels: Channel[]) => void
   reorderGroup: (groupId: string, targetGroupId: string) => void
-  reorderChannel: (channelId: string, targetChannelId: string) => void
+  reorderChannel: (channelId: string, targetChannelId: string, position?: 'before' | 'after') => void
   setCurrentChannel: (channel: Channel) => void
   setIsPlaying: (playing: boolean) => void
   setSearchQuery: (q: string) => void
@@ -161,7 +161,7 @@ export const useStore = create<PlayerStore>()(
         return { groups, channels: allChannels }
       }),
 
-      reorderChannel: (channelId: string, targetChannelId: string) => set((s) => {
+      reorderChannel: (channelId: string, targetChannelId: string, position?: 'before' | 'after') => set((s) => {
         const groups = s.groups.map((g) => ({ ...g, channels: [...g.channels] }))
         let sourceGroupIdx = -1, sourceIdx = -1
         let targetGroupIdx = -1, targetIdx = -1
@@ -177,10 +177,16 @@ export const useStore = create<PlayerStore>()(
         const [moved] = sourceChs.splice(sourceIdx, 1)
 
         if (sourceGroupIdx === targetGroupIdx) {
-          const adjust = targetIdx > sourceIdx ? targetIdx - 1 : targetIdx
-          sourceChs.splice(adjust, 0, moved)
+          if (position === 'after') {
+            const insertIdx = targetIdx > sourceIdx ? targetIdx : targetIdx + 1
+            sourceChs.splice(insertIdx, 0, moved)
+          } else {
+            const adjust = targetIdx > sourceIdx ? targetIdx - 1 : targetIdx
+            sourceChs.splice(adjust, 0, moved)
+          }
         } else {
-          groups[targetGroupIdx].channels.splice(targetIdx, 0, moved)
+          const insertIdx = position === 'after' ? targetIdx + 1 : targetIdx
+          groups[targetGroupIdx].channels.splice(insertIdx, 0, moved)
           if (sourceChs.length === 0) {
             groups.splice(sourceGroupIdx, 1)
           }

@@ -252,6 +252,7 @@ export default function App() {
       if (result.channels && result.channels.length > 0) {
         const allChannels = [...groups.flatMap((g) => g.channels), ...result.channels]
         setChannels(allChannels)
+        await window.electronAPI.saveChannels(allChannels as unknown[])
         addPlaylist({
           id: result.playlistId,
           name: result.playlistName,
@@ -260,6 +261,8 @@ export default function App() {
           importedAt: Date.now(),
           channelCount: result.channels.length,
         })
+        const channels = await window.electronAPI.loadChannels()
+        setChannels(channels)
       }
     }
   }, [groups, setChannels, addPlaylist])

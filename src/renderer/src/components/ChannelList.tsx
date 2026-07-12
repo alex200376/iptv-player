@@ -313,7 +313,6 @@ function ChannelGroupChannels({
   const [dropPosition, setDropPosition] = useState<'before' | 'after'>('before')
 
   const handleChDragStart = useCallback((e: React.DragEvent, chId: string) => {
-    e.stopPropagation()
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('application/x-channel', chId)
     setDragChId(chId)
@@ -333,7 +332,10 @@ function ChannelGroupChannels({
     e.preventDefault()
     const sourceChId = e.dataTransfer.getData('application/x-channel')
     if (sourceChId && sourceChId !== targetChId) {
-      reorderChannel(sourceChId, targetChId)
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+      const midY = rect.top + rect.height / 2
+      const position = e.clientY < midY ? 'before' : 'after'
+      reorderChannel(sourceChId, targetChId, position)
     }
     setDragChId(null)
     setDropTargetId(null)
@@ -486,17 +488,20 @@ const ChannelRowWrapper = memo(function ChannelRowWrapper({
       )}
       <div
         className={`flex items-center w-full h-full min-w-0 overflow-hidden ${isDragging ? 'opacity-40' : ''}`}
-        draggable
-        onDragStart={(e) => onDragStart(e, ch.id)}
-        onDragOver={(e) => onDragOver(e, ch.id)}
-        onDrop={(e) => onDrop(e, ch.id)}
-        onDragEnd={onDragEnd}
       >
-        <span className="pl-1 pr-0.5 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground flex-shrink-0">
+        <span
+          draggable
+          onDragStart={(e) => onDragStart(e, ch.id)}
+          onDragOver={(e) => onDragOver(e, ch.id)}
+          onDrop={(e) => onDrop(e, ch.id)}
+          onDragEnd={onDragEnd}
+          className="pl-1 pr-0.5 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground flex-shrink-0"
+        >
           <GripIcon />
         </span>
         <button
           ref={isActive ? activeRef : undefined}
+          draggable="false"
           onClick={() => onPlay(ch)}
           onContextMenu={(e) => onContextMenu(e, ch)}
           className={`flex-1 flex items-center py-1 text-sm text-left transition-colors hover:bg-muted group overflow-hidden h-full ${
@@ -540,6 +545,7 @@ const ChannelRowWrapper = memo(function ChannelRowWrapper({
           </div>
           <div className="flex-shrink-0 w-7 flex items-center justify-center ml-1">
             <span
+              draggable="false"
               onClick={(e) => {
                 e.stopPropagation()
                 onToggleFav(ch.id)

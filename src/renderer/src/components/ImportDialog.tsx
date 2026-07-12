@@ -31,7 +31,7 @@ export default function ImportDialog({
     }
   }, [open])
 
-  function mergeChannels(newChannels: Channel[], playlistId: string, playlistName: string, source: 'file' | 'url' = 'file', playlistUrl?: string, filePath?: string): boolean {
+  async function mergeChannels(newChannels: Channel[], playlistId: string, playlistName: string, source: 'file' | 'url' = 'file', playlistUrl?: string, filePath?: string): Promise<boolean> {
     const existing = groups.flatMap((g) => g.channels)
     const existingUrls = new Set(existing.map((ch) => ch.url))
     const unique: any[] = []
@@ -51,7 +51,7 @@ export default function ImportDialog({
     const merged = [...existing, ...unique]
     const playlistChannelCount = merged.filter((c) => c.playlistId === playlistId).length
     setChannels(merged)
-    window.electronAPI.saveChannels(merged as unknown[])
+    await window.electronAPI.saveChannels(merged as unknown[])
 
     const meta: PlaylistMeta = {
       id: playlistId,
@@ -63,6 +63,15 @@ export default function ImportDialog({
       channelCount: playlistChannelCount,
     }
     addPlaylist(meta)
+
+    if (source === 'url' && playlistUrl) {
+      try {
+        await window.electronAPI.refreshPlaylistUrl(playlistId, playlistUrl)
+      } catch { /* best-effort sync */ }
+    }
+    const channels = await window.electronAPI.loadChannels()
+    setChannels(channels)
+
     const msg = dupCount > 0
       ? t('import.successWithDup', { count: unique.length, dup: dupCount })
       : t('import.success', { count: unique.length })
@@ -79,7 +88,7 @@ export default function ImportDialog({
       if (result.error) {
         setError(result.error)
       } else if (result.channels.length > 0 && result.playlistId) {
-        const ok = mergeChannels(result.channels, result.playlistId, result.playlistName || t('import.unnamed'), 'file', undefined, result.filePath)
+        const ok = await mergeChannels(result.channels, result.playlistId, result.playlistName || t('import.unnamed'), 'file', undefined, result.filePath)
         if (ok) setTimeout(() => onOpenChange(false), 1200)
       }
     } finally {
@@ -98,7 +107,7 @@ export default function ImportDialog({
         setError(result.error)
       } else if (result.playlistId) {
         if (result.channels.length > 0) {
-          const ok = mergeChannels(result.channels, result.playlistId, result.playlistName || url.trim().slice(0, 50), 'url', result.url)
+          const ok = await mergeChannels(result.channels, result.playlistId, result.playlistName || url.trim().slice(0, 50), 'url', result.url)
           if (ok) {
             setTimeout(() => { onOpenChange(false); setUrl('') }, 1200)
           }

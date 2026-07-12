@@ -123,6 +123,7 @@ export default function PlayerContainer() {
   const errorTimerRef = useRef<ReturnType<typeof setTimeout>>()
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout>>()
   const layoutDebounceRef = useRef<ReturnType<typeof setTimeout>>()
+  const playerContainerRef = useRef<HTMLDivElement>(null)
 
   // ── helpers ───────────────────────────────────────────────────────────────
   const clearAllTimers = useCallback(() => {
@@ -310,15 +311,21 @@ export default function PlayerContainer() {
     return () => document.removeEventListener('keydown', handler)
   }, [currentChannel])
 
-  // ── notify layout change when EPG panel opens/closes ─────────────────────
-  // Wait for DOM to finish transitioning before renegotiating VLC surface.
+  // ── notify VLC when the player container resizes ──────────────────────────
+  // Catches EPG toggle, channel switch, program change — any size change.
   useEffect(() => {
-    clearTimeout(layoutDebounceRef.current)
-    layoutDebounceRef.current = setTimeout(() => {
-      window.electronAPI.notifyLayoutChange()
-    }, LAYOUT_NOTIFY_DELAY_MS)
-    return () => clearTimeout(layoutDebounceRef.current)
-  }, [showEpg])
+    const el = playerContainerRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+
+    const observer = new ResizeObserver(() => {
+      clearTimeout(layoutDebounceRef.current)
+      layoutDebounceRef.current = setTimeout(() => {
+        window.electronAPI.notifyLayoutChange()
+      }, LAYOUT_NOTIFY_DELAY_MS)
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   // ── cleanup on unmount ────────────────────────────────────────────────────
   useEffect(() => {
@@ -352,7 +359,7 @@ export default function PlayerContainer() {
       )}
 
       {/* Player area — always fills remaining space; never compressed by EPG panel */}
-      <div className="flex-1 relative group min-h-0" id="player-container">
+      <div className="flex-1 relative group min-h-0" id="player-container" ref={playerContainerRef}>
         <div id="player" className="w-full h-full" />
         {isBuffering && currentChannel && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">

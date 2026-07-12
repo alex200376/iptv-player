@@ -4,8 +4,9 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { parseM3U, urlToId } from '../m3uParser'
 import { saveChannels, loadChannels } from '../channelStore'
-import { getLocalLogoUrl, queueCacheLogos } from '../logoCache'
+import { getLocalLogoUrl, queueCacheLogos, clearLogoCache } from '../logoCache'
 import { saveUserData, loadUserData } from '../userDataStore'
+import { clearEpgCache } from '../epgStore'
 import { readSettings, writeSettings } from '../settingsStore'
 import type { Channel } from '../m3uParser'
 import { getState } from './shared'
@@ -635,28 +636,22 @@ export function registerPlaylistIpc() {
     return await refreshPlaylistUrl(playlistId, url)
   })
 
-  // ── Serialisation lock for save-user-data ───────────────────────────
-  // Guards against a race where concurrent IPC calls can overwrite
-  // playlists with stale empty data (setChannels + addPlaylist in quick
-  // succession both trigger setItem → save-user-data).
-  let saveUserDataQueue = Promise.resolve()
-
   ipcMain.handle('save-user-data', async (_event, data: unknown) => {
-    const current = saveUserDataQueue.then(async () => {
-      const incoming = data as import('../userDataStore').UserData
-      // Guard: never overwrite persisted playlists with an empty array
-      // that arrives before Zustand has finished hydrating.
-      const hasInvalidPlaylists = !incoming.playlists || !Array.isArray(incoming.playlists) || incoming.playlists.length === 0
-      if (hasInvalidPlaylists) {
+    const incoming = data as import('../userDataStore').UserData
+    const hasInvalidPlaylists = !incoming.playlists || !Array.isArray(incoming.playlists) || incoming.playlists.length === 0
+    if (hasInvalidPlaylists) {
+      const isFullClear =
+        (!incoming.favoriteIds || incoming.favoriteIds.length === 0) &&
+        (!incoming.historyEntries || incoming.historyEntries.length === 0) &&
+        (!incoming.activePlaylistId || incoming.activePlaylistId === null)
+      if (!isFullClear) {
         const existing = await loadUserData()
         if (Array.isArray(existing.playlists) && existing.playlists.length > 0) {
           incoming.playlists = existing.playlists
         }
       }
-      await saveUserData(incoming)
-    })
-    saveUserDataQueue = current.catch(() => {})
-    return current
+    }
+    await saveUserData(incoming)
   })
 
   ipcMain.handle('load-user-data', async () => {
@@ -763,6 +758,8 @@ export function registerPlaylistIpc() {
         snoozeUpdateUntil: 0,
         language: 'zh-CN',
       })
+      await clearLogoCache()
+      await clearEpgCache()
       // Reset counter so IDs start fresh after a full clear.
       playlistIdCounter = 0
       playlistIdSeeded = false

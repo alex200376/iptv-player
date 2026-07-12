@@ -391,8 +391,9 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                            checkRunning: false,
                            checkTotal: 0,
                          })
-                         await useSettingsStore.getState().loadSettings()
-                         const newSettings = useSettingsStore.getState().settings
+                             await useSettingsStore.getState().loadSettings()
+                             localStorage.clear()
+                             const newSettings = useSettingsStore.getState().settings
                          i18n.changeLanguage(newSettings.language)
                          document.documentElement.lang = newSettings.language
                           const restored = result.info
@@ -426,8 +427,9 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                         onClick={async () => {
                           const result = await window.electronAPI.clearAllData()
                           if (result.success) {
-                            useStore.setState({
+                             useStore.setState({
                               groups: [],
+                              channels: [],
                               currentChannel: null,
                               isPlaying: false,
                               searchQuery: '',

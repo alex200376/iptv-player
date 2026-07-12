@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { writeFile, readFile } from 'fs/promises'
+import { writeFile, readFile, unlink } from 'fs/promises'
 import { existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import type { EpgProgram } from './epgParser'
@@ -12,7 +12,7 @@ interface CacheEntry {
   programs: { channelTvgId: string; start: string; stop: string; title: string; description?: string; category?: string; icon?: string }[]
 }
 
-function getFilePath(): string {
+export function getFilePath(): string {
   const dir = app.getPath('userData')
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
   return join(dir, FILE)
@@ -70,4 +70,10 @@ export function restorePrograms(entry: CacheEntry): EpgProgram[] {
     category: p.category,
     icon: p.icon,
   }))
+}
+
+export async function clearEpgCache(): Promise<void> {
+  try {
+    await unlink(getFilePath())
+  } catch { /* ignore */ }
 }
