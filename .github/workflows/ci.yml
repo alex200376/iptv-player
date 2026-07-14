@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, 'fix/**', 'feat/**']
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  typecheck:
+    name: TypeScript type-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Type-check (main process)
+        run: npx tsc --project tsconfig.node.json --noEmit
+      - name: Type-check (renderer)
+        run: npx tsc --project tsconfig.web.json --noEmit
+
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    needs: typecheck
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run Vitest
+        run: npx vitest run --coverage
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
+
+  lint:
+    name: ESLint (optional — add .eslintrc to enable)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npx eslint src --ext .ts,.tsx --max-warnings 0 || true

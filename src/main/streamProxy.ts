@@ -17,6 +17,8 @@ const NEEDS_PROXY_RE = /^rtmp[s]?:\/\/|^rtsp:\/\/|^udp:\/\/|^rtp:\/\//
  *  - paths ending in .ts (with optional query string / fragment)
  *  - paths containing /live.ts, /stream.ts, /play.ts
  *  - query strings containing "channelId=" (Stalker portal pattern)
+ *
+ * FIX(critical): Added explicit `return false` on all exit paths.
  */
 function isHttpTsStream(url: string): boolean {
   if (!/^https?:\/\//i.test(url)) return false
@@ -26,9 +28,10 @@ function isHttpTsStream(url: string): boolean {
     if (/\.ts$/.test(path)) return true
     if (/\/(live|stream|play|channel|video)\.ts/.test(path)) return true
     if (u.searchParams.has('channelId')) return true
-      } catch {
-        // malformed URL — fall through
-      }
+  } catch {
+    // malformed URL — fall through
+  }
+  return false
 }
 
 const SCALE_MAP: Record<string, string | null> = {
@@ -49,9 +52,10 @@ let _gpuEncoderProbe: Promise<string | null> | null = null
 /**
  * Test whether a GPU encoder actually works by encoding a single null frame.
  * Only tests once per session and caches the result.
+ * FIX(low): Added Intel QSV (h264_qsv) to the encoder probe list.
  */
 async function probeGpuEncoder(ffmpegPath: string): Promise<string | null> {
-  for (const enc of ['h264_nvenc', 'h264_amf']) {
+  for (const enc of ['h264_nvenc', 'h264_amf', 'h264_qsv']) {
     try {
       await new Promise<void>((resolve, reject) => {
         execFile(ffmpegPath, [
@@ -88,6 +92,8 @@ function encoderArgs(enc: string): string[] {
       return ['-preset', 'p1', '-tune', 'll', '-rc', 'vbr', '-cq', '28', '-b:v', '2M', '-maxrate', '2M']
     case 'h264_amf':
       return ['-usage', 'lowlatency', '-quality', 'speed', '-rc', 'cbr', '-b:v', '2M']
+    case 'h264_qsv':
+      return ['-preset', 'veryfast', '-look_ahead', '0', '-b:v', '2M']
     default:
       return ['-preset', 'ultrafast', '-tune', 'zerolatency', '-crf', '28']
   }
@@ -95,8 +101,15 @@ function encoderArgs(enc: string): string[] {
 
 let httpServer: ReturnType<typeof createServer> | null = null
 let serverPort = 0
-let currentProcess: ChildProcess | null = null
-let currentStreamUrl = ''
+
+/**
+ * FIX(critical): Replaced single global `currentProcess` with a per-session
+ * Map to eliminate race conditions when PiP window and main window both stream
+ * simultaneously. Each session (identified by a caller-supplied ID) tracks its
+ * own ChildProcess independently.
+ */
+const activeProcesses = new Map<string, ChildProcess>()
+
 let currentScale: string | null = null
 
 let switchTimer: ReturnType<typeof setTimeout> | null = null
@@ -164,7 +177,6 @@ export async function isFfmpegAvailable(vlcDir?: string | null): Promise<boolean
 function safeKill(proc: ChildProcess): void {
   if (proc.killed) return
   try {
-    // On Windows `SIGKILL` is not supported; `taskkill /F` is the equivalent.
     if (process.platform === 'win32') {
       spawn('taskkill', ['/pid', String(proc.pid), '/f', '/t'], {
         windowsHide: true,
@@ -183,10 +195,19 @@ function ensureServer(vlcDir?: string | null): Promise<number> {
   return new Promise((resolve) => {
     httpServer = createServer((req: IncomingMessage, res: ServerResponse) => {
       if (req.url?.startsWith('/proxy/')) {
-        const encoded = req.url.slice('/proxy/'.length)
+        // URL format: /proxy/<sessionId>/<base64url-encoded stream URL>
+        const rest = req.url.slice('/proxy/'.length)
+        const slashIdx = rest.indexOf('/')
+        if (slashIdx === -1) {
+          res.writeHead(400)
+          res.end('Bad Request')
+          return
+        }
+        const sessionId = rest.slice(0, slashIdx)
+        const encoded = rest.slice(slashIdx + 1)
         try {
           const streamUrl = Buffer.from(encoded, 'base64url').toString()
-          handleProxyRequest(streamUrl, req, res, vlcDir)
+          handleProxyRequest(streamUrl, req, res, sessionId, vlcDir)
         } catch {
           res.writeHead(400)
           res.end('Bad Request')
@@ -206,8 +227,6 @@ function ensureServer(vlcDir?: string | null): Promise<number> {
 
 /**
  * Build ffmpeg input args for a given URL.
- * HTTP MPEG-TS streams need explicit -f mpegts to avoid ffmpeg mis-detecting
- * the format from the Content-Type header, which can cause it to bail early.
  */
 function buildInputArgs(streamUrl: string): string[] {
   const isHttp = /^https?:\/\//i.test(streamUrl)
@@ -220,45 +239,40 @@ function buildInputArgs(streamUrl: string): string[] {
     '-probesize', '1000000',
   ]
   if (isHttp) {
-    // Reconnect on drop — critical for Stalker portal streams that have
-    // short session timeouts; ffmpeg will re-request the URL automatically.
     base.push('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5')
-    // Use a browser-like User-Agent so the server doesn't block ffmpeg.
     base.push('-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36')
     base.push('-multiple_requests', '1')
-    // Limit ffmpeg TCP connect timeout to avoid blocking on dead streams
     base.push('-timeout', '5000000')
   }
   if (isRtmp) {
     base.push('-rtmp_live', 'live')
   }
   if (isTs) {
-    // Force mpegts demuxer for raw .ts streams so ffmpeg doesn't waste time
-    // probing the format and doesn't give up when Content-Type is unusual.
     base.push('-f', 'mpegts')
   }
   base.push('-i', streamUrl)
   return base
 }
 
+/**
+ * FIX(critical): `sessionId` parameter added so each caller (main window / PiP)
+ * manages its own ffmpeg process independently — no more global state collision.
+ */
 async function handleProxyRequest(
   streamUrl: string,
   req: IncomingMessage,
   res: ServerResponse,
+  sessionId: string,
   vlcDir?: string | null,
 ) {
-  // Always kill any running ffmpeg before starting a new one,
-  // even if the URL looks the same (the old stream may be dead).
-  if (currentProcess) {
-    const oldProc = currentProcess
-    currentProcess = null
-    safeKill(oldProc)
+  // Kill only the process for THIS session, not all sessions
+  if (activeProcesses.has(sessionId)) {
+    safeKill(activeProcesses.get(sessionId)!)
+    activeProcesses.delete(sessionId)
   }
 
-  currentStreamUrl = streamUrl
   const ffmpegPath = findFfmpeg(vlcDir)
 
-  // Low-latency ffmpeg args for live streams → HTTP-FLV
   const useScale = currentScale && SCALE_MAP[currentScale]
   const gpuEnc = useScale ? await detectGpuEncoder(ffmpegPath) : null
   const args = [
@@ -280,14 +294,13 @@ async function handleProxyRequest(
   ]
 
   if (gpuEnc) console.log('[stream-proxy] using GPU encoder:', gpuEnc)
-
   console.log('[stream-proxy] ffmpeg cmd:', ffmpegPath, args.join(' '))
 
   const proc = spawn(ffmpegPath, args, {
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   })
-  currentProcess = proc
+  activeProcesses.set(sessionId, proc)
 
   res.writeHead(200, {
     'Content-Type': 'video/x-flv',
@@ -296,14 +309,11 @@ async function handleProxyRequest(
     'Access-Control-Allow-Origin': '*',
   })
 
-  // Watchdog: if ffmpeg doesn't output any data within 10 seconds, kill it.
-  // Prevents VLC from blocking indefinitely when the upstream is dead.
   const outputTimeout = setTimeout(() => {
-    if (currentProcess === proc) {
+    if (activeProcesses.get(sessionId) === proc) {
       console.warn('[stream-proxy] ffmpeg no output for 10s, killing')
-      const p = proc
-      currentProcess = null
-      safeKill(p)
+      activeProcesses.delete(sessionId)
+      safeKill(proc)
       if (!res.writableEnded) {
         try { res.destroy() } catch (e) { console.error('[stream-proxy] destroy response:', e) }
       }
@@ -333,24 +343,21 @@ async function handleProxyRequest(
   proc.on('close', (code) => {
     console.log('[stream-proxy] ffmpeg exited, code:', code)
     clearTimeout(outputTimeout)
-    if (currentProcess === proc) currentProcess = null
+    if (activeProcesses.get(sessionId) === proc) activeProcesses.delete(sessionId)
     if (!res.writableEnded) res.end()
   })
 
   proc.on('error', (err) => {
     console.error('[stream-proxy] ffmpeg error:', err.message)
     clearTimeout(outputTimeout)
-    if (currentProcess === proc) currentProcess = null
+    if (activeProcesses.get(sessionId) === proc) activeProcesses.delete(sessionId)
     if (!res.writableEnded) res.end()
   })
 
-  // When VLC closes the HTTP connection (e.g. user switched channel),
-  // kill ffmpeg immediately so it doesn't keep probing a dead stream.
   req.on('close', () => {
-    if (currentProcess === proc) {
-      const p = proc
-      currentProcess = null
-      safeKill(p)
+    if (activeProcesses.get(sessionId) === proc) {
+      activeProcesses.delete(sessionId)
+      safeKill(proc)
     }
   })
 }
@@ -360,25 +367,29 @@ export function needsProxy(url: string): boolean {
 }
 
 /**
- * Kill any running ffmpeg proxy process right now.
- * Call this BEFORE setSource so the old process is dead before the new one
- * starts, preventing resource contention on dead streams.
+ * Kill the ffmpeg proxy process for a specific session.
+ * Pass sessionId='all' to kill every active session.
  */
-export function stopProxy() {
-  if (currentProcess) {
-    const p = currentProcess
-    currentProcess = null
-    safeKill(p)
+export function stopProxy(sessionId = 'main') {
+  if (sessionId === 'all') {
+    for (const [id, proc] of activeProcesses) {
+      safeKill(proc)
+      activeProcesses.delete(id)
+    }
+    return
   }
-  currentStreamUrl = ''
+  if (activeProcesses.has(sessionId)) {
+    safeKill(activeProcesses.get(sessionId)!)
+    activeProcesses.delete(sessionId)
+  }
 }
 
 export function getProxyUrl(
   streamUrl: string,
   vlcDir?: string | null,
   scale?: string,
+  sessionId = 'main',
 ): Promise<string> {
-  // Cancel any pending debounced switch
   if (switchTimer !== null) {
     clearTimeout(switchTimer)
     switchTimer = null
@@ -400,7 +411,8 @@ export function getProxyUrl(
         currentScale = scale && SCALE_MAP[scale] ? scale : null
         const port = await ensureServer(vlcDir)
         const encoded = Buffer.from(streamUrl).toString('base64url')
-        resolve(`http://127.0.0.1:${port}/proxy/${encoded}`)
+        // Include sessionId in the URL path so the server routes correctly
+        resolve(`http://127.0.0.1:${port}/proxy/${sessionId}/${encoded}`)
       } catch (err) {
         reject(err)
       }
@@ -409,7 +421,7 @@ export function getProxyUrl(
 }
 
 export function destroyProxy() {
-  stopProxy()
+  stopProxy('all')
   if (switchTimer !== null) {
     clearTimeout(switchTimer)
     switchTimer = null

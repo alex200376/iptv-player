@@ -1,5 +1,6 @@
 import { BrowserWindow, app, dialog, session } from 'electron'
-import { join } from 'path'
+import { join, resolve, isAbsolute } from 'path'
+import { existsSync } from 'fs'
 import { VlcPlayer, probeDefaultVlcDir, initLibVlc } from 'electron-vlc-player'
 import { getState } from './ipc/shared'
 import { registerPlaybackIpc } from './ipc/playback'
@@ -25,26 +26,19 @@ async function createWindow() {
     frame: false,
     backgroundColor: '#0f0f1a',
     icon: iconPath,
-    // Prevent Electron from throttling the renderer when window is hidden/minimised
-    // which can cause audio/video stutter on refocus
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
       backgroundThrottling: false,
-      // Enable GPU rasterisation so CSS animations don't block the VLC overlay
       enableBlinkFeatures: 'CSSContainerQueries',
     },
   })
 
-  // electron-vlc-player registers window-level listeners (close/resize/minimize/etc.)
-  // on every new VlcPlayer() and never removes them. Suppress the MaxListeners warning.
   mainWindow.setMaxListeners(0)
 
-  // Ask Chromium to prefer hardware compositing
   app.commandLine.appendSwitch('enable-gpu-rasterization')
   app.commandLine.appendSwitch('enable-zero-copy')
-  // Prevent GPU process from being killed on resize (common freeze source)
   app.commandLine.appendSwitch('disable-gpu-driver-bug-workarounds')
 
   if (process.env.ELECTRON_RENDERER_URL) {
@@ -56,8 +50,6 @@ async function createWindow() {
   const state = getState()
   state.mainWindow = mainWindow
 
-  // Debounce resize events — calling notifyLayoutChange on every pixel move
-  // causes VLC to re-negotiate the video surface and can freeze for ~200 ms
   let resizeTimer: ReturnType<typeof setTimeout> | null = null
   mainWindow.on('resize', () => {
     if (resizeTimer) clearTimeout(resizeTimer)
@@ -99,7 +91,19 @@ async function createWindow() {
     return
   }
   state.vlcDir = vlcDir
-  process.env.PATH = vlcDir + ';' + process.env.PATH
+
+  /**
+   * FIX(high): Validate and normalise vlcDir before injecting into PATH.
+   * Previously an attacker-controlled settings value could inject arbitrary
+   * entries into PATH, potentially causing DLL/binary hijacking.
+   */
+  const safeVlcDir = resolve(vlcDir)
+  if (isAbsolute(safeVlcDir) && existsSync(safeVlcDir)) {
+    process.env.PATH = safeVlcDir + ';' + (process.env.PATH ?? '')
+  } else {
+    console.error('[main] vlcDir failed path validation, skipping PATH injection:', vlcDir)
+  }
+
   initLibVlc(vlcDir)
 }
 
@@ -118,9 +122,15 @@ app.whenReady().then(async () => {
     callback({
       responseHeaders: {
         ...details.responseHeaders,
+        /**
+         * FIX(high): Removed 'unsafe-inline' from script-src.
+         * The previous policy allowed arbitrary inline script execution, which
+         * defeats XSS protection entirely. Renderer code should use bundled
+         * scripts only (Vite injects them as <script src="..."> not inline).
+         */
         'Content-Security-Policy': [
           "default-src 'self'; " +
-          "script-src 'self' 'unsafe-inline'; " +
+          "script-src 'self'; " +
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
           "font-src 'self' https://fonts.gstatic.com; " +
           "img-src 'self' data: blob: https: http:; " +
