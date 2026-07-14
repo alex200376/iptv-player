@@ -137,6 +137,7 @@ interface ElectronAPI {
   onChannelsCheckLog: (callback: (log: { name: string; url: string; protocol: string; result: string; checked: number; total: number }) => void) => void
   onChannelsCheckDone: (callback: (channels: Channel[]) => void) => void
   togglePip: () => Promise<{ active: boolean }>
+  pipReloadSource: () => Promise<void>
   onPipStateChange: (callback: (active: boolean) => void) => void
   onPlayerBuffering: (callback: () => void) => void
   onPlayerPlaying: (callback: () => void) => void

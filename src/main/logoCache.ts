@@ -48,7 +48,7 @@ export function getLocalLogoUrl(url: string): string | null {
     saveIndex(index)
     return null
   }
-  return `file:///${localPath.replace(/\\/g, '/')}`
+  return `logo://${filename}`
 }
 
 export async function downloadAndCacheLogo(url: string): Promise<boolean> {

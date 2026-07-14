@@ -197,14 +197,11 @@ export default function PlayerContainer() {
             if (!ch) return
             setPlayerError(null)
             setIsBuffering(false)
-            // Fix Bug 2: preserve PiP during reconnect
-            // Exit PiP first, reconnect, then restore PiP once playing fires
             if (pipActiveRef.current) {
-              window.electronAPI.togglePip()
-              pipActiveRef.current = false
-              ;(pipActiveRef as any)._pendingRestore = true
+              window.electronAPI.pipReloadSource()
+            } else {
+              window.electronAPI.switchChannel(ch.url)
             }
-            window.electronAPI.switchChannel(ch.url)
           }, reconnectInterval)
         }
       }, BUFFER_TIMEOUT_MS)
@@ -220,11 +217,6 @@ export default function PlayerContainer() {
       retryCountRef.current = 0
       setPlayerError(null)
       setIsBuffering(false)
-      // Restore PiP if it was active before reconnect
-      if ((pipActiveRef as any)._pendingRestore) {
-        ;(pipActiveRef as any)._pendingRestore = false
-        setTimeout(() => window.electronAPI.togglePip(), 300)
-      }
     })
 
     const offError = window.electronAPI.onPlayerError(() => {
@@ -249,11 +241,10 @@ export default function PlayerContainer() {
             setPlayerError(null)
             setIsBuffering(false)
             if (pipActiveRef.current) {
-              window.electronAPI.togglePip()
-              pipActiveRef.current = false
-              ;(pipActiveRef as any)._pendingRestore = true
+              window.electronAPI.pipReloadSource()
+            } else {
+              window.electronAPI.switchChannel(ch.url)
             }
-            window.electronAPI.switchChannel(ch.url)
           }, reconnectInterval)
         }
       }, 800)
@@ -324,6 +315,7 @@ export default function PlayerContainer() {
     const el = playerContainerRef.current
     if (!el || typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(() => {
+      if (pipActiveRef.current) return
       clearTimeout(layoutDebounceRef.current)
       layoutDebounceRef.current = setTimeout(() => {
         window.electronAPI.notifyLayoutChange(true)

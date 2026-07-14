@@ -40,6 +40,27 @@ async function enterPipMode() {
   })
   await state.player.embed()
   state.player.hideOverlay()
+  state.player.removeAllListeners('error')
+  state.player.removeAllListeners('playing')
+  state.player.removeAllListeners('buffering')
+  state.player.on('error', (...args) => {
+    console.error('[pip-vlc-error]', pipUrl.substring(0, 60), ...args)
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+      state.mainWindow.webContents.send('player-error')
+    }
+  })
+  state.player.on('playing', () => {
+    console.log('[pip-vlc-playing]', pipUrl.substring(0, 60))
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+      state.mainWindow.webContents.send('player-playing')
+    }
+  })
+  state.player.on('buffering', () => {
+    console.log('[pip-vlc-buffering]', pipUrl.substring(0, 60))
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+      state.mainWindow.webContents.send('player-buffering')
+    }
+  })
   state.player.setVolume(savedVolume)
   state.player.setMute(savedMuted)
   state.player.setSource(pipUrl, { mediaOptions: buildMediaOptions(settings) })
@@ -107,6 +128,25 @@ export async function exitPipMode() {
   state.mainWindow.webContents.send('pip-state-changed', false)
 }
 
+export async function reloadPipSource() {
+  const state = getState()
+  if (!state.pipWindow || state.pipWindow.isDestroyed() || !state.player || !state.mainWindow) return
+
+  const settings = readSettings()
+  let playUrl = state.currentUrl
+  if (state.originalUrl && await isFfmpegAvailable(state.vlcDir)) {
+    try {
+      playUrl = await getProxyUrl(state.originalUrl, state.vlcDir, settings.proxyResolution)
+    } catch (e) {
+      console.error('[pip] reload proxy failed:', e)
+    }
+  }
+
+  console.log('[pip] reloading source:', playUrl?.substring(0, 60))
+  state.player.setSource(playUrl, { mediaOptions: buildMediaOptions(settings) })
+  state.player.play()
+}
+
 export function registerPipIpc() {
   ipcMain.handle('toggle-pip', async () => {
     const state = getState()
@@ -120,6 +160,10 @@ export function registerPipIpc() {
 
   ipcMain.handle('exit-pip', async () => {
     await exitPipMode()
+  })
+
+  ipcMain.handle('pip-reload-source', async () => {
+    await reloadPipSource()
   })
 
   ipcMain.handle('pip-move-by', (_event, dx: number, dy: number) => {

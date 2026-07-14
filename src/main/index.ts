@@ -1,4 +1,4 @@
-import { BrowserWindow, app, dialog, session } from 'electron'
+import { BrowserWindow, app, dialog, session, protocol, net } from 'electron'
 import { join, resolve, isAbsolute } from 'path'
 import { existsSync } from 'fs'
 import { VlcPlayer, probeDefaultVlcDir, initLibVlc } from 'electron-vlc-player'
@@ -117,23 +117,28 @@ function setupIPC() {
   registerUpdateIpc()
 }
 
+  const isDev = !!process.env.ELECTRON_RENDERER_URL
+  const scriptSrc = isDev
+    ? "script-src 'self' 'unsafe-inline'; "
+    : "script-src 'self'; "
+
 app.whenReady().then(async () => {
+  protocol.handle('logo', (request) => {
+    const filename = request.url.slice('logo://'.length)
+    const filePath = join(app.getPath('userData'), 'logos', filename)
+    return net.fetch('file:///' + filePath.replace(/\\/g, '/'))
+  })
+
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
         ...details.responseHeaders,
-        /**
-         * FIX(high): Removed 'unsafe-inline' from script-src.
-         * The previous policy allowed arbitrary inline script execution, which
-         * defeats XSS protection entirely. Renderer code should use bundled
-         * scripts only (Vite injects them as <script src="..."> not inline).
-         */
         'Content-Security-Policy': [
           "default-src 'self'; " +
-          "script-src 'self'; " +
+          scriptSrc +
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
           "font-src 'self' https://fonts.gstatic.com; " +
-          "img-src 'self' data: blob: https: http:; " +
+          "img-src 'self' data: blob: file: logo: https: http:; " +
           "media-src 'self' http: https:; " +
           "connect-src 'self' http://127.0.0.1:* https:; " +
           "frame-src 'none'"
