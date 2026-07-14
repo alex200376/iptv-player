@@ -1,3 +1,4 @@
+import { createHash } from 'crypto'
 import { t } from './i18n'
 
 export interface Channel {
@@ -14,14 +15,13 @@ export interface Channel {
   lastCheckedAt?: number
 }
 
+/**
+ * FIX(high): Replaced 32-bit djb2 hash with SHA-1 truncated to 16 hex chars.
+ * The old hash had significant collision probability on large playlists (10k+
+ * channels), causing channels to silently overwrite each other in the store.
+ */
 export function urlToId(url: string): string {
-  let hash = 0
-  for (let i = 0; i < url.length; i++) {
-    const char = url.charCodeAt(i)
-    hash = ((hash << 5) - hash) + char
-    hash |= 0
-  }
-  return `ch-${Math.abs(hash).toString(36)}`
+  return 'ch-' + createHash('sha1').update(url).digest('hex').slice(0, 16)
 }
 
 /**
@@ -54,7 +54,13 @@ export function parseM3U(content: string, playlistId?: string): Promise<Channel[
           const tvgId = line.match(/tvg-id="([^"]*)"/)?.[1]
           const tvgUrl = line.match(/tvg-url="([^"]*)"/)?.[1]
           const tvgChno = line.match(/tvg-chno="([^"]*)"/)?.[1]
-          const name = line.split(',').pop()?.trim()
+          /**
+           * FIX(high): Use indexOf to find the FIRST comma, then take everything
+           * after it as the channel name. The old `split(',').pop()` would truncate
+           * names that legitimately contain commas (e.g. "BBC News, HD").
+           */
+          const commaIdx = line.indexOf(',')
+          const name = commaIdx !== -1 ? line.slice(commaIdx + 1).trim() : ''
           current = {
             group: group || t('group.ungrouped'),
             logo,
