@@ -38,13 +38,9 @@ export function buildMediaOptions(settings: Settings): string[] {
     `:h264-threads=${settings.h264Threads}`,
     // Generous TCP timeout so VLC does not immediately give up on slow streams.
     ':tcp-timeout=10000',
-    // Auto-reconnect at the HTTP layer (handles brief CDN 503s silently).
-    ':http-reconnect',
     ':rtsp-tcp',
     ':sout-mux-caching=100',
-    ':no-drop-late-frames',
-    ':no-skip-frames',
-    // Free-running clock: essential for live streams that have no PCR.
+    ':drop-late-frames',
     ':clock-synchro=0',
     // Prevent some CDN/proxy servers from blocking headless HTTP clients.
     ':http-user-agent=VLC/3.0',
