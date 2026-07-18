@@ -20,7 +20,6 @@ async function doPlay(
   const effectiveCache = cacheOverride ?? settings.networkCache
   const mediaOptions = buildMediaOptions({ ...settings, networkCache: effectiveCache })
   const state = getState()
-  let watchdogTimer: ReturnType<typeof setTimeout> | null = null
 
   function attachListeners(player: InstanceType<typeof VlcPlayer>) {
     player.removeAllListeners('error')
@@ -39,7 +38,6 @@ async function doPlay(
     player.on('playing', () => {
       if (currentPlayId !== _playId) return
       console.log('[vlc-playing]', url.substring(0, 60))
-      if (watchdogTimer) { clearTimeout(watchdogTimer); watchdogTimer = null }
       if (state.mainWindow && !state.mainWindow.isDestroyed()) {
         state.mainWindow.webContents.send('player-playing')
       }
@@ -56,44 +54,36 @@ async function doPlay(
   // Same-URL reload optimisation: reuse the existing VlcPlayer instead of
   // destroy→recreate. This avoids libVLC GPU surface renegotiation which is
   // the root cause of the window auto-resize and black-screen flash.
-  // Falls back to full recreate if the player is in a bad state.
+  // Only applies when the stream is in a healthy Playing state — for stuck
+  // streams (repeated buffering without playing), setSource() calls
+  // libvlc_media_player_stop() internally which blocks the main process.
   if (state.player && !state.player.destroyed && state.currentUrl === url) {
-    try {
-      console.log('[playback] same-url reload — reusing player, skipping destroy')
-      attachListeners(state.player)
-      state.player.setSource(url, { mediaOptions })
-      state.player.play()
-      // Watchdog: restart the guard timer for the reused player
-      watchdogTimer = setTimeout(() => {
-        if (currentPlayId !== _playId) return
-        console.warn('[play] watchdog: no playing event within 15s (reuse path), killing player')
-        if (state.player) {
-          try { state.player.removeAllListeners(); state.player.destroy() } catch (e) { console.error('[playback] watchdog kill failed:', e) }
-          state.player = null
-        }
-        if (state.mainWindow && !state.mainWindow.isDestroyed()) {
-          state.mainWindow.webContents.send('player-error')
-        }
-      }, 15000)
-      return { success: true }
-    } catch (e) {
-      console.warn('[playback] same-url reuse failed, falling back to recreate:', (e as Error).message)
-      // Fall through to the full destroy+recreate path below
+    const healthy = (state.player as any).isPlaying?.() ?? false
+    if (!healthy) {
+      console.log('[playback] same-url reload skipped — player stuck, using two-player swap')
+    } else {
+      try {
+        console.log('[playback] same-url reload — reusing player, skipping destroy')
+        attachListeners(state.player)
+        state.player.setSource(url, { mediaOptions })
+        state.player.play()
+        return { success: true }
+      } catch (e) {
+        console.warn('[playback] same-url reuse failed, falling back to recreate:', (e as Error).message)
+      }
     }
   }
 
-  // Destroy existing player BEFORE creating a new one — reusing a VLC player
-  // hung on a dead stream with setSource() freezes the app because libVLC's
-  // I/O thread is still blocked. Always start fresh for a different URL.
+  // Destroy old player before creating the new one.
   if (state.player) {
     try {
       state.player.removeAllListeners()
       state.player.destroy()
     } catch (e) {
       console.error('[playback] destroy player failed:', e)
+    } finally {
+      state.player = null
     }
-    // Give libVLC extra time to release GPU surfaces / threads before
-    // allocating a new VlcPlayer (avoids race on Windows / dead-stream freeze).
     await new Promise<void>((r) => setTimeout(r, 120))
     if (currentPlayId !== _playId) return { success: false }
   }
@@ -111,14 +101,21 @@ async function doPlay(
 
     // Wrap embed() in a timeout so a hung libVLC surface negotiation can
     // never block the Electron main process indefinitely.
-    await Promise.race([
-      Promise.resolve(ensurePlayerEmbedded()),
-      new Promise<void>((_res, reject) =>
-        setTimeout(() => reject(new Error('embed timeout')), 5000),
+    const embedTimedOut = await Promise.race([
+      Promise.resolve(ensurePlayerEmbedded()).then(() => false),
+      new Promise<boolean>((resolve) =>
+        setTimeout(() => resolve(true), 5000),
       ),
-    ]).catch((e) => {
-      console.warn('[play] embed timed out or failed:', e?.message)
-    })
+    ]).catch(() => true)
+
+    if (embedTimedOut) {
+      console.warn('[play] embed timed out — destroying player')
+      if (state.player) {
+        try { state.player.destroy() } catch (e) { console.error('[playback] embed timeout destroy:', e) }
+        state.player = null
+      }
+      return { success: false, error: 'embed timeout' }
+    }
 
     if (currentPlayId !== _playId) return { success: false }
     state.player.showOverlay()
@@ -126,20 +123,6 @@ async function doPlay(
     state.player.setSource(url, { mediaOptions })
     state.player.play()
     state.currentUrl = url
-
-    // Watchdog: if playing event doesn't fire within 15s, kill player and report error.
-    // This bounds the worst-case freeze to ~15s instead of VLC's default 20-30s.
-    watchdogTimer = setTimeout(() => {
-      if (currentPlayId !== _playId) return
-      console.warn('[play] watchdog: no playing event within 15s, killing player')
-      if (state.player) {
-        try { state.player.removeAllListeners(); state.player.destroy() } catch (e) { console.error('[playback] watchdog kill failed:', e) }
-        state.player = null
-      }
-      if (state.mainWindow && !state.mainWindow.isDestroyed()) {
-        state.mainWindow.webContents.send('player-error')
-      }
-    }, 15000)
 
     return { success: true }
   }
@@ -149,7 +132,7 @@ async function doPlay(
   } catch (e) {
     console.error('[play] error, rebuilding player:', url, (e as Error).message)
     if (state.player) {
-      try { state.player.removeAllListeners(); state.player.destroy() } catch (e) { console.error('[playback] rebuild destroy failed:', e) }
+      try { (state.player as any).removeAllListeners(); (state.player as any).destroy() } catch (e) { console.error('[playback] rebuild destroy failed:', e) }
       state.player = null
     }
     if (currentPlayId !== _playId) return { success: false }
@@ -234,7 +217,7 @@ export function registerPlaybackIpc() {
   ipcMain.handle('toggle-mute', async () => {
     if (ensureEmbedded()) {
       const p = getState().player!
-      const muted = !p.isMuted()
+      const muted = !(p as any).isMuted()
       p.setMute(muted)
       return muted
     }

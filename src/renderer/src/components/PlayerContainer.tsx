@@ -14,11 +14,9 @@ const EPG_LOAD_DELAY_MS = 500
 // immediately at 1.5 s looks jittery; 3 s gives the stream time to recover
 // without user-visible feedback on short micro-stalls.
 const BUFFERING_GRACE_MS = 3000
-// Raised from 20 s → 30 s:
-// Slow IPTV servers (e.g. those behind congested CDNs) sometimes take
-// 20–25 s to send the first segment. Give them a full 30 s before we
-// force a reconnect which would cause a visible black-screen flash.
-const BUFFER_TIMEOUT_MS = 30000
+// Removed BUFFER_TIMEOUT_MS — let VLC decide when a stream is truly
+// unreachable via its own internal timeout.  The player will keep
+// buffering indefinitely as long as VLC reports [vlc-buffering].
 const MAX_RETRIES = 5
 const LAYOUT_NOTIFY_DELAY_MS = 50
 
@@ -111,18 +109,17 @@ export default function PlayerContainer() {
   const timerRef = useRef<ReturnType<typeof setTimeout>>()
   const epgTimerRef = useRef<ReturnType<typeof setTimeout>>()
   const bufferGraceRef = useRef<ReturnType<typeof setTimeout>>()
-  const bufferTimeoutRef = useRef<ReturnType<typeof setTimeout>>()
   const errorTimerRef = useRef<ReturnType<typeof setTimeout>>()
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout>>()
   const layoutDebounceRef = useRef<ReturnType<typeof setTimeout>>()
   const rafRef = useRef<number>()
   const playerContainerRef = useRef<HTMLDivElement>(null)
+  const bufferingSeqRef = useRef(0)
 
   const clearAllTimers = useCallback(() => {
     clearTimeout(timerRef.current)
     clearTimeout(epgTimerRef.current)
     clearTimeout(bufferGraceRef.current)
-    clearTimeout(bufferTimeoutRef.current)
     clearTimeout(errorTimerRef.current)
     clearTimeout(reconnectTimerRef.current)
     clearTimeout(layoutDebounceRef.current)
@@ -150,6 +147,7 @@ export default function PlayerContainer() {
   const handleReplay = useCallback(async () => {
     if (!currentChannel) return
     switchTokenRef.current += 1
+    bufferingSeqRef.current += 1
     retryCountRef.current = 0
     setPlayerError(null)
     setIsBuffering(false)
@@ -180,46 +178,21 @@ export default function PlayerContainer() {
 
   useEffect(() => {
     const offBuffering = window.electronAPI.onPlayerBuffering(() => {
-      const token = switchTokenRef.current
+      const seq = ++bufferingSeqRef.current
+
       clearTimeout(bufferGraceRef.current)
-      clearTimeout(bufferTimeoutRef.current)
       clearTimeout(errorTimerRef.current)
 
       bufferGraceRef.current = setTimeout(() => {
-        if (switchTokenRef.current !== token) return
+        if (bufferingSeqRef.current !== seq) return
         setIsBuffering(true)
         setPlayerError(null)
       }, BUFFERING_GRACE_MS)
-
-      bufferTimeoutRef.current = setTimeout(() => {
-        if (switchTokenRef.current !== token) return
-        setPlayerError(t('player.bufferingTimeout'))
-        setIsBuffering(false)
-
-        const { autoReconnect, reconnectInterval } = settingsRef.current
-        if (autoReconnect && retryCountRef.current < MAX_RETRIES) {
-          retryCountRef.current += 1
-          reconnectTimerRef.current = setTimeout(() => {
-            if (switchTokenRef.current !== token) return
-            const ch = useStore.getState().currentChannel
-            if (!ch) return
-            setPlayerError(null)
-            setIsBuffering(false)
-            if (pipActiveRef.current) {
-              window.electronAPI.pipReloadSource()
-            } else {
-              window.electronAPI.switchChannel(ch.url)
-            }
-          }, reconnectInterval)
-        }
-      }, BUFFER_TIMEOUT_MS)
     })
 
     const offPlaying = window.electronAPI.onPlayerPlaying(() => {
-      const token = switchTokenRef.current
-      if (switchTokenRef.current !== token) return
+      bufferingSeqRef.current += 1
       clearTimeout(bufferGraceRef.current)
-      clearTimeout(bufferTimeoutRef.current)
       clearTimeout(errorTimerRef.current)
       clearTimeout(reconnectTimerRef.current)
       retryCountRef.current = 0
@@ -228,24 +201,20 @@ export default function PlayerContainer() {
     })
 
     const offError = window.electronAPI.onPlayerError(() => {
-      const token = switchTokenRef.current
+      bufferingSeqRef.current += 1
       clearTimeout(bufferGraceRef.current)
-      clearTimeout(bufferTimeoutRef.current)
       clearTimeout(errorTimerRef.current)
       clearTimeout(reconnectTimerRef.current)
       setIsBuffering(false)
 
       errorTimerRef.current = setTimeout(() => {
-        if (switchTokenRef.current !== token) return
-        setPlayerError(t('player.playError'))
-
         const { autoReconnect, reconnectInterval } = settingsRef.current
         if (autoReconnect && retryCountRef.current < MAX_RETRIES) {
           retryCountRef.current += 1
           reconnectTimerRef.current = setTimeout(() => {
-            if (switchTokenRef.current !== token) return
             const ch = useStore.getState().currentChannel
             if (!ch) return
+            bufferingSeqRef.current += 1
             setPlayerError(null)
             setIsBuffering(false)
             if (pipActiveRef.current) {
@@ -254,6 +223,8 @@ export default function PlayerContainer() {
               window.electronAPI.switchChannel(ch.url)
             }
           }, reconnectInterval)
+        } else {
+          setPlayerError(t('player.playError'))
         }
       }, 800)
     })
@@ -269,6 +240,7 @@ export default function PlayerContainer() {
   useEffect(() => {
     if (!currentChannel) return
     switchTokenRef.current += 1
+    bufferingSeqRef.current += 1
     const token = switchTokenRef.current
     retryCountRef.current = 0
     clearAllTimers()

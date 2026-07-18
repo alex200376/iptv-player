@@ -239,10 +239,10 @@ function buildInputArgs(streamUrl: string): string[] {
     '-probesize', '1000000',
   ]
   if (isHttp) {
-    base.push('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5')
+    base.push('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5', '-reconnect_at_eof', '1')
     base.push('-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36')
     base.push('-multiple_requests', '1')
-    base.push('-timeout', '5000000')
+    base.push('-timeout', '15000000')
   }
   if (isRtmp) {
     base.push('-rtmp_live', 'live')
@@ -275,8 +275,16 @@ async function handleProxyRequest(
 
   const useScale = currentScale && SCALE_MAP[currentScale]
   const gpuEnc = useScale ? await detectGpuEncoder(ffmpegPath) : null
+  const inputArgs = buildInputArgs(streamUrl)
+  // Stream-copy mode: reduce analysis time for faster first-byte-to-VLC
+  if (!useScale) {
+    for (let i = 0; i < inputArgs.length; i++) {
+      if (inputArgs[i] === '-analyzeduration') inputArgs[i + 1] = '500000'
+      if (inputArgs[i] === '-probesize') inputArgs[i + 1] = '500000'
+    }
+  }
   const args = [
-    ...buildInputArgs(streamUrl),
+    ...inputArgs,
     ...(useScale
       ? [
           '-vf', useScale,
@@ -286,8 +294,7 @@ async function handleProxyRequest(
           '-flags', 'low_delay',
         ]
       : ['-c', 'copy']),
-    '-f', 'flv',
-    '-flvflags', 'no_duration_filesize+no_sequence_end',
+    '-f', 'mpegts',
     '-flush_packets', '1',
     '-loglevel', 'warning',
     'pipe:1',
@@ -303,7 +310,7 @@ async function handleProxyRequest(
   activeProcesses.set(sessionId, proc)
 
   res.writeHead(200, {
-    'Content-Type': 'video/x-flv',
+    'Content-Type': 'video/mp2t',
     'Cache-Control': 'no-cache, no-store',
     Pragma: 'no-cache',
     'Access-Control-Allow-Origin': '*',
@@ -311,14 +318,14 @@ async function handleProxyRequest(
 
   const outputTimeout = setTimeout(() => {
     if (activeProcesses.get(sessionId) === proc) {
-      console.warn('[stream-proxy] ffmpeg no output for 10s, killing')
+      console.warn('[stream-proxy] ffmpeg no output for 20s, killing')
       activeProcesses.delete(sessionId)
       safeKill(proc)
       if (!res.writableEnded) {
         try { res.destroy() } catch (e) { console.error('[stream-proxy] destroy response:', e) }
       }
     }
-  }, 10000)
+  }, 20000)
 
   proc.stdout?.pipe(res)
 
@@ -416,7 +423,7 @@ export function getProxyUrl(
       } catch (err) {
         reject(err)
       }
-    }, 200)
+    }, 50)
   })
 }
 
