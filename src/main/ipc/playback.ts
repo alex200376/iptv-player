@@ -53,9 +53,38 @@ async function doPlay(
     })
   }
 
+  // Same-URL reload optimisation: reuse the existing VlcPlayer instead of
+  // destroy→recreate. This avoids libVLC GPU surface renegotiation which is
+  // the root cause of the window auto-resize and black-screen flash.
+  // Falls back to full recreate if the player is in a bad state.
+  if (state.player && !state.player.destroyed && state.currentUrl === url) {
+    try {
+      console.log('[playback] same-url reload — reusing player, skipping destroy')
+      attachListeners(state.player)
+      state.player.setSource(url, { mediaOptions })
+      state.player.play()
+      // Watchdog: restart the guard timer for the reused player
+      watchdogTimer = setTimeout(() => {
+        if (currentPlayId !== _playId) return
+        console.warn('[play] watchdog: no playing event within 15s (reuse path), killing player')
+        if (state.player) {
+          try { state.player.removeAllListeners(); state.player.destroy() } catch (e) { console.error('[playback] watchdog kill failed:', e) }
+          state.player = null
+        }
+        if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+          state.mainWindow.webContents.send('player-error')
+        }
+      }, 15000)
+      return { success: true }
+    } catch (e) {
+      console.warn('[playback] same-url reuse failed, falling back to recreate:', (e as Error).message)
+      // Fall through to the full destroy+recreate path below
+    }
+  }
+
   // Destroy existing player BEFORE creating a new one — reusing a VLC player
   // hung on a dead stream with setSource() freezes the app because libVLC's
-  // I/O thread is still blocked. Always start fresh.
+  // I/O thread is still blocked. Always start fresh for a different URL.
   if (state.player) {
     try {
       state.player.removeAllListeners()
@@ -155,7 +184,12 @@ export function registerPlaybackIpc() {
     // A dead stream's ffmpeg stays alive during its TCP probe timeout unless
     // we force-kill it here, causing the next stream to contend for the same
     // pipe and VLC to lag/freeze.
-    stopProxy()
+    // Skip proxy kill when reloading the same URL — terminating ffmpeg mid-stream
+    // would cause a brief drop even on a healthy stream.
+    const isSameUrl = state.currentUrl === url || state.originalUrl === url
+    if (!isSameUrl) {
+      stopProxy()
+    }
 
     if (currentPlayId !== _playId) return { success: false }
 
