@@ -9,8 +9,16 @@ import { useTranslation } from 'react-i18next'
 // constants
 const INFO_HIDE_MS = 3000
 const EPG_LOAD_DELAY_MS = 500
-const BUFFERING_GRACE_MS = 1500
-const BUFFER_TIMEOUT_MS = 20000
+// Raised from 1500 ms → 3000 ms:
+// Most transient CDN hiccups resolve within 2–3 s. Showing the spinner
+// immediately at 1.5 s looks jittery; 3 s gives the stream time to recover
+// without user-visible feedback on short micro-stalls.
+const BUFFERING_GRACE_MS = 3000
+// Raised from 20 s → 30 s:
+// Slow IPTV servers (e.g. those behind congested CDNs) sometimes take
+// 20–25 s to send the first segment. Give them a full 30 s before we
+// force a reconnect which would cause a visible black-screen flash.
+const BUFFER_TIMEOUT_MS = 30000
 const MAX_RETRIES = 5
 const LAYOUT_NOTIFY_DELAY_MS = 50
 
