@@ -1,6 +1,6 @@
 {
   "name": "iptv-player",
-  "version": "1.7.5",
+  "version": "1.7.6",
   "description": "IPTV 全能播放器 - 支持 RTMP/M3U 等格式",
   "main": "./out/main/index.js",
   "scripts": {
