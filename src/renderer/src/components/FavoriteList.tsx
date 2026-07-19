@@ -1,11 +1,11 @@
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useMemo, useRef, useEffect } from 'react'
 import { useStore } from '../stores/useStore'
-import ContextMenu from './ContextMenu'
 import { useState } from 'react'
 import MarqueeText from './MarqueeText'
 import { usePlayChannel } from '../hooks/usePlayChannel'
 import LogoImg from './LogoImg'
 import { useTranslation } from 'react-i18next'
+import type { Channel } from '../types'
 
 export default function FavoriteList() {
   const { t } = useTranslation()
@@ -14,7 +14,6 @@ export default function FavoriteList() {
   const currentChannel = useStore((s) => s.currentChannel)
   const toggleFavorite = useStore((s) => s.toggleFavorite)
 
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; channel: any } | null>(null)
   const activeRef = useRef<HTMLButtonElement>(null)
 
   const favoriteChannels = useMemo(() => {
@@ -25,14 +24,42 @@ export default function FavoriteList() {
 
   const handlePlay = usePlayChannel()
 
-  const handleContextMenu = useCallback((e: React.MouseEvent, ch: any) => {
-    e.preventDefault()
-    setCtxMenu({ x: e.clientX, y: e.clientY, channel: ch })
-  }, [])
-
   const copyUrl = useCallback((url: string) => {
     navigator.clipboard.writeText(url).catch(() => {})
   }, [])
+
+  const handleContextMenu = useCallback((e: React.MouseEvent, ch: any) => {
+    e.preventDefault()
+    window.electronAPI.showContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      channel: ch as unknown as Record<string, unknown>,
+      actions: [
+        { id: 'play', label: '▶ ' + t('channel.play') },
+        { id: 'copy-url', label: '📋 ' + t('channel.copyUrl') },
+        { separator: true, label: '' },
+        { id: 'unfavorite', label: '★ ' + t('channel.unfavorite'), danger: true },
+      ],
+    })
+  }, [t])
+
+  useEffect(() => {
+    const off = window.electronAPI.onContextMenuAction(({ action, channel }) => {
+      const ch = channel as unknown as Channel
+      switch (action) {
+        case 'play':
+          handlePlay(ch)
+          break
+        case 'copy-url':
+          copyUrl(ch.url)
+          break
+        case 'unfavorite':
+          toggleFavorite(ch.id)
+          break
+      }
+    })
+    return off
+  }, [handlePlay, copyUrl, toggleFavorite])
 
   if (favoriteChannels.length === 0) {
     return (
@@ -73,49 +100,6 @@ export default function FavoriteList() {
           </span>
         </button>
       ))}
-
-      {ctxMenu && (
-        <ContextMenu
-          x={ctxMenu.x}
-          y={ctxMenu.y}
-          onClose={() => setCtxMenu(null)}
-          items={[
-            { label: t('channel.play'), onClick: () => handlePlay(ctxMenu.channel), icon: <PlayIcon /> },
-            { label: t('channel.copyUrl'), onClick: () => copyUrl(ctxMenu.channel.url), icon: <CopyIcon /> },
-            { separator: true, label: '', onClick: () => {} },
-            {
-              label: t('channel.unfavorite'),
-              onClick: () => toggleFavorite(ctxMenu.channel.id),
-              danger: true,
-              icon: <StarOffIcon />,
-            },
-          ]}
-        />
-      )}
     </div>
-  )
-}
-
-function PlayIcon() {
-  return (
-    <svg className="w-3.5 h-3.5" viewBox="0 0 15 15" fill="currentColor">
-      <path d="M4 2.5v10l8-5z" />
-    </svg>
-  )
-}
-
-function CopyIcon() {
-  return (
-    <svg className="w-3.5 h-3.5" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <rect x="5.5" y="1.5" width="7" height="9" rx="1" /><path d="M1.5 5.5v7a1 1 0 001 1h7" />
-    </svg>
-  )
-}
-
-function StarOffIcon() {
-  return (
-    <svg className="w-3.5 h-3.5" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <path d="M7.5 1.5l2 4.5h4.5l-3.5 3 1.5 4.5-3.5-2.5-3.5 2.5 1.5-4.5-3.5-3h4.5z" />
-    </svg>
   )
 }

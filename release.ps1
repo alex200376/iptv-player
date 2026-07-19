@@ -6,13 +6,15 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# Read token from .env.local
-$envContent = Get-Content ".env.local" -ErrorAction Stop | Where-Object { $_ -match '^GITHUB_TOKEN=' }
-if (-not $envContent) {
-  Write-Error ".env.local missing GITHUB_TOKEN"
+# Use GH_TOKEN or GITHUB_TOKEN from environment
+# NEVER store tokens in files — set via:
+#   $env:GH_TOKEN="ghp_xxx"  (PowerShell)
+$token = $env:GH_TOKEN
+if (-not $token) { $token = $env:GITHUB_TOKEN }
+if (-not $token) {
+  Write-Error "Missing GitHub token. Set env var GH_TOKEN or GITHUB_TOKEN."
   exit 1
 }
-$token = $envContent -replace '^GITHUB_TOKEN='
 
 # Update version in package.json
 $pkg = Get-Content "package.json" -Raw | ConvertFrom-Json

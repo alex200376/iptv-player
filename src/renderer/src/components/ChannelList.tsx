@@ -2,7 +2,6 @@ import { useRef, useEffect, useCallback, useState, useMemo, memo } from 'react'
 import * as Accordion from '@radix-ui/react-accordion'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useStore, groupChannels } from '../stores/useStore'
-import ContextMenu from './ContextMenu'
 import { usePlayChannel } from '../hooks/usePlayChannel'
 import { useLogoUrl } from '../hooks/useLogoUrl'
 import type { Channel, ChannelGroup, EpgProgram } from '../types'
@@ -78,7 +77,6 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
     return groupChannels(channels)
   }, [groups, searchQuery, activePlaylistId, categoryFilter])
 
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; channel: Channel } | null>(null)
   const activeRef = useRef<HTMLButtonElement>(null)
   const setChannels = useStore((s) => s.setChannels)
 
@@ -102,18 +100,12 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
   }, [removing, offlineCount, setChannels])
 
   useEffect(() => {
-    if (activeRef.current && ctxMenu === null) {
+    if (activeRef.current) {
       activeRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
     }
-  }, [currentChannel, ctxMenu])
+  }, [currentChannel])
 
   const handlePlay = usePlayChannel()
-
-  const handleContextMenu = useCallback((e: React.MouseEvent, ch: Channel) => {
-    e.preventDefault()
-    setCtxMenu({ x: e.clientX, y: e.clientY, channel: ch })
-  }, [])
-
   const removeChannel = useStore((s) => s.removeChannel)
   const updateChannelStatus = useStore((s) => s.updateChannelStatus)
 
@@ -135,6 +127,47 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
     },
     [removeChannel],
   )
+
+  const handleContextMenu = useCallback((e: React.MouseEvent, ch: Channel) => {
+    e.preventDefault()
+    window.electronAPI.showContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      channel: ch as unknown as Record<string, unknown>,
+      actions: [
+        { id: 'play', label: '▶ ' + t('channel.play') },
+        { id: 'toggle-favorite', label: (favoriteIds.includes(ch.id) ? '★ ' : '☆ ') + (favoriteIds.includes(ch.id) ? t('channel.unfavorite') : t('channel.favorite')) },
+        { id: 'copy-url', label: '📋 ' + t('channel.copyUrl') },
+        { id: 'check-link', label: '✓ ' + t('channel.checkLink') },
+        { separator: true, label: '' },
+        { id: 'delete', label: '✕ ' + t('channel.deleteChannel'), danger: true },
+      ],
+    })
+  }, [t, favoriteIds])
+
+  useEffect(() => {
+    const off = window.electronAPI.onContextMenuAction(({ action, channel }) => {
+      const ch = channel as unknown as Channel
+      switch (action) {
+        case 'play':
+          handlePlay(ch)
+          break
+        case 'toggle-favorite':
+          toggleFavorite(ch.id)
+          break
+        case 'copy-url':
+          copyUrl(ch.url)
+          break
+        case 'check-link':
+          handleCheck(ch)
+          break
+        case 'delete':
+          handleDelete(ch.id)
+          break
+      }
+    })
+    return off
+  }, [handlePlay, toggleFavorite, copyUrl, handleCheck, handleDelete])
 
   const handleToggleFav = useCallback(
     (id: string) => {
@@ -271,45 +304,6 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
           )
         })}
       </Accordion.Root>
-
-      {ctxMenu && (
-        <ContextMenu
-          x={ctxMenu.x}
-          y={ctxMenu.y}
-          onClose={() => setCtxMenu(null)}
-          items={[
-            {
-              label: t('channel.play'),
-              onClick: () => handlePlay(ctxMenu.channel),
-              icon: <PlayIcon />,
-            },
-            {
-              label: favoriteIds.includes(ctxMenu.channel.id)
-                ? t('channel.unfavorite')
-                : t('channel.favorite'),
-              onClick: () => toggleFavorite(ctxMenu.channel.id),
-              icon: <StarIcon filled={favoriteIds.includes(ctxMenu.channel.id)} />,
-            },
-            {
-              label: t('channel.copyUrl'),
-              onClick: () => copyUrl(ctxMenu.channel.url),
-              icon: <CopyIcon />,
-            },
-            {
-              label: t('channel.checkLink'),
-              onClick: () => handleCheck(ctxMenu.channel),
-              icon: <CheckIcon />,
-            },
-            { separator: true, label: '', onClick: () => {} },
-            {
-              label: t('channel.deleteChannel'),
-              onClick: () => handleDelete(ctxMenu.channel.id),
-              danger: true,
-              icon: <TrashIcon />,
-            },
-          ]}
-        />
-      )}
     </div>
   )
 }
@@ -604,36 +598,6 @@ const ChannelRowWrapper = memo(function ChannelRowWrapper({
   )
 })
 
-export default memo(ChannelList)
-
-function PlayIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-      <polygon points="5,3 19,12 5,21" />
-    </svg>
-  )
-}
-
-function CopyIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="9" y="9" width="13" height="13" rx="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
-  )
-}
-
-function TrashIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <polyline points="3 6 5 6 21 6" />
-      <path d="M19 6l-1 14H6L5 6" />
-      <path d="M10 11v6M14 11v6" />
-      <path d="M9 6V4h6v2" />
-    </svg>
-  )
-}
-
 function StarIcon({ filled }: { filled: boolean }) {
   return (
     <svg
@@ -650,10 +614,4 @@ function StarIcon({ filled }: { filled: boolean }) {
   )
 }
 
-function CheckIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  )
-}
+export default memo(ChannelList)

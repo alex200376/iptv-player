@@ -1,19 +1,6 @@
 import { createHash } from 'crypto'
 import { t } from './i18n'
-
-export interface Channel {
-  id: string
-  name: string
-  url: string
-  logo?: string
-  group?: string
-  tvgId?: string
-  tvgUrl?: string
-  tvgChno?: string
-  playlistId?: string
-  status?: 'unknown' | 'online' | 'offline'
-  lastCheckedAt?: number
-}
+import type { Channel } from '../shared/types'
 
 /**
  * FIX(high): Replaced 32-bit djb2 hash with SHA-1 truncated to 16 hex chars.

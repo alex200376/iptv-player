@@ -36,10 +36,10 @@ export function usePlayChannel() {
             addHistoryEntry(channel)
           } else {
             const settings = useSettingsStore.getState().settings
-            if (settings.autoReconnect && retryCount < 3) {
+            if (settings.autoReconnect && retryCount < 5) {
               const delay = settings.reconnectInterval * (retryCount + 1)
               console.warn(
-                `[play] ${channel.name} failed, retrying in ${delay}ms (${retryCount + 1}/3)`,
+                `[play] ${channel.name} failed, retrying in ${delay}ms (${retryCount + 1}/5)`,
               )
               retryTimerRef.current = setTimeout(() => {
                 // Only retry if this channel is still the active one

@@ -117,10 +117,16 @@ function setupIPC() {
   registerUpdateIpc()
 }
 
-  const isDev = !!process.env.ELECTRON_RENDERER_URL
-  const scriptSrc = isDev
-    ? "script-src 'self' 'unsafe-inline'; "
-    : "script-src 'self'; "
+import { logger } from '../shared/logger'
+
+process.on('uncaughtException', (error) => {
+  logger.error(`uncaughtException: ${error.message}\n${error.stack}`)
+})
+
+process.on('unhandledRejection', (reason) => {
+  const msg = reason instanceof Error ? reason.message : String(reason)
+  logger.error(`unhandledRejection: ${msg}`)
+})
 
 app.whenReady().then(async () => {
   protocol.handle('logo', (request) => {
@@ -130,6 +136,14 @@ app.whenReady().then(async () => {
   })
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    /**
+     * CSP: Dev 模式下 Vite HMR 需要 'unsafe-inline' 和 'unsafe-eval'，
+     * 生產模式下只允許 'self'。
+     */
+    const isDev = !!process.env.ELECTRON_RENDERER_URL
+    const scriptSrc = isDev
+      ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+      : "script-src 'self'; "
     callback({
       responseHeaders: {
         ...details.responseHeaders,

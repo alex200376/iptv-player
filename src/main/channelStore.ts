@@ -2,7 +2,7 @@ import { app } from 'electron'
 import { writeFile, readFile, rename, copyFile, unlink } from 'fs/promises'
 import { existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
-import type { Channel } from './m3uParser'
+import type { Channel } from '../shared/types'
 
 const FILE = 'iptv-player-channels.json'
 const FILE_TMP = 'iptv-player-channels.json.tmp'

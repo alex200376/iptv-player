@@ -93,15 +93,17 @@ export default function PlayerContainer() {
   const epgCache = useStore((s) => s.epgCache)
   const loadEpg = useStore((s) => s.loadEpg)
 
-  const [showInfo, setShowInfo] = useState(false)
-  const [showEpg, setShowEpg] = useState(false)
-  const [isBuffering, setIsBuffering] = useState(false)
-  const [playerError, setPlayerError] = useState<string | null>(null)
+const [showInfo, setShowInfo] = useState(false)
+const [showEpg, setShowEpg] = useState(false)
+const [isBuffering, setIsBuffering] = useState(false)
+const [playerError, setPlayerError] = useState<string | null>(null)
+const [deadNotification, setDeadNotification] = useState<string | null>(null)
+const [autoDeadNotify, setAutoDeadNotify] = useState<{ url: string; name: string } | null>(null)
 
   const pipActiveRef = useRef(false)
   const settingsRef = useRef<{ autoReconnect: boolean; reconnectInterval: number }>({
     autoReconnect: true,
-    reconnectInterval: 2000,
+    reconnectInterval: 5000,
   })
 
   const switchTokenRef = useRef(0)
@@ -158,11 +160,11 @@ export default function PlayerContainer() {
   }, [currentChannel, t])
 
   useEffect(() => {
-    window.electronAPI.getSettings().then((s: any) => {
+    window.electronAPI.getSettings().then((s) => {
       if (!s) return
       settingsRef.current = {
         autoReconnect: s.autoReconnect ?? true,
-        reconnectInterval: Math.max(500, s.reconnectInterval ?? 2000),
+        reconnectInterval: Math.max(500, s.reconnectInterval ?? 5000),
       }
     })
   }, [])
@@ -175,6 +177,50 @@ export default function PlayerContainer() {
       if (typeof off === 'function') off()
     }
   }, [])
+
+  useEffect(() => {
+    const offDead = window.electronAPI.onPlayerDead((url: string) => {
+      const { channels, currentChannel } = useStore.getState()
+      const dead = channels.find((ch) => ch.url === url)
+      if (!dead) return
+
+      const name = dead.name
+      useStore.getState().removeChannel(dead.id)
+
+      const remaining = useStore.getState().channels
+      window.electronAPI.saveChannels(remaining as any)
+
+      setDeadNotification(t('player.deadRemoved', { name }))
+      setTimeout(() => setDeadNotification(null), 3000)
+    })
+    return () => {
+      if (typeof offDead === 'function') offDead()
+    }
+  }, [t])
+
+  useEffect(() => {
+    const offNotify = window.electronAPI.onPlayerDeadNotify((url: string) => {
+      const { channels } = useStore.getState()
+      const ch = channels.find((c) => c.url === url)
+      if (!ch) return
+      setAutoDeadNotify({ url, name: ch.name })
+    })
+    return () => {
+      if (typeof offNotify === 'function') offNotify()
+    }
+  }, [t])
+
+  const handleRemoveDead = useCallback(() => {
+    if (!autoDeadNotify) return
+    const { channels } = useStore.getState()
+    const ch = channels.find((c) => c.url === autoDeadNotify.url)
+    if (ch) {
+      useStore.getState().removeChannel(ch.id)
+      const remaining = useStore.getState().channels
+      window.electronAPI.saveChannels(remaining as any)
+    }
+    setAutoDeadNotify(null)
+  }, [autoDeadNotify])
 
   useEffect(() => {
     const offBuffering = window.electronAPI.onPlayerBuffering(() => {
@@ -408,6 +454,30 @@ export default function PlayerContainer() {
               />
             </div>
           )}
+        </div>
+      )}
+
+      {deadNotification && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-red-600 text-white rounded-lg shadow-lg text-sm animate-fade-in">
+          {deadNotification}
+        </div>
+      )}
+
+      {autoDeadNotify && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-2 bg-yellow-700 text-white rounded-lg shadow-lg text-sm animate-fade-in">
+          <span>{t('player.deadNotify', { name: autoDeadNotify.name })}</span>
+          <button
+            onClick={handleRemoveDead}
+            className="px-2 py-1 rounded bg-red-600 hover:bg-red-500 text-xs font-medium transition-colors"
+          >
+            {t('player.remove')}
+          </button>
+          <button
+            onClick={() => setAutoDeadNotify(null)}
+            className="px-2 py-1 rounded bg-white/20 hover:bg-white/30 text-xs transition-colors"
+          >
+            {t('player.dismiss')}
+          </button>
         </div>
       )}
     </div>

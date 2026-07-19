@@ -6,7 +6,7 @@
     "target": "ESNext",
     "jsx": "react-jsx",
     "outDir": "./out/renderer",
-    "rootDir": "./src/renderer",
+    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -18,5 +18,5 @@
       "@/*": ["src/renderer/src/*"]
     }
   },
-  "include": ["src/renderer/src/**/*"]
+  "include": ["src/renderer/src/**/*", "src/shared/**/*"]
 }

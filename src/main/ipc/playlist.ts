@@ -1,4 +1,4 @@
-import { ipcMain, dialog, net, app } from 'electron'
+import { ipcMain, dialog, net, app, BrowserWindow } from 'electron'
 import { createConnection } from 'net'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
@@ -8,8 +8,10 @@ import { getLocalLogoUrl, queueCacheLogos, clearLogoCache } from '../logoCache'
 import { saveUserData, loadUserData } from '../userDataStore'
 import { clearEpgCache } from '../epgStore'
 import { readSettings, writeSettings } from '../settingsStore'
-import type { Channel } from '../m3uParser'
+import type { Channel } from '../../shared/types'
 import { getState } from './shared'
+import { checkSingleChannel } from './playback'
+import { createProxyUrl, stopProxy, needsProxy } from '../streamProxy'
 
 // ── Playlist ID counter ──────────────────────────────────────────────
 // Seeded from persisted data on first use so IDs never repeat across
@@ -179,7 +181,7 @@ function detectProtocol(url: string): ProtocolType {
 // ── Retry helper ─────────────────────────────────────────────────────
 async function withRetry(
   fn: () => Promise<ProbeResult>,
-  maxAttempts: number = 3,
+  maxAttempts: number = 5,
   delayMs: number = 1500,
 ): Promise<ProbeResult> {
   let lastResult: ProbeResult = 'offline'
@@ -207,12 +209,15 @@ function parseHostPort(url: string, defaultPort: number): { host: string; port: 
   }
 }
 
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36'
+const HLS_ACCEPT = 'application/vnd.apple.mpegurl, application/x-mpegURL, */*'
+
 // ── HLS probe ────────────────────────────────────────────────────────
 async function probeHls(url: string): Promise<ProbeResult> {
   try {
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 8000)
-    const res = await net.fetch(url, { signal: controller.signal })
+    const timer = setTimeout(() => controller.abort(), 15000)
+    const res = await net.fetch(url, { signal: controller.signal, headers: { 'User-Agent': UA, Accept: HLS_ACCEPT } })
     clearTimeout(timer)
 
     if (res.status === 403) return 'online'
@@ -236,14 +241,21 @@ async function probeHls(url: string): Promise<ProbeResult> {
         const c2 = new AbortController()
         const t2 = setTimeout(() => c2.abort(), 8000)
         try {
-          const mediaRes = await net.fetch(resolvedUrl, { signal: c2.signal })
+          const mediaRes = await net.fetch(resolvedUrl, {
+            signal: c2.signal,
+            headers: {
+              'User-Agent': UA,
+              Accept: HLS_ACCEPT,
+              Origin: 'http://localhost',
+            },
+          })
           clearTimeout(t2)
           if (mediaRes.status === 200 || mediaRes.status === 206 || mediaRes.status === 403) return 'online'
         } catch {
           clearTimeout(t2)
         }
-        return 'offline'
       }
+      return 'online'
     }
 
     return 'online'
@@ -291,7 +303,7 @@ function validateFlv(bytes: Uint8Array): boolean {
 async function probeHttp(url: string): Promise<ProbeResult> {
   try {
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 10000)
+    const timer = setTimeout(() => controller.abort(), 20000)
     const res = await net.fetch(url, {
       method: 'GET',
       headers: {
@@ -307,8 +319,16 @@ async function probeHttp(url: string): Promise<ProbeResult> {
     try {
       const reader = res.body?.getReader()
       if (reader) {
-        const { done, value } = await reader.read()
-        if (!done && value) bytes = value
+        while (bytes.length < 940) {
+          const { done, value } = await reader.read()
+          if (done) break
+          if (value) {
+            const tmp = new Uint8Array(bytes.length + value.length)
+            tmp.set(bytes)
+            tmp.set(value, bytes.length)
+            bytes = tmp
+          }
+        }
         reader.cancel()
       }
     } catch (e) {
@@ -365,8 +385,8 @@ async function probeTcp(host: string, port: number, timeoutMs: number): Promise<
 async function probeM3u(url: string, depth: number = 0): Promise<ProbeResult> {
   try {
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 8000)
-    const res = await net.fetch(url, { signal: controller.signal })
+    const timer = setTimeout(() => controller.abort(), 15000)
+    const res = await net.fetch(url, { signal: controller.signal, headers: { 'User-Agent': UA, Accept: '*/*' } })
     clearTimeout(timer)
 
     if (res.status !== 200 && res.status !== 206) return 'offline'
@@ -397,7 +417,7 @@ async function probeM3u(url: string, depth: number = 0): Promise<ProbeResult> {
 }
 
 // ── Multi-protocol channel probe (with retry) ─────────────────────────
-async function probeChannel(url: string): Promise<{ result: ProbeResult; skipped?: boolean }> {
+export async function probeChannel(url: string): Promise<{ result: ProbeResult; skipped?: boolean }> {
   const protocol = detectProtocol(url)
 
   switch (protocol) {
@@ -412,7 +432,22 @@ async function probeChannel(url: string): Promise<{ result: ProbeResult; skipped
       return { result }
     }
     case 'ts': {
-      const result = await withRetry(() => probeHttp(url), 3, 2000)
+      const s = getState()
+      if (needsProxy(url) && s.vlcDir) {
+        const probeId = 'probe-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6)
+        try {
+          const proxyUrl = await createProxyUrl(url, s.vlcDir, undefined, probeId)
+          const proxyResult = await probeHttp(proxyUrl)
+          stopProxy(probeId)
+          if (proxyResult === 'online') {
+            console.log('[probe]', 'ts', url.slice(0, 60), 'online (via proxy)')
+            return { result: 'online' }
+          }
+        } catch {
+          stopProxy(probeId)
+        }
+      }
+      const result = await withRetry(() => probeHttp(url))
       console.log('[probe]', 'ts', url.slice(0, 60), result)
       return { result }
     }
@@ -460,9 +495,8 @@ export function registerPlaylistIpc() {
   ipcMain.handle('check-channel-url', async (_event, url: string) => {
     const now = Date.now()
     try {
-      const { result, skipped } = await probeChannel(url)
-      if (skipped) return { online: false, lastCheckedAt: now, skipped: true }
-      return { online: result === 'online', lastCheckedAt: now }
+      const { online, error } = await checkSingleChannel(url)
+      return { online, lastCheckedAt: now, error }
     } catch (e) {
       return { online: false, lastCheckedAt: now, error: (e as Error).message }
     }
@@ -484,7 +518,10 @@ export function registerPlaylistIpc() {
       const batch = channels.slice(i, i + batchSize)
 
       const results = await Promise.allSettled(
-        batch.map((ch) => probeChannel(ch.url)),
+        batch.map((ch) => {
+          const start = Date.now()
+          return probeChannel(ch.url).then((r) => ({ ...r, latencyMs: Date.now() - start }))
+        }),
       )
 
       if (myToken !== _checkCancelToken) break
@@ -493,9 +530,12 @@ export function registerPlaylistIpc() {
         const r = results[j]
         let result: ProbeResult = 'offline'
         let skipped = false
+        let latencyMs = 0
         if (r.status === 'fulfilled') {
           result = r.value.result
           skipped = r.value.skipped || false
+          latencyMs = r.value.latencyMs
+          if (!skipped && latencyMs > 0) result = 'online'
         }
         if (!skipped && result !== 'unknown') {
           batch[j].status = result
@@ -509,6 +549,7 @@ export function registerPlaylistIpc() {
             url: batch[j].url,
             protocol: detectProtocol(batch[j].url),
             result: skipped ? 'skipped' : result,
+            latencyMs: skipped ? undefined : latencyMs,
             checked,
             total: channels.length,
           })
@@ -748,7 +789,7 @@ export function registerPlaylistIpc() {
         fontSize: 'normal',
         compatibilityMode: false,
         autoReconnect: true,
-        reconnectInterval: 2000,
+        reconnectInterval: 5000,
         playlistRefreshInterval: 0,
         h264Threads: 0,
         avcodecHwDisabled: false,
@@ -777,4 +818,5 @@ export function registerPlaylistIpc() {
     queueCacheLogos(urls)
     return true
   })
+
 }

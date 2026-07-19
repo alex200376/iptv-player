@@ -67,6 +67,7 @@ module.exports = {
       animation: {
         'pulse-dot': 'pulse-dot 1.5s ease-in-out infinite',
         'marquee-scroll': 'marquee-scroll var(--marquee-dur, 4s) ease-in-out infinite',
+        'fade-in': 'fadeIn 0.3s ease-out forwards',
       },
     },
   },

@@ -9,6 +9,7 @@ interface Channel {
   tvgId?: string
   tvgUrl?: string
   tvgChno?: string
+  playlistId?: string
   status?: 'unknown' | 'online' | 'offline'
   lastCheckedAt?: number
 }
@@ -43,6 +44,7 @@ interface UserData {
   historyEntries: HistoryEntry[]
   playlists: PlaylistMeta[]
   epgSources?: EpgSource[]
+  activePlaylistId?: string | null
 }
 
 interface EpgSource {
@@ -69,6 +71,8 @@ interface Settings {
   autoReconnect: boolean
   reconnectInterval: number
   playlistRefreshInterval: number
+  h264Threads: number
+  avcodecHwDisabled: boolean
   streamProxy: boolean
   proxyResolution: string
   autoDownloadUpdates: boolean
@@ -85,6 +89,7 @@ interface ElectronAPI {
   switchChannel: (url: string) => Promise<PlayResult>
   importM3U: () => Promise<ImportResult>
   importM3UFromUrl: (url: string) => Promise<ImportResult>
+  importM3UFromFile: (filePath: string) => Promise<ImportResult>
   hidePlayer: () => Promise<void>
   hidePlayerWindow: () => Promise<void>
   showPlayerWindow: () => Promise<void>
@@ -107,14 +112,15 @@ interface ElectronAPI {
   getPlayerDuration: () => Promise<number>
   setPlayerTime: (timeMs: number) => Promise<void>
   toggleFullscreen: () => Promise<void>
-  notifyLayoutChange: () => Promise<void>
+  notifyLayoutChange: (force?: boolean) => Promise<void>
+  notifyLayoutChangeNow: () => Promise<void>
   exitFullscreen: () => Promise<void>
   exportM3U: () => Promise<{ success: boolean; error?: string }>
   fetchEpg: (tvgUrl: string) => Promise<EpgProgram[]>
   importEpgFromUrl: (url: string) => Promise<{ success: boolean; count: number; tvgIds: string[]; error?: string }>
   refreshPlaylists: () => Promise<{ total: number; errors: string[] }>
   refreshPlaylistUrl: (playlistId: string, url?: string) => Promise<{ added: number; updated: number; removed: number; error?: string }>
-  onPlaylistsRefreshed: (callback: (channels: Channel[]) => void) => void
+  onPlaylistsRefreshed: (callback: (channels: Channel[]) => void) => () => void
   checkChannelUrl: (url: string) => Promise<{ online: boolean; length?: number; lastCheckedAt: number; error?: string }>
   checkAllChannels: () => Promise<{ total: number; channels: Channel[] }>
   cancelCheckAll: () => void
@@ -129,31 +135,38 @@ interface ElectronAPI {
   closeWindow: () => Promise<void>
   isWindowMaximized: () => Promise<boolean>
   showAppMenu: (menuName: string, x: number, y: number) => Promise<void>
+  showContextMenu: (data: {
+    x: number; y: number; channel: Record<string, unknown>; actions: Array<{
+      id?: string; label: string; danger?: boolean; separator?: boolean
+    }>
+  }) => Promise<void>
+  onContextMenuAction: (callback: (payload: { action: string; channel: Record<string, unknown> }) => void) => () => void
   onWindowMaximized: (callback: (maximized: boolean) => void) => () => void
   onFullscreenChanged: (callback: (fullscreen: boolean) => void) => () => void
   onMenuAction: (callback: (action: string) => void) => () => void
   onMenuClosed: (callback: () => void) => () => void
-  onChannelsCheckProgress: (callback: (progress: { checked: number; total: number }) => void) => void
-  onChannelsCheckLog: (callback: (log: { name: string; url: string; protocol: string; result: string; checked: number; total: number }) => void) => void
-  onChannelsCheckDone: (callback: (channels: Channel[]) => void) => void
+  onChannelsCheckProgress: (callback: (progress: { checked: number; total: number }) => void) => () => void
+  onChannelsCheckLog: (callback: (log: { name: string; url: string; protocol: string; result: string; latencyMs?: number; checked: number; total: number }) => void) => () => void
+  onChannelsCheckDone: (callback: (channels: Channel[]) => void) => () => void
   togglePip: () => Promise<{ active: boolean }>
   pipReloadSource: () => Promise<void>
-  onPipStateChange: (callback: (active: boolean) => void) => void
-  onPlayerBuffering: (callback: () => void) => void
-  onPlayerPlaying: (callback: () => void) => void
-  onPlayerError: (callback: () => void) => void
+  onPipStateChange: (callback: (active: boolean) => void) => () => void
+  onPlayerBuffering: (callback: () => void) => () => void
+  onPlayerPlaying: (callback: () => void) => () => void
+  onPlayerError: (callback: () => void) => () => void
+  onPlayerDead: (callback: (url: string) => void) => () => void
+  onPlayerDeadNotify: (callback: (url: string) => void) => () => void
 
-  // Update
   getAppVersion: () => Promise<string>
   getVlcVersion: () => Promise<string>
   snoozeUpdate: (until: number) => Promise<boolean>
   checkForUpdate: () => Promise<{ available: boolean; info?: { version: string; releaseDate?: string; releaseNotes?: string }; error?: string; checking?: boolean }>
   downloadUpdate: () => Promise<{ downloading: boolean; error?: string }>
   installUpdate: () => Promise<boolean>
-  onUpdateStatus: (callback: (text: string) => void) => void
-  onUpdateDownloadProgress: (callback: (progress: { percent: number; bytesPerSecond: number; total: number; transferred: number }) => void) => void
-  onUpdateDownloaded: (callback: (info: { version: string }) => void) => void
-  onUpdateAvailable: (callback: (info: { version: string; releaseDate?: string; releaseNotes?: string }) => void) => void
+  onUpdateStatus: (callback: (text: string) => void) => () => void
+  onUpdateDownloadProgress: (callback: (progress: { percent: number; bytesPerSecond: number; total: number; transferred: number }) => void) => () => void
+  onUpdateDownloaded: (callback: (info: { version: string }) => void) => () => void
+  onUpdateAvailable: (callback: (info: { version: string; releaseDate?: string; releaseNotes?: string }) => void) => () => void
 }
 
 interface Window {

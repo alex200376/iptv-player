@@ -495,7 +495,10 @@ function ChannelVerifier() {
   const running = useStore((s) => s.checkRunning)
   const totalCh = useStore((s) => s.checkTotal)
   const resetCheck = useStore((s) => s.resetCheck)
+  const setChannels = useStore((s) => s.setChannels)
   const logRef = useRef<HTMLDivElement>(null)
+  const [filter, setFilter] = useState<'all' | 'online' | 'offline' | 'skipped'>('all')
+  const [removing, setRemoving] = useState(false)
 
   useEffect(() => {
     if (logRef.current) {
@@ -508,6 +511,13 @@ function ChannelVerifier() {
   const skippedCount = logs.filter((l) => l.result === 'skipped').length
   const remaining = totalCh - logs.length
 
+  const filteredLogs = logs.filter((l) =>
+    filter === 'all' ? true : l.result === filter,
+  )
+
+  const done = logs.length
+  const progress = totalCh > 0 ? (done / totalCh) * 100 : 0
+
   const handleStart = async () => {
     resetCheck()
     useStore.setState({ checkRunning: true })
@@ -518,6 +528,44 @@ function ChannelVerifier() {
     window.electronAPI.cancelCheckAll()
   }
 
+  const handleRemoveOffline = async () => {
+    if (removing || offlineCount === 0) return
+    setRemoving(true)
+    try {
+      const result = await window.electronAPI.removeOfflineChannels()
+      setChannels(result.channels)
+    } finally {
+      setRemoving(false)
+    }
+  }
+
+  const handleExport = () => {
+    const header = 'Name,URL,Protocol,Result,Latency(ms)'
+    const rows = logs.map((l) =>
+      `"${l.name.replace(/"/g, '""')}","${l.url}","${l.protocol}","${l.result}","${l.latencyMs ?? ''}"`,
+    )
+    const csv = [header, ...rows].join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'channel-verify-report.csv'
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  const latencyColor = (ms?: number) => {
+    if (ms === undefined || ms === null) return ''
+    if (ms < 500) return 'text-green-400'
+    if (ms < 1500) return 'text-yellow-400'
+    return 'text-red-400'
+  }
+
+  const latencyText = (ms?: number) => {
+    if (ms === undefined || ms === null) return '—'
+    if (ms >= 10000) return '>10s'
+    return `${ms}ms`
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
@@ -526,77 +574,121 @@ function ChannelVerifier() {
             onClick={handleStart}
             className="px-5 py-2 bg-tv-accent text-white text-tv-sm rounded-tv-md hover:bg-tv-accent-hover transition-colors"
           >
-             {t('verify.start')}
-            </button>
-          ) : (
-            <button
-              onClick={handleCancel}
-              className="px-5 py-2 bg-red-700 text-white text-tv-sm rounded-tv-md hover:bg-red-600 transition-colors"
-            >
-              {t('verify.cancel')}
-            </button>
-          )}
-          {logs.length > 0 && running && (
-            <span className="text-tv-xs text-tv-text-secondary ml-1">
-              {t('verify.checking', { done: logs.length, total: totalCh })}
-            </span>
-          )}
-        </div>
+            {t('verify.start')}
+          </button>
+        ) : (
+          <button
+            onClick={handleCancel}
+            className="px-5 py-2 bg-red-700 text-white text-tv-sm rounded-tv-md hover:bg-red-600 transition-colors"
+          >
+            {t('verify.cancel')}
+          </button>
+        )}
+        {logs.length > 0 && running && (
+          <span className="text-tv-xs text-tv-text-secondary ml-1">
+            {t('verify.checking', { done, total: totalCh })}
+          </span>
+        )}
+      </div>
 
-        {logs.length > 0 && (
-          <div className="flex items-center gap-4 text-tv-xs">
+      {logs.length > 0 && (
+        <>
+          <div className="w-full bg-[#0d0e12] rounded-tv-md h-1.5 overflow-hidden">
+            <div
+              className="bg-tv-accent h-1.5 rounded-tv-md transition-all duration-300"
+              style={{ width: `${Math.min(progress, 100)}%` }}
+            />
+          </div>
+
+          <div className="flex items-center gap-4 text-tv-xs flex-wrap">
             <span className="text-green-500">{t('verify.online', { count: onlineCount })}</span>
             <span className="text-red-500">{t('verify.offline', { count: offlineCount })}</span>
             {skippedCount > 0 && <span className="text-gray-500">{t('verify.skipped', { count: skippedCount })}</span>}
             {remaining > 0 && <span className="text-gray-500">{t('verify.remaining', { count: remaining })}</span>}
             <span className="text-tv-text-secondary">{t('verify.total', { count: totalCh })}</span>
-            <span className="ml-auto text-tv-text-secondary">
-              {running ? t('verify.autoUpdate') : t('verify.done')}
-            </span>
-        </div>
-      )}
 
-      <div
-        ref={logRef}
-        className="h-80 overflow-y-auto bg-[#0d0e12] border border-tv-border rounded-tv-md font-mono text-tv-xs leading-relaxed"
-      >
-        {logs.length === 0 && !running && (
-          <div className="flex items-center justify-center h-full text-tv-text-secondary">
-            {t('verify.emptyHint')}
-          </div>
-        )}
-        {logs.length === 0 && running && (
-          <div className="flex items-center justify-center h-full text-tv-text-secondary">
-            {t('verify.checkingHint')}
-          </div>
-        )}
-        {logs.map((log, i) => {
-          let color = ''
-          let icon = ''
-          if (log.result === 'online') { color = 'text-green-400'; icon = 'OK' }
-          else if (log.result === 'offline') { color = 'text-red-400'; icon = 'XX' }
-          else if (log.result === 'skipped') { color = 'text-gray-500'; icon = '--' }
-          else { color = 'text-gray-500'; icon = '??' }
-
-          const protoColor =
-            log.protocol === 'hls' ? 'text-blue-400' :
-            log.protocol === 'http' ? 'text-cyan-400' :
-            log.protocol === 'ts' ? 'text-emerald-400' :
-            log.protocol === 'rtmp' ? 'text-yellow-400' :
-            log.protocol === 'rtsp' ? 'text-purple-400' :
-            log.protocol === 'm3u' ? 'text-orange-400' :
-            log.protocol === 'udp' ? 'text-gray-600' : 'text-gray-500'
-
-          return (
-            <div key={i} className={`flex items-center gap-2 px-3 py-0.5 ${i % 2 === 0 ? 'bg-black/20' : ''}`}>
-              <span className={`w-6 text-center font-bold flex-shrink-0 ${color}`}>{icon}</span>
-              <span className={`w-12 flex-shrink-0 ${protoColor}`}>{log.protocol.toUpperCase()}</span>
-              <span className="truncate flex-1 text-tv-text-primary">{log.name}</span>
-              <span className="text-tv-text-secondary flex-shrink-0 w-16 text-right">{log.checked}/{log.total}</span>
+            <div className="ml-auto flex items-center gap-2">
+              {!running && offlineCount > 0 && (
+                <button
+                  onClick={handleRemoveOffline}
+                  disabled={removing}
+                  className="px-3 py-1 bg-red-900/40 text-red-400 text-tv-xs rounded-tv-md hover:bg-red-900/60 border border-red-800 transition-colors disabled:opacity-50"
+                >
+                  {removing ? t('channel.deleting') : `${t('verify.deleteOffline')} (${offlineCount})`}
+                </button>
+              )}
+              {!running && logs.length > 0 && (
+                <button
+                  onClick={handleExport}
+                  className="px-3 py-1 bg-tv-bg-surface text-tv-text-secondary text-tv-xs rounded-tv-md hover:text-tv-accent border border-tv-border transition-colors"
+                >
+                  {t('verify.exportCSV')}
+                </button>
+              )}
             </div>
-          )
-        })}
-      </div>
+          </div>
+
+          <div className="flex items-center gap-1 flex-wrap">
+            {(['all', 'online', 'offline', 'skipped'] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-3 py-1 text-tv-xs rounded-tv-md transition-colors ${
+                  filter === f
+                    ? 'bg-tv-accent/20 text-tv-accent'
+                    : 'text-tv-text-secondary hover:text-tv-text-primary'
+                }`}
+              >
+                {f === 'all' && t('verify.filterAll')}
+                {f === 'online' && `${t('verify.filterOnline')} (${onlineCount})`}
+                {f === 'offline' && `${t('verify.filterOffline')} (${offlineCount})`}
+                {f === 'skipped' && `${t('verify.filterSkipped')} (${skippedCount})`}
+              </button>
+            ))}
+          </div>
+
+          <div
+            ref={logRef}
+            className="h-80 overflow-y-auto bg-[#0d0e12] border border-tv-border rounded-tv-md font-mono text-tv-xs leading-relaxed"
+          >
+            {filteredLogs.length === 0 && (
+              <div className="flex items-center justify-center h-full text-tv-text-secondary">
+                {filter === 'all' && (running ? t('verify.checkingHint') : t('verify.emptyHint'))}
+                {filter !== 'all' && `${t('verify.noResults')} (${filter})`}
+              </div>
+            )}
+            {filteredLogs.map((log, i) => {
+              let color = ''
+              let icon = ''
+              if (log.result === 'online') { color = 'text-green-400'; icon = 'OK' }
+              else if (log.result === 'offline') { color = 'text-red-400'; icon = 'XX' }
+              else if (log.result === 'skipped') { color = 'text-gray-500'; icon = '--' }
+              else { color = 'text-gray-500'; icon = '??' }
+
+              const protoColor =
+                log.protocol === 'hls' ? 'text-blue-400' :
+                log.protocol === 'http' ? 'text-cyan-400' :
+                log.protocol === 'ts' ? 'text-emerald-400' :
+                log.protocol === 'rtmp' ? 'text-yellow-400' :
+                log.protocol === 'rtsp' ? 'text-purple-400' :
+                log.protocol === 'm3u' ? 'text-orange-400' :
+                log.protocol === 'udp' ? 'text-gray-600' : 'text-gray-500'
+
+              return (
+                <div key={i} className={`flex items-center gap-2 px-3 py-0.5 ${i % 2 === 0 ? 'bg-black/20' : ''}`}>
+                  <span className={`w-6 text-center font-bold flex-shrink-0 ${color}`}>{icon}</span>
+                  <span className={`w-12 flex-shrink-0 ${protoColor}`}>{log.protocol.toUpperCase()}</span>
+                  <span className="truncate flex-1 text-tv-text-primary">{log.name}</span>
+                  <span className={`flex-shrink-0 w-14 text-right ${latencyColor(log.latencyMs)}`}>
+                    {latencyText(log.latencyMs)}
+                  </span>
+                  <span className="text-tv-text-secondary flex-shrink-0 w-16 text-right">{log.checked}/{log.total}</span>
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
     </div>
   )
 }

@@ -53,10 +53,10 @@ interface PlayerStore extends PersistedChannelData {
   loadEpg: (tvgUrl: string) => Promise<void>
   importEpgFromUrl: (url: string) => Promise<{ success: boolean; count: number; error?: string }>
   removeEpgSource: (url: string) => void
-  checkLogs: Array<{ name: string; url: string; protocol: string; result: string; checked: number; total: number }>
+  checkLogs: Array<{ name: string; url: string; protocol: string; result: string; latencyMs?: number; checked: number; total: number }>
   checkRunning: boolean
   checkTotal: number
-  appendCheckLog: (log: { name: string; url: string; protocol: string; result: string; checked: number; total: number }) => void
+  appendCheckLog: (log: { name: string; url: string; protocol: string; result: string; latencyMs?: number; checked: number; total: number }) => void
   setCheckRunning: (v: boolean) => void
   resetCheck: () => void
   updateChannelStatus: (id: string, status: 'online' | 'offline', lastCheckedAt: number) => void
@@ -73,11 +73,11 @@ const ipcStorage = {
         const persisted: PersistedChannelData = {
           channels: channels || [],
           directStreams: (channels || []).filter((ch: Channel) => ch.id.startsWith('direct-')),
-          activePlaylistId: (userData as any)?.activePlaylistId ?? null,
-          favoriteIds: (userData as UserData)?.favoriteIds || [],
-          historyEntries: (userData as UserData)?.historyEntries || [],
-          playlists: (userData as UserData)?.playlists || [],
-          epgSources: (userData as UserData)?.epgSources || [],
+          activePlaylistId: userData?.activePlaylistId ?? null,
+          favoriteIds: userData?.favoriteIds || [],
+          historyEntries: userData?.historyEntries || [],
+          playlists: userData?.playlists || [],
+          epgSources: userData?.epgSources || [],
         }
         return JSON.stringify({ state: persisted, version: 0 })
       }
@@ -287,7 +287,7 @@ export const useStore = create<PlayerStore>()(
         if (!tvgUrl) return
         const programs = await window.electronAPI.fetchEpg(tvgUrl)
         if (programs.length > 0) {
-          set((s) => ({ epgCache: { ...s.epgCache, [tvgUrl]: programs as EpgProgram[] } }))
+          set((s) => ({ epgCache: { ...s.epgCache, [tvgUrl]: programs } }))
         }
       },
 

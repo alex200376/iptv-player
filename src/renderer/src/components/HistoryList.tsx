@@ -1,11 +1,11 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useRef, useEffect } from 'react'
 import { useStore } from '../stores/useStore'
 import { useState } from 'react'
-import ContextMenu from './ContextMenu'
 import { usePlayChannel } from '../hooks/usePlayChannel'
 import { useTranslation } from 'react-i18next'
 import LogoImg from './LogoImg'
 import MarqueeText from './MarqueeText'
+import type { Channel } from '../types'
 
 export default function HistoryList() {
   const { t, i18n } = useTranslation()
@@ -24,19 +24,41 @@ export default function HistoryList() {
   const currentChannel = useStore((s) => s.currentChannel)
   const clearHistory = useStore((s) => s.clearHistory)
 
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; channel: any } | null>(null)
   const activeRef = useRef<HTMLButtonElement>(null)
 
   const handlePlay = usePlayChannel()
 
-  const handleContextMenu = useCallback((e: React.MouseEvent, ch: any) => {
-    e.preventDefault()
-    setCtxMenu({ x: e.clientX, y: e.clientY, channel: ch })
-  }, [])
-
   const copyUrl = useCallback((url: string) => {
     navigator.clipboard.writeText(url).catch(() => {})
   }, [])
+
+  const handleContextMenu = useCallback((e: React.MouseEvent, ch: any) => {
+    e.preventDefault()
+    window.electronAPI.showContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      channel: ch as unknown as Record<string, unknown>,
+      actions: [
+        { id: 'play', label: '▶ ' + t('channel.play') },
+        { id: 'copy-url', label: '📋 ' + t('channel.copyUrl') },
+      ],
+    })
+  }, [t])
+
+  useEffect(() => {
+    const off = window.electronAPI.onContextMenuAction(({ action, channel }) => {
+      const ch = channel as unknown as Channel
+      switch (action) {
+        case 'play':
+          handlePlay(ch)
+          break
+        case 'copy-url':
+          copyUrl(ch.url)
+          break
+      }
+    })
+    return off
+  }, [handlePlay, copyUrl])
 
   if (historyEntries.length === 0) {
     return (
@@ -84,34 +106,6 @@ export default function HistoryList() {
           </div>
         </button>
       ))}
-
-      {ctxMenu && (
-        <ContextMenu
-          x={ctxMenu.x}
-          y={ctxMenu.y}
-          onClose={() => setCtxMenu(null)}
-          items={[
-            { label: t('channel.play'), onClick: () => handlePlay(ctxMenu.channel), icon: <PlayIcon /> },
-            { label: t('channel.copyUrl'), onClick: () => copyUrl(ctxMenu.channel.url), icon: <CopyIcon /> },
-          ]}
-        />
-      )}
     </div>
-  )
-}
-
-function PlayIcon() {
-  return (
-    <svg className="w-3.5 h-3.5" viewBox="0 0 15 15" fill="currentColor">
-      <path d="M4 2.5v10l8-5z" />
-    </svg>
-  )
-}
-
-function CopyIcon() {
-  return (
-    <svg className="w-3.5 h-3.5" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <rect x="5.5" y="1.5" width="7" height="9" rx="1" /><path d="M1.5 5.5v7a1 1 0 001 1h7" />
-    </svg>
   )
 }

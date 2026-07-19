@@ -29,11 +29,11 @@ interface SettingsStore {
 const DEFAULTS: Settings = {
   theme: 'dark',
   hardwareAcceleration: 'd3d11va',
-  networkCache: 400,
+  networkCache: 800,
   fontSize: 'normal',
   compatibilityMode: false,
   autoReconnect: true,
-  reconnectInterval: 2000,
+  reconnectInterval: 5000,
   playlistRefreshInterval: 0,
   h264Threads: 0,
   avcodecHwDisabled: false,

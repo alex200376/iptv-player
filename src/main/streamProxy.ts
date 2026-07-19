@@ -427,6 +427,18 @@ export function getProxyUrl(
   })
 }
 
+export async function createProxyUrl(
+  streamUrl: string,
+  vlcDir?: string | null,
+  scale?: string,
+  sessionId: string = 'main',
+): Promise<string> {
+  currentScale = scale && SCALE_MAP[scale] ? scale : null
+  const port = await ensureServer(vlcDir)
+  const encoded = Buffer.from(streamUrl).toString('base64url')
+  return `http://127.0.0.1:${port}/proxy/${sessionId}/${encoded}`
+}
+
 export function destroyProxy() {
   stopProxy('all')
   if (switchTimer !== null) {

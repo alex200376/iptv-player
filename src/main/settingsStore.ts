@@ -31,7 +31,7 @@ const DEFAULTS: Settings = {
   fontSize: 'normal',
   compatibilityMode: false,
   autoReconnect: true,
-  reconnectInterval: 2000,
+  reconnectInterval: 5000,
   playlistRefreshInterval: 0,
   h264Threads: 0,
   avcodecHwDisabled: false,

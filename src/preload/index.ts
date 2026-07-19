@@ -136,7 +136,7 @@ const api = {
   ) => on('channels-check-progress', callback),
 
   onChannelsCheckLog: (
-    callback: (log: { name: string; url: string; protocol: string; result: string; checked: number; total: number }) => void,
+    callback: (log: { name: string; url: string; protocol: string; result: string; latencyMs?: number; checked: number; total: number }) => void,
   ) => on('channels-check-log', callback),
 
   onChannelsCheckDone: (callback: (channels: unknown[]) => void) =>
@@ -153,6 +153,13 @@ const api = {
   isWindowMaximized: () => ipcRenderer.invoke('is-window-maximized'),
   showAppMenu: (menuName: string, x: number, y: number) =>
     ipcRenderer.invoke('show-app-menu', menuName, x, y),
+  showContextMenu: (data: {
+    x: number; y: number; channel: Record<string, unknown>; actions: Array<{
+      id?: string; label: string; danger?: boolean; separator?: boolean
+    }>
+  }) => ipcRenderer.invoke('show-context-menu', data),
+  onContextMenuAction: (callback: (payload: { action: string; channel: Record<string, unknown> }) => void) =>
+    on<{ action: string; channel: Record<string, unknown> }>('context-menu-action', callback),
   onWindowMaximized: (callback: (maximized: boolean) => void) =>
     on<boolean>('window-maximized', callback),
   onFullscreenChanged: (callback: (fullscreen: boolean) => void) =>
@@ -161,6 +168,14 @@ const api = {
     on<string>('menu-action', callback),
   onMenuClosed: (callback: () => void) =>
     on<void>('menu-closed', callback),
+
+  // Dead stream auto-removal
+  onPlayerDead: (callback: (url: string) => void): (() => void) =>
+    on<string>('player-dead', callback),
+
+  // Auto-verify: stream appears offline during playback
+  onPlayerDeadNotify: (callback: (url: string) => void): (() => void) =>
+    on<string>('player-dead-notify', callback),
 
   // Player state events — all return unsubscribe functions.
   onPlayerBuffering: (callback: () => void): (() => void) => {

@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import { ipcMain, BrowserWindow, Menu } from 'electron'
 import { join } from 'path'
 import { getBinding } from 'electron-vlc-player'
 import { getState, ensureEmbedded } from './shared'
@@ -84,6 +84,25 @@ export function registerWindowIpc() {
     const win = getState().mainWindow
     if (!win) return
     showMenuPopup(menuName, win, x, y)
+  })
+
+  ipcMain.handle('show-context-menu', (event, data: {
+    x: number; y: number; channel: Record<string, unknown>; actions: Array<{
+      id?: string; label: string; danger?: boolean; separator?: boolean
+    }>
+  }) => {
+    const { x, y, channel, actions } = data
+    const template = actions.map((a) => {
+      if (a.separator) return { type: 'separator' as const }
+      return {
+        label: a.label,
+        click: () => {
+          event.sender.send('context-menu-action', { action: a.id, channel })
+        },
+      }
+    })
+    const menu = Menu.buildFromTemplate(template)
+    menu.popup({ window: BrowserWindow.fromWebContents(event.sender)!, x, y })
   })
 
   ipcMain.handle('toggle-fullscreen', () => {

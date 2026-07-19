@@ -5,6 +5,14 @@ import { getState, buildMediaOptions } from './shared'
 import { createPipWindow, getPipHtml, positionPipBottomRight } from '../pipManager'
 import { needsProxy, getProxyUrl, stopProxy, isFfmpegAvailable } from '../streamProxy'
 
+function destroyPlayerAsync(player: InstanceType<typeof VlcPlayer> | null) {
+  if (!player || player.destroyed) return
+  try { player.removeAllListeners() } catch { /* ignore */ }
+  setImmediate(() => {
+    try { player.destroy() } catch (e) { console.error('[pip] async destroy failed:', e) }
+  })
+}
+
 async function enterPipMode() {
   const state = getState()
   if (!state.player || !state.mainWindow || !state.currentUrl) return
@@ -23,8 +31,7 @@ async function enterPipMode() {
   const savedTime = state.player.getTime()
   const savedMuted = getBinding().getMute(state.player.playerId)
 
-  state.player.removeAllListeners()
-  state.player.destroy()
+  destroyPlayerAsync(state.player)
   state.player = null
 
   state.pipWindow = createPipWindow(state.vlcDir!)
@@ -94,8 +101,7 @@ export async function exitPipMode() {
   const savedTime = state.player.getTime()
   const savedMuted = getBinding().getMute(state.player.playerId)
 
-  state.player.removeAllListeners()
-  state.player.destroy()
+  destroyPlayerAsync(state.player)
   state.player = null
 
   if (!state.pipWindow.isDestroyed()) state.pipWindow.close()
@@ -157,11 +163,8 @@ export async function reloadPipSource() {
 
   const savedBounds = state.pipWindow.getBounds()
 
-  state.player.removeAllListeners()
-  state.player.destroy()
+  destroyPlayerAsync(state.player)
   state.player = null
-
-  await new Promise<void>((r) => setTimeout(r, 120))
 
   state.player = new VlcPlayer({
     window: state.pipWindow,
