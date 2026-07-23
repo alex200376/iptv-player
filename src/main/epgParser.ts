@@ -11,10 +11,20 @@ export interface EpgProgram {
 }
 
 function parseXmltvTime(timeStr: string): Date {
-  const match = timeStr.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\s/)
+  const match = timeStr.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\s([+-]\d{4})$/)
   if (!match) return new Date(timeStr)
-  const [, y, m, d, h, min, s] = match
-  return new Date(Number(y), Number(m) - 1, Number(d), Number(h), Number(min), Number(s))
+  const [, y, m, d, h, min, s, tz] = match
+  const year = Number(y)
+  const month = Number(m) - 1
+  const day = Number(d)
+  const hour = Number(h)
+  const minute = Number(min)
+  const second = Number(s)
+  const tzSign = tz[0] === '+' ? 1 : -1
+  const tzHours = Number(tz.slice(1, 3))
+  const tzMinutes = Number(tz.slice(3, 5))
+  const utcMs = Date.UTC(year, month, day, hour, minute, second) - tzSign * (tzHours * 60 + tzMinutes) * 60000
+  return new Date(utcMs)
 }
 
 /**
