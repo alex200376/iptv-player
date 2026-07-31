@@ -16,12 +16,16 @@ if (-not $token) {
   exit 1
 }
 
-# Update version in package.json
-$pkg = Get-Content "package.json" -Raw | ConvertFrom-Json
-$pkg.version = $Version
-$pkg | ConvertTo-Json -Depth 10 | Set-Content "package.json"
+# Update version in package.json (regex replace to preserve file formatting/encoding)
+$raw = Get-Content "package.json" -Raw -Encoding UTF8
+$newRaw = [regex]::Replace($raw, '"version"\s*:\s*"[^"]+"', ('"version": "' + $Version + '"'), 1)
+if ($newRaw -eq $raw) { Write-Error "Could not find version field in package.json"; exit 1 }
+[System.IO.File]::WriteAllText((Resolve-Path "package.json"), $newRaw, (New-Object System.Text.UTF8Encoding $false))
 
 # Build
+# CSC_IDENTITY_AUTO_DISCOVERY=false skips code-signing discovery (no cert configured),
+# which avoids electron-builder downloading winCodeSign and failing on macOS symlinks.
+$env:CSC_IDENTITY_AUTO_DISCOVERY = "false"
 npm run dist
 if ($LASTEXITCODE -ne 0) { throw "Build failed" }
 
