@@ -1,89 +1,20 @@
 /// <reference types="vite/client" />
 
-interface Channel {
-  id: string
-  name: string
-  url: string
-  logo?: string
-  group?: string
-  tvgId?: string
-  tvgUrl?: string
-  tvgChno?: string
-  playlistId?: string
-  status?: 'unknown' | 'online' | 'offline'
-  lastCheckedAt?: number
-}
-
-interface EpgProgram {
-  channelTvgId: string
-  start: string
-  stop: string
-  title: string
-  description?: string
-  category?: string
-  icon?: string
-}
-
-interface HistoryEntry {
-  channel: Channel
-  watchedAt: number
-}
-
-interface PlaylistMeta {
-  id: string
-  name: string
-  source: 'file' | 'url'
-  path?: string
-  url?: string
-  importedAt: number
-  channelCount: number
-}
-
-interface UserData {
-  favoriteIds: string[]
-  historyEntries: HistoryEntry[]
-  playlists: PlaylistMeta[]
-  epgSources?: EpgSource[]
-  activePlaylistId?: string | null
-}
-
-interface EpgSource {
-  url: string
-  importedAt: number
-  programCount: number
-  tvgIds: string[]
-}
-
-interface ImportResult {
-  channels: Channel[]
-  playlistId?: string
-  playlistName?: string
-  url?: string
-  error?: string
-}
-
-interface Settings {
-  theme: string
-  hardwareAcceleration: string
-  networkCache: number
-  fontSize: string
-  compatibilityMode: boolean
-  autoReconnect: boolean
-  reconnectInterval: number
-  playlistRefreshInterval: number
-  h264Threads: number
-  avcodecHwDisabled: boolean
-  streamProxy: boolean
-  proxyResolution: string
-  autoDownloadUpdates: boolean
-  snoozeUpdateUntil: number
-  language: string
-}
-
-interface PlayResult {
-  success: boolean
-  error?: string
-}
+import type {
+  Channel,
+  EpgProgram,
+  HistoryEntry,
+  PlaylistMeta,
+  UserData,
+  EpgSource,
+  Settings,
+  ImportResult,
+  PlayResult,
+  UpdateDownloadProgress,
+  UpdateInfo,
+  ChannelCheckProgress,
+  ChannelCheckLog,
+} from '../../shared/types'
 
 interface ElectronAPI {
   switchChannel: (url: string) => Promise<PlayResult>
@@ -96,7 +27,7 @@ interface ElectronAPI {
   hideOverlay: () => void
   showOverlay: () => void
   getSettings: () => Promise<Settings>
-  saveSettings: (s: Record<string, unknown>) => Promise<boolean>
+  saveSettings: (s: Settings) => Promise<boolean>
   applyHwAccel: () => Promise<boolean>
   saveChannels: (channels: Channel[]) => Promise<void>
   loadChannels: () => Promise<Channel[]>
@@ -136,17 +67,17 @@ interface ElectronAPI {
   isWindowMaximized: () => Promise<boolean>
   showAppMenu: (menuName: string, x: number, y: number) => Promise<void>
   showContextMenu: (data: {
-    x: number; y: number; channel: Record<string, unknown>; actions: Array<{
+    x: number; y: number; channel: Channel; actions: Array<{
       id?: string; label: string; danger?: boolean; separator?: boolean
     }>
   }) => Promise<void>
-  onContextMenuAction: (callback: (payload: { action: string; channel: Record<string, unknown> }) => void) => () => void
+  onContextMenuAction: (callback: (payload: { action: string; channel: Channel }) => void) => () => void
   onWindowMaximized: (callback: (maximized: boolean) => void) => () => void
   onFullscreenChanged: (callback: (fullscreen: boolean) => void) => () => void
   onMenuAction: (callback: (action: string) => void) => () => void
   onMenuClosed: (callback: () => void) => () => void
-  onChannelsCheckProgress: (callback: (progress: { checked: number; total: number }) => void) => () => void
-  onChannelsCheckLog: (callback: (log: { name: string; url: string; protocol: string; result: string; latencyMs?: number; checked: number; total: number }) => void) => () => void
+  onChannelsCheckProgress: (callback: (progress: ChannelCheckProgress) => void) => () => void
+  onChannelsCheckLog: (callback: (log: ChannelCheckLog) => void) => () => void
   onChannelsCheckDone: (callback: (channels: Channel[]) => void) => () => void
   togglePip: () => Promise<{ active: boolean }>
   pipReloadSource: () => Promise<void>
@@ -160,13 +91,13 @@ interface ElectronAPI {
   getAppVersion: () => Promise<string>
   getVlcVersion: () => Promise<string>
   snoozeUpdate: (until: number) => Promise<boolean>
-  checkForUpdate: () => Promise<{ available: boolean; info?: { version: string; releaseDate?: string; releaseNotes?: string }; error?: string; checking?: boolean }>
+  checkForUpdate: () => Promise<{ available: boolean; info?: UpdateInfo; error?: string; checking?: boolean }>
   downloadUpdate: () => Promise<{ downloading: boolean; error?: string }>
   installUpdate: () => Promise<boolean>
   onUpdateStatus: (callback: (text: string) => void) => () => void
-  onUpdateDownloadProgress: (callback: (progress: { percent: number; bytesPerSecond: number; total: number; transferred: number }) => void) => () => void
+  onUpdateDownloadProgress: (callback: (progress: UpdateDownloadProgress) => void) => () => void
   onUpdateDownloaded: (callback: (info: { version: string }) => void) => () => void
-  onUpdateAvailable: (callback: (info: { version: string; releaseDate?: string; releaseNotes?: string }) => void) => () => void
+  onUpdateAvailable: (callback: (info: UpdateInfo) => void) => () => void
 }
 
 interface Window {

@@ -9,12 +9,14 @@ import Onboarding from './components/Onboarding'
 import UpdateDialog from './components/UpdateDialog'
 import ImportDialog from './components/ImportDialog'
 import OpenStreamDialog from './components/OpenStreamDialog'
+import ToastContainer from './components/ToastContainer'
 import { useStore } from './stores/useStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { applyTheme } from './themes'
-import type { Channel } from './types'
+import { useTranslation } from 'react-i18next'
 
 export default function App() {
+  const { t } = useTranslation()
   const [epgPageOpen, setEpgPageOpen] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(() => {
     return !localStorage.getItem('iptv-player-onboarded')
@@ -29,6 +31,8 @@ export default function App() {
   const addPlaylist = useStore((s) => s.addPlaylist)
   const settingsOpen = useStore((s) => s.settingsOpen)
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
+  const volume = useStore((s) => s.volume)
+  const setVolume = useStore((s) => s.setVolume)
   const epgSources = useStore((s) => s.epgSources)
   const loadEpg = useStore((s) => s.loadEpg)
   const { loadSettings, settings } = useSettingsStore()
@@ -50,10 +54,10 @@ export default function App() {
     if (!hydrated) return
 
     const offRefreshed = window.electronAPI.onPlaylistsRefreshed((channels) => {
-      if (channels.length > 0) setChannels(channels as Channel[])
+      if (channels.length > 0) setChannels(channels)
     })
     const offCheckDone = window.electronAPI.onChannelsCheckDone((channels) => {
-      if (channels.length > 0) setChannels(channels as Channel[])
+      if (channels.length > 0) setChannels(channels)
       useStore.setState({ checkRunning: false })
     })
     const offCheckLog = window.electronAPI.onChannelsCheckLog((log) => {
@@ -160,15 +164,15 @@ export default function App() {
           break
         case 'ArrowUp':
           e.preventDefault()
-          window.electronAPI.setVolume(
-            Math.min(100, parseInt(localStorage.getItem('volume') || '80') + 5),
-          )
+          const newVolUp = Math.min(100, useStore.getState().volume + 5)
+          useStore.getState().setVolume(newVolUp)
+          window.electronAPI.setVolume(newVolUp)
           break
         case 'ArrowDown':
           e.preventDefault()
-          window.electronAPI.setVolume(
-            Math.max(0, parseInt(localStorage.getItem('volume') || '80') - 5),
-          )
+          const newVolDown = Math.max(0, useStore.getState().volume - 5)
+          useStore.getState().setVolume(newVolDown)
+          window.electronAPI.setVolume(newVolDown)
           break
         case 'f':
         case 'F':
@@ -254,7 +258,7 @@ export default function App() {
       if (result.channels && result.channels.length > 0) {
         const allChannels = [...groups.flatMap((g) => g.channels), ...result.channels]
         setChannels(allChannels)
-        await window.electronAPI.saveChannels(allChannels as unknown[])
+        await window.electronAPI.saveChannels(allChannels)
         addPlaylist({
           id: result.playlistId,
           name: result.playlistName,
@@ -285,7 +289,7 @@ export default function App() {
               <polyline points="17 8 12 3 7 8" />
               <line x1="12" y1="3" x2="12" y2="15" />
             </svg>
-            <p className="text-lg font-semibold text-foreground">放開以匯入 M3U 播放列表</p>
+            <p className="text-lg font-semibold text-foreground">{t('app.dropToImport')}</p>
           </div>
         </div>
       )}
@@ -309,6 +313,7 @@ export default function App() {
       {showUpdateDialog && <UpdateDialog onClose={() => setShowUpdateDialog(false)} />}
       <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
       {streamOpen && <OpenStreamDialog onClose={() => { setStreamOpen(false); window.electronAPI.showPlayerWindow() }} />}
+      <ToastContainer />
     </div>
   )
 }

@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import { readSettings, writeSettings } from '../settingsStore'
 import { getState } from './shared'
 import { refreshAllUrlPlaylists } from './playlist'
+import type { Settings } from '../../shared/types'
 
 function startPlaylistRefreshTimer() {
   const state = getState()
@@ -15,11 +16,11 @@ function startPlaylistRefreshTimer() {
 export function registerSettingsIpc() {
   ipcMain.handle('get-settings', () => readSettings())
 
-  ipcMain.handle('save-settings', (_event, s: Record<string, unknown>) => {
-    writeSettings(s as any)
+  ipcMain.handle('save-settings', (_event, s: Settings) => {
+    writeSettings(s)
     startPlaylistRefreshTimer()
     const state = getState()
-    const lang = (s as any).language
+    const lang = s.language
     if (lang && state.player && !state.player.destroyed) {
       try { state.player.setLocale(lang === 'zh-CN' ? 'zh-CN' : 'en') } catch (e) { console.error('[settings] setLocale:', e) }
     }

@@ -1,23 +1,6 @@
 import { create } from 'zustand'
+import type { Settings } from '../../../../shared/types'
 import type { ThemeId } from '../themes'
-
-export interface Settings {
-  theme: ThemeId
-  hardwareAcceleration: string
-  networkCache: number
-  fontSize: 'small' | 'normal' | 'large' | 'xlarge'
-  compatibilityMode: boolean
-  autoReconnect: boolean
-  reconnectInterval: number
-  playlistRefreshInterval: number
-  h264Threads: number
-  avcodecHwDisabled: boolean
-  streamProxy: boolean
-  proxyResolution: string
-  autoDownloadUpdates: boolean
-  snoozeUpdateUntil: number
-  language: 'zh-CN' | 'en-US'
-}
 
 interface SettingsStore {
   settings: Settings

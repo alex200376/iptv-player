@@ -1,46 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-
-interface Channel {
-  id: string
-  name: string
-  url: string
-  logo?: string
-  group?: string
-  tvgId?: string
-  tvgUrl?: string
-  tvgChno?: string
-  status?: 'unknown' | 'online' | 'offline'
-  lastCheckedAt?: number
-}
-
-interface PlaylistMeta {
-  id: string
-  name: string
-  source: 'file' | 'url'
-  path?: string
-  url?: string
-  importedAt: number
-  channelCount: number
-}
-
-interface HistoryEntry {
-  channel: Channel
-  watchedAt: number
-}
-
-interface EpgSource {
-  url: string
-  importedAt: number
-  programCount: number
-  tvgIds: string[]
-}
-
-interface UserData {
-  favoriteIds: string[]
-  historyEntries: HistoryEntry[]
-  playlists: PlaylistMeta[]
-  epgSources?: EpgSource[]
-}
+import type { Channel, PlaylistMeta, HistoryEntry, EpgSource, UserData } from '../shared/types'
 
 // Helper: register a listener and return a cleanup function.
 function on<T>(channel: string, cb: (payload: T) => void): () => void {
@@ -154,12 +113,12 @@ const api = {
   showAppMenu: (menuName: string, x: number, y: number) =>
     ipcRenderer.invoke('show-app-menu', menuName, x, y),
   showContextMenu: (data: {
-    x: number; y: number; channel: Record<string, unknown>; actions: Array<{
+    x: number; y: number; channel: Channel; actions: Array<{
       id?: string; label: string; danger?: boolean; separator?: boolean
     }>
   }) => ipcRenderer.invoke('show-context-menu', data),
-  onContextMenuAction: (callback: (payload: { action: string; channel: Record<string, unknown> }) => void) =>
-    on<{ action: string; channel: Record<string, unknown> }>('context-menu-action', callback),
+  onContextMenuAction: (callback: (payload: { action: string; channel: Channel }) => void) =>
+    on<{ action: string; channel: Channel }>('context-menu-action', callback),
   onWindowMaximized: (callback: (maximized: boolean) => void) =>
     on<boolean>('window-maximized', callback),
   onFullscreenChanged: (callback: (fullscreen: boolean) => void) =>

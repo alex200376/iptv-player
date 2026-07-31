@@ -5,6 +5,7 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { useStore, groupChannels } from '../stores/useStore'
 import type { Channel } from '../types'
 import UpdateDialog from './UpdateDialog'
+import { toast } from '../stores/toastStore'
 import { useTranslation } from 'react-i18next'
 
 export default function SettingsPage({ variant = 'page', onClose }: { variant?: 'page' | 'overlay'; onClose?: () => void }) {
@@ -359,9 +360,9 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                     onClick={async () => {
                       const result = await window.electronAPI.backupData()
                       if (result.success) {
-                        alert(t('settings.backupSuccess'))
+                        toast(t('settings.backupSuccess'), 'success')
                       } else if (result.error) {
-                        alert(result.error)
+                        toast(result.error, 'error')
                       }
                     }}
                     className="flex-1 py-2 bg-tv-bg border border-tv-border text-tv-text-primary text-tv-sm rounded-tv-md hover:bg-tv-bg-surface transition-colors"
@@ -369,40 +370,40 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                     {t('settings.backup')}
                   </button>
                    <button
-                     onClick={async () => {
-                       const result = await window.electronAPI.restoreData()
-                       if (result.success) {
-                         const channels = await window.electronAPI.loadChannels()
-                         const userData = await window.electronAPI.loadUserData()
-                         useStore.setState({
-                           groups: groupChannels(channels as Channel[]),
-                           currentChannel: null,
-                           isPlaying: false,
-                           searchQuery: '',
-                           navTab: 'channels',
-                           directStreams: [],
-                           settingsOpen: false,
-                           activePlaylistId: null,
-                           favoriteIds: userData.favoriteIds || [],
-                           historyEntries: userData.historyEntries || [],
-                           playlists: userData.playlists || [],
-                           epgSources: userData.epgSources || [],
-                           checkLogs: [],
-                           checkRunning: false,
-                           checkTotal: 0,
-                         })
-                             await useSettingsStore.getState().loadSettings()
-                             localStorage.clear()
-                             const newSettings = useSettingsStore.getState().settings
-                         i18n.changeLanguage(newSettings.language)
-                         document.documentElement.lang = newSettings.language
-                          const restored = result.info
-                          alert(t('settings.restoreSuccess', { channels: restored.channels, playlists: restored.playlists }))
-                         onClose?.()
-                       } else if (result.error) {
-                         alert(result.error)
-                       }
-                     }}
+onClick={async () => {
+                        const result = await window.electronAPI.restoreData()
+                        if (result.success) {
+                          const channels = await window.electronAPI.loadChannels()
+                          const userData = await window.electronAPI.loadUserData()
+                          useStore.setState({
+                            groups: groupChannels(channels as Channel[]),
+                            currentChannel: null,
+                            isPlaying: false,
+                            searchQuery: '',
+                            navTab: 'channels',
+                            directStreams: [],
+                            settingsOpen: false,
+                            activePlaylistId: null,
+                            favoriteIds: userData.favoriteIds || [],
+                            historyEntries: userData.historyEntries || [],
+                            playlists: userData.playlists || [],
+                            epgSources: userData.epgSources || [],
+                            checkLogs: [],
+                            checkRunning: false,
+                            checkTotal: 0,
+                          })
+                              await useSettingsStore.getState().loadSettings()
+                              localStorage.clear()
+                              const newSettings = useSettingsStore.getState().settings
+                          i18n.changeLanguage(newSettings.language)
+                          document.documentElement.lang = newSettings.language
+                           const restored = result.info
+                           toast(t('settings.restoreSuccess', { channels: restored.channels, playlists: restored.playlists }), 'success')
+                          onClose?.()
+                        } else if (result.error) {
+                          toast(result.error, 'error')
+                        }
+                      }}
                      className="flex-1 py-2 bg-tv-bg border border-tv-border text-tv-text-primary text-tv-sm rounded-tv-md hover:bg-tv-bg-surface transition-colors"
                    >
                      {t('settings.restore')}

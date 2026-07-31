@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useStore } from '../stores/useStore'
-import type { PlaylistMeta } from '../types'
+import type { Channel, PlaylistMeta } from '../types'
 import { useTranslation } from 'react-i18next'
 
 export default function ImportDialog({
@@ -34,7 +34,7 @@ export default function ImportDialog({
   async function mergeChannels(newChannels: Channel[], playlistId: string, playlistName: string, source: 'file' | 'url' = 'file', playlistUrl?: string, filePath?: string): Promise<boolean> {
     const existing = groups.flatMap((g) => g.channels)
     const existingUrls = new Set(existing.map((ch) => ch.url))
-    const unique: any[] = []
+    const unique: Channel[] = []
     let dupCount = 0
     for (const ch of newChannels) {
       if (existingUrls.has(ch.url)) {
@@ -51,7 +51,7 @@ export default function ImportDialog({
     const merged = [...existing, ...unique]
     const playlistChannelCount = merged.filter((c) => c.playlistId === playlistId).length
     setChannels(merged)
-    await window.electronAPI.saveChannels(merged as unknown[])
+    await window.electronAPI.saveChannels(merged)
 
     const meta: PlaylistMeta = {
       id: playlistId,

@@ -6,4 +6,7 @@ export type {
   HistoryEntry,
   EpgSource,
   UserData,
+  Settings,
+  ImportResult,
+  PlayResult,
 } from '../../../../shared/types'

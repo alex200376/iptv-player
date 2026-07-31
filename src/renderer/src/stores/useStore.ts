@@ -33,6 +33,8 @@ interface PlayerStore extends PersistedChannelData {
   navTab: string
   settingsOpen: boolean
   epgCache: Record<string, EpgProgram[]>
+  volume: number
+  setVolume: (vol: number) => void
   setChannels: (channels: Channel[]) => void
   reorderGroup: (groupId: string, targetGroupId: string, position?: 'before' | 'after') => void
   reorderChannel: (channelId: string, targetChannelId: string, position?: 'before' | 'after') => void
@@ -141,6 +143,7 @@ export const useStore = create<PlayerStore>()(
       checkLogs: [],
       checkRunning: false,
       checkTotal: 0,
+      volume: parseInt(localStorage.getItem('iptv-volume') || '80', 10),
 
       setChannels: (channels) => set({ groups: groupChannels(channels), channels }),
 
@@ -330,6 +333,11 @@ export const useStore = create<PlayerStore>()(
           const allChannels = groups.flatMap((g) => g.channels)
           return { groups, channels: allChannels }
         }),
+
+      setVolume: (vol: number) => {
+        localStorage.setItem('iptv-volume', String(vol))
+        set({ volume: vol })
+      },
     }),
     {
       name: 'iptv-player-store',

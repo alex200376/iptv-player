@@ -245,5 +245,9 @@
   "topbar.openStream": "打开网络流",
   "topbar.epgGuide": "节目指南",
   "topbar.settings": "设置 (Ctrl+,)",
-  "updateBadge.newVersion": "新版本 v{{version}} 可用"
+  "updateBadge.newVersion": "新版本 v{{version}} 可用",
+  "errorBoundary.title": "应用出现了意外错误",
+  "errorBoundary.unknown": "未知错误",
+  "errorBoundary.retry": "重试",
+  "app.dropToImport": "放開以匯入 M3U 播放列表"
 }

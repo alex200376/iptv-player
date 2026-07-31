@@ -1,24 +1,7 @@
 import { app } from 'electron'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
-
-export interface Settings {
-  theme: string
-  hardwareAcceleration: string
-  networkCache: number
-  fontSize: string
-  compatibilityMode: boolean
-  autoReconnect: boolean
-  reconnectInterval: number
-  playlistRefreshInterval: number
-  h264Threads: number
-  avcodecHwDisabled: boolean
-  streamProxy: boolean
-  proxyResolution: string
-  autoDownloadUpdates: boolean
-  snoozeUpdateUntil: number
-  language: string
-}
+import type { Settings } from '../shared/types'
 
 const DEFAULTS: Settings = {
   theme: 'dark',

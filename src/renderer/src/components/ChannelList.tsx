@@ -133,7 +133,7 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
     window.electronAPI.showContextMenu({
       x: e.clientX,
       y: e.clientY,
-      channel: ch as unknown as Record<string, unknown>,
+      channel: ch,
       actions: [
         { id: 'play', label: '▶ ' + t('channel.play') },
         { id: 'toggle-favorite', label: (favoriteIds.includes(ch.id) ? '★ ' : '☆ ') + (favoriteIds.includes(ch.id) ? t('channel.unfavorite') : t('channel.favorite')) },
@@ -147,7 +147,7 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
 
   useEffect(() => {
     const off = window.electronAPI.onContextMenuAction(({ action, channel }) => {
-      const ch = channel as unknown as Channel
+      const ch = channel
       switch (action) {
         case 'play':
           handlePlay(ch)

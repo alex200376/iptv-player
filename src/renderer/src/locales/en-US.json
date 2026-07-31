@@ -245,5 +245,9 @@
   "topbar.openStream": "Open network stream",
   "topbar.epgGuide": "Program Guide",
   "topbar.settings": "Settings (Ctrl+,)",
-  "updateBadge.newVersion": "New version v{{version}} available"
+  "updateBadge.newVersion": "New version v{{version}} available",
+  "errorBoundary.title": "An unexpected error occurred",
+  "errorBoundary.unknown": "Unknown error",
+  "errorBoundary.retry": "Retry",
+  "app.dropToImport": "Drop to import M3U playlist"
 }

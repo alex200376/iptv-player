@@ -12,6 +12,7 @@ import type { Channel } from '../../shared/types'
 import { getState } from './shared'
 import { checkSingleChannel } from './playback'
 import { createProxyUrl, stopProxy, needsProxy } from '../streamProxy'
+import { t } from '../i18n'
 
 // ── Playlist ID counter ──────────────────────────────────────────────
 // Seeded from persisted data on first use so IDs never repeat across
@@ -43,7 +44,7 @@ async function nextPlaylistId(): Promise<string> {
 
 function playlistNameFromPath(filePath: string): string {
   const parts = filePath.replace(/\\/g, '/').split('/')
-  const name = parts.pop() || '\u672a\u547d\u540d'
+  const name = parts.pop() || t('playlist.unnamed')
   return name.replace(/\.(m3u|m3u8)$/i, '')
 }
 
@@ -58,13 +59,13 @@ export async function refreshPlaylistUrl(
     const userData = await loadUserData()
     const playlistMeta = userData.playlists.find((p) => p.id === playlistId)
     const targetUrl = url || playlistMeta?.url
-    if (!targetUrl) return { added: 0, updated: 0, removed: 0, error: '\u672a\u627e\u5230\u64ad\u653e\u5217\u8868 URL' }
+    if (!targetUrl) return { added: 0, updated: 0, removed: 0, error: t('playlist.urlNotFound') }
 
     const res = await net.fetch(targetUrl, { signal: controller.signal })
     clearTimeout(timeout)
     if (!res.ok) return { added: 0, updated: 0, removed: 0, error: `HTTP ${res.status}` }
     const content = await res.text()
-    if (!content.trim()) return { added: 0, updated: 0, removed: 0, error: '\u54cd\u5e94\u5185\u5bb9\u4e3a\u7a7a' }
+    if (!content.trim()) return { added: 0, updated: 0, removed: 0, error: t('playlist.emptyResponse') }
 
     const freshChannels = await parseM3U(content, playlistId)
     const existing: Channel[] = await loadChannels()
@@ -589,7 +590,7 @@ export function registerPlaylistIpc() {
 
   ipcMain.handle('import-m3u', async () => {
     const state = getState()
-    if (!state.mainWindow) return { channels: [], error: '\u7a97\u53e3\u672a\u521d\u59cb\u5316' }
+    if (!state.mainWindow) return { channels: [], error: t('error.windowNotInitialized') }
     const result = await dialog.showOpenDialog(state.mainWindow, {
       properties: ['openFile'],
       filters: [{ name: 'M3U Playlist', extensions: ['m3u', 'm3u8'] }],
@@ -604,7 +605,7 @@ export function registerPlaylistIpc() {
       queueCacheLogos(channels.map((ch) => ch.logo).filter((l): l is string => !!l))
       return { channels, playlistId, playlistName, filePath }
     } catch (e) {
-      return { channels: [], error: `\u8bfb\u53d6\u6587\u4ef6\u5931\u8d25: ${(e as Error).message}` }
+      return { channels: [], error: t('error.readFileFailed').replace('{{message}}', (e as Error).message) }
     }
   })
 
@@ -617,7 +618,7 @@ export function registerPlaylistIpc() {
       queueCacheLogos(channels.map((ch) => ch.logo).filter((l): l is string => !!l))
       return { channels, playlistId, playlistName, filePath }
     } catch (e) {
-      return { channels: [], error: `讀取檔案失敗: ${(e as Error).message}` }
+      return { channels: [], error: t('error.readFileFailed').replace('{{message}}', (e as Error).message) }
     }
   })
 
@@ -635,7 +636,7 @@ export function registerPlaylistIpc() {
       clearTimeout(timeout)
       if (!res.ok) return { channels: [], error: `HTTP ${res.status}: ${res.statusText}` }
       const content = await res.text()
-      if (!content.trim()) return { channels: [], error: '\u54cd\u5e94\u5185\u5bb9\u4e3a\u7a7a' }
+      if (!content.trim()) return { channels: [], error: t('playlist.emptyResponse') }
       const playlistId = await nextPlaylistId()
       const channels = await parseM3U(content, playlistId)
 
@@ -645,7 +646,7 @@ export function registerPlaylistIpc() {
           id: urlToId(url),
           name,
           url,
-          group: '\u672a\u5206\u7ec4',
+          group: t('playlist.ungrouped'),
           playlistId,
         })
       }
@@ -662,10 +663,10 @@ export function registerPlaylistIpc() {
       const err = e as Error & { cause?: Error; code?: string }
       console.error('[import-m3u-url]', url, err.message, err.code || '', err.cause?.message || '')
       const msg = err.message + (err.cause ? ` (${err.cause.message})` : '')
-      if (msg.includes('abort')) return { channels: [], error: '\u8bf7\u6c42\u8d85\u65f6\uff0810\u79d2\uff09' }
+      if (msg.includes('abort')) return { channels: [], error: t('error.requestTimeout') }
       if (msg.includes('ECONNREFUSED'))
-        return { channels: [], error: '\u8fde\u63a5\u88ab\u62d2\u7edd\uff0c\u8bf7\u786e\u8ba4\u670d\u52a1\u5668\u6b63\u5728\u8fd0\u884c' }
-      return { channels: [], error: `\u8bf7\u6c42\u5931\u8d25: ${msg}` }
+        return { channels: [], error: t('error.connectionRefused') }
+      return { channels: [], error: t('error.requestFailed').replace('{{message}}', msg) }
     }
   })
 
@@ -701,12 +702,12 @@ export function registerPlaylistIpc() {
 
   ipcMain.handle('export-m3u', async () => {
     const state = getState()
-    if (!state.mainWindow) return { success: false, error: '\u7a97\u53e3\u672a\u521d\u59cb\u5316' }
+    if (!state.mainWindow) return { success: false, error: t('error.windowNotInitialized') }
     const channels = await loadChannels()
     if (!channels || channels.length === 0)
-      return { success: false, error: '\u65e0\u9891\u9053\u53ef\u5bfc\u51fa' }
+      return { success: false, error: t('playlist.noChannelsToExport') }
     const result = await dialog.showSaveDialog(state.mainWindow, {
-      title: '\u5bfc\u51fa M3U \u64ad\u653e\u5217\u8868',
+      title: t('playlist.exportTitle'),
       defaultPath: 'iptv-playlist.m3u',
       filters: [{ name: 'M3U Playlist', extensions: ['m3u'] }],
     })
@@ -718,7 +719,7 @@ export function registerPlaylistIpc() {
         if (ch.tvgId) attrs.push(`tvg-id="${ch.tvgId}"`)
         if (ch.logo) attrs.push(`tvg-logo="${ch.logo}"`)
         if (ch.group) attrs.push(`group-title="${ch.group}"`)
-        m3u += `#EXTINF:-1 ${attrs.join(' ')},${ch.name || '\u672a\u77e5'}\n${ch.url}\n`
+        m3u += `#EXTINF:-1 ${attrs.join(' ')},${ch.name || t('channel.unknown')}\n${ch.url}\n`
       }
       writeFileSync(result.filePath, m3u, 'utf-8')
       return { success: true }
@@ -729,12 +730,12 @@ export function registerPlaylistIpc() {
 
   ipcMain.handle('backup-data', async () => {
     const state = getState()
-    if (!state.mainWindow) return { success: false, error: '窗口未初始化' }
+    if (!state.mainWindow) return { success: false, error: t('error.windowNotInitialized') }
     const channels = await loadChannels()
     const userData = await loadUserData()
     const settings = readSettings()
     const result = await dialog.showSaveDialog(state.mainWindow, {
-      title: '備份 IPTV 播放器資料',
+      title: 'IPTV Backup',
       defaultPath: `iptv-backup-${new Date().toISOString().slice(0, 10)}.json`,
       filters: [{ name: 'IPTV Backup', extensions: ['json'] }],
     })
@@ -750,9 +751,9 @@ export function registerPlaylistIpc() {
 
   ipcMain.handle('restore-data', async () => {
     const state = getState()
-    if (!state.mainWindow) return { success: false, error: '窗口未初始化' }
+    if (!state.mainWindow) return { success: false, error: t('error.windowNotInitialized') }
     const result = await dialog.showOpenDialog(state.mainWindow, {
-      title: '還原 IPTV 播放器備份',
+      title: 'Restore IPTV Backup',
       filters: [{ name: 'IPTV Backup', extensions: ['json'] }],
       properties: ['openFile'],
     })
@@ -761,7 +762,7 @@ export function registerPlaylistIpc() {
       const raw = readFileSync(result.filePaths[0], 'utf-8')
       const backup = JSON.parse(raw)
       if (!backup.version || !backup.channels || !backup.userData) {
-        return { success: false, error: '無效的備份檔案' }
+        return { success: false, error: t('error.invalidBackup') }
       }
       await saveChannels(backup.channels)
       await saveUserData(backup.userData)

@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
+import i18n from '../i18n'
 
 interface Props {
   children: ReactNode
@@ -34,15 +35,15 @@ export default class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="flex flex-col items-center justify-center h-full gap-4 p-8 text-center">
           <div className="text-4xl">⚠</div>
-          <h2 className="text-lg font-semibold text-foreground">应用出现了意外错误</h2>
+          <h2 className="text-lg font-semibold text-foreground">{i18n.t('errorBoundary.title')}</h2>
           <p className="text-sm text-muted-foreground max-w-md">
-            {this.state.error?.message || '未知错误'}
+            {this.state.error?.message || i18n.t('errorBoundary.unknown')}
           </p>
           <button
             onClick={this.handleReset}
             className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors"
           >
-            重试
+            {i18n.t('errorBoundary.retry')}
           </button>
         </div>
       )

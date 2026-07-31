@@ -4,6 +4,7 @@ import { getBinding } from 'electron-vlc-player'
 import { getState, ensureEmbedded } from './shared'
 import { showMenuPopup } from '../menu'
 import { t } from '../i18n'
+import type { Channel } from '../../shared/types'
 
 // Rate-limit notify-layout-change so rapid sidebar toggles / React re-renders
 // do not hammer the VLC surface renegotiation path (causes ~200 ms freeze each time).
@@ -87,7 +88,7 @@ export function registerWindowIpc() {
   })
 
   ipcMain.handle('show-context-menu', (event, data: {
-    x: number; y: number; channel: Record<string, unknown>; actions: Array<{
+    x: number; y: number; channel: Channel; actions: Array<{
       id?: string; label: string; danger?: boolean; separator?: boolean
     }>
   }) => {

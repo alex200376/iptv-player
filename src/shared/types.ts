@@ -62,7 +62,7 @@ export interface UserData {
 }
 
 // ── Settings ────────────────────────────────────────────
-export interface AppSettings {
+export interface Settings {
   theme: string
   hardwareAcceleration: string
   networkCache: number
@@ -80,7 +80,21 @@ export interface AppSettings {
   language: string
 }
 
-// ── IPC ─────────────────────────────────────────────────
+// ── IPC Result Types ────────────────────────────────────
+export interface ImportResult {
+  channels: Channel[]
+  playlistId?: string
+  playlistName?: string
+  url?: string
+  filePath?: string
+  error?: string
+}
+
+export interface PlayResult {
+  success: boolean
+  error?: string
+}
+
 export interface UpdateDownloadProgress {
   percent: number
   bytesPerSecond: number
@@ -104,6 +118,7 @@ export interface ChannelCheckLog {
   url: string
   protocol: string
   result: string
+  latencyMs?: number
   checked: number
   total: number
 }

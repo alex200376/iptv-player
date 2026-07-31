@@ -1,6 +1,6 @@
 import { BrowserWindow } from 'electron'
 import { VlcPlayer } from 'electron-vlc-player'
-import type { Settings } from '../settingsStore'
+import type { Settings } from '../../shared/types'
 
 export interface SharedState {
   mainWindow: BrowserWindow | null
