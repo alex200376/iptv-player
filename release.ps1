@@ -19,7 +19,7 @@ if (-not $token) {
 # Abort early if the tag or release already exists
 $env:GH_TOKEN = $token
 $env:Path = "C:\Program Files\GitHub CLI;$env:Path"
-gh release view "v$Version" 2>$null | Out-Null
+cmd /c "gh release view v$Version >nul 2>&1"
 if ($LASTEXITCODE -eq 0) {
   Write-Error "Release v$Version already exists. Pick a new version."
   exit 1
@@ -28,7 +28,9 @@ if ($LASTEXITCODE -eq 0) {
 # Update version in package.json (regex replace to preserve file formatting/encoding)
 $raw = Get-Content "package.json" -Raw -Encoding UTF8
 $newRaw = [regex]::Replace($raw, '"version"\s*:\s*"[^"]+"', ('"version": "' + $Version + '"'), 1)
-if ($newRaw -eq $raw) { Write-Error "Could not find version field in package.json"; exit 1 }
+if ($newRaw -eq $raw -and $raw -notmatch ('"version"\s*:\s*"' + [regex]::Escape($Version) + '"')) {
+  Write-Error "Could not find version field in package.json"; exit 1
+}
 [System.IO.File]::WriteAllText((Resolve-Path "package.json"), $newRaw, (New-Object System.Text.UTF8Encoding $false))
 
 # Build
