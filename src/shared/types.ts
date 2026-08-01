@@ -9,6 +9,7 @@ export interface Channel {
   tvgUrl?: string
   tvgChno?: string
   playlistId?: string
+  customEdited?: boolean
   status?: 'unknown' | 'online' | 'offline'
   lastCheckedAt?: number
 }

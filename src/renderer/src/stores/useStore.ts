@@ -32,6 +32,7 @@ interface PlayerStore extends PersistedChannelData {
   searchQuery: string
   navTab: string
   settingsOpen: boolean
+  editChannel: Channel | null
   epgCache: Record<string, EpgProgram[]>
   volume: number
   setVolume: (vol: number) => void
@@ -44,8 +45,10 @@ interface PlayerStore extends PersistedChannelData {
   setNavTab: (tab: string) => void
   addDirectStream: (url: string) => Channel
   removeChannel: (id: string) => void
+  updateChannel: (id: string, updates: Partial<Channel>) => void
   setSettingsOpen: (open: boolean) => void
   setActivePlaylistId: (id: string | null) => void
+  setEditChannel: (channel: Channel | null) => void
   toggleFavorite: (id: string) => void
   addHistoryEntry: (channel: Channel) => void
   clearHistory: () => void
@@ -135,6 +138,7 @@ export const useStore = create<PlayerStore>()(
       navTab: 'channels',
       directStreams: [],
       settingsOpen: false,
+      editChannel: null,
       activePlaylistId: null,
       favoriteIds: [],
       historyEntries: [],
@@ -202,6 +206,7 @@ export const useStore = create<PlayerStore>()(
       setSearchQuery: (q) => set({ searchQuery: q }),
       setNavTab: (tab) => set({ navTab: tab }),
       setSettingsOpen: (open) => set({ settingsOpen: open }),
+      setEditChannel: (channel) => set({ editChannel: channel }),
       setActivePlaylistId: (id) => set({ activePlaylistId: id }),
 
       addDirectStream: (url: string) => {
@@ -231,6 +236,18 @@ export const useStore = create<PlayerStore>()(
             currentChannel: s.currentChannel?.id === id ? null : s.currentChannel,
             favoriteIds,
           }
+        }),
+
+      updateChannel: (id: string, updates: Partial<Channel>) =>
+        set((s) => {
+          const channels = s.channels.map((ch) =>
+            ch.id === id ? { ...ch, ...updates, customEdited: true } : ch,
+          )
+          const currentChannel =
+            s.currentChannel?.id === id
+              ? { ...s.currentChannel, ...updates, customEdited: true }
+              : s.currentChannel
+          return { channels, groups: groupChannels(channels), currentChannel }
         }),
 
       toggleFavorite: (id) =>

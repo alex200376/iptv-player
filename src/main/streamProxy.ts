@@ -3,7 +3,7 @@ import { AddressInfo } from 'net'
 import { spawn, execFile, ChildProcess } from 'child_process'
 import { existsSync } from 'fs'
 import { join } from 'path'
-import { app } from 'electron'
+import { app, net } from 'electron'
 
 // RTMP/RTSP/UDP always need proxy.
 // HTTP .ts streams (MPEG-TS over HTTP) also need proxy — VLC cannot reliably
@@ -32,6 +32,84 @@ function isHttpTsStream(url: string): boolean {
     // malformed URL — fall through
   }
   return false
+}
+
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36'
+const HLS_ACCEPT = 'application/vnd.apple.mpegurl, application/x-mpegURL, */*'
+const NON_HLS_EXT_RE = /\.(ts|mp4|flv|mkv|avi|mov|webm|mp3|aac|wav|m4a|m4v)(\?|#|$)/i
+const hlsCache = new Map<string, { t: number; v: boolean }>()
+const HLS_CACHE_TTL = 5 * 60 * 1000
+
+/**
+ * Returns true when the URL is an HLS playlist (m3u8 marker in the URL).
+ * Obfuscated HLS (no .m3u8 in the URL, e.g. `cdn.qd.je/163189/fctvtt`) is
+ * detected asynchronously by {@link isHlsStream} via a content probe.
+ */
+export function isHlsUrl(url: string): boolean {
+  return /m3u8/i.test(url)
+}
+
+/**
+ * Detect HLS streams even when the URL hides it (redirect + `.jpg`-obfuscated
+ * segments, separate EXT-X-MEDIA audio group). VLC 3.x cannot attach the audio
+ * group / rejects obfuscated segments, so these must go through ffmpeg which
+ * merges audio+video into MPEG-TS.
+ *
+ * Fast paths:
+ *  - m3u8 marker in URL            -> true
+ *  - non-http scheme               -> false
+ *  - MPEG-TS / obvious media ext   -> false
+ *  - already probed (cached 5 min) -> cached result
+ * Otherwise probes content-type + first bytes once and caches the outcome.
+ */
+export async function isHlsStream(url: string): Promise<boolean> {
+  if (isHlsUrl(url)) return true
+  if (!/^https?:\/\//i.test(url)) return false
+  if (isHttpTsStream(url)) return false
+  if (NON_HLS_EXT_RE.test(url)) return false
+
+  const cached = hlsCache.get(url)
+  if (cached && Date.now() - cached.t < HLS_CACHE_TTL) return cached.v
+
+  let v = false
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 8000)
+    const res = await net.fetch(url, {
+      method: 'GET',
+      headers: { 'User-Agent': UA, Accept: HLS_ACCEPT, Range: 'bytes=0-131071' },
+      signal: controller.signal,
+    })
+    clearTimeout(timer)
+
+    const ct = (res.headers.get('content-type') || '').toLowerCase()
+    if (ct.includes('mpegurl') || ct.includes('m3u8')) {
+      v = true
+    } else if (res.status === 200 || res.status === 206) {
+      const reader = res.body?.getReader()
+      let buf = new Uint8Array(0)
+      if (reader) {
+        while (buf.length < 4096) {
+          const { done, value } = await reader.read()
+          if (done) break
+          if (value) {
+            const tmp = new Uint8Array(buf.length + value.length)
+            tmp.set(buf)
+            tmp.set(value, buf.length)
+            buf = tmp
+          }
+        }
+        try { reader.cancel() } catch { /* ignore */ }
+      }
+      const text = Buffer.from(buf).toString('utf8')
+      v = text.includes('#EXTM3U') || text.includes('#EXT-X-')
+    }
+  } catch {
+    v = false
+  }
+
+  hlsCache.set(url, { t: Date.now(), v })
+  return v
 }
 
 const SCALE_MAP: Record<string, string | null> = {
@@ -63,7 +141,7 @@ async function probeGpuEncoder(ffmpegPath: string): Promise<string | null> {
           '-frames:v', '1',
           '-c:v', enc,
           '-f', 'null', '-',
-        ], { timeout: 5000, stdio: 'ignore' }, (err) => {
+        ], { timeout: 5000 }, (err) => {
           if (err) reject(err)
           else resolve()
         })
@@ -228,7 +306,7 @@ function ensureServer(vlcDir?: string | null): Promise<number> {
 /**
  * Build ffmpeg input args for a given URL.
  */
-function buildInputArgs(streamUrl: string): string[] {
+function buildInputArgs(streamUrl: string, isHls = false): string[] {
   const isHttp = /^https?:\/\//i.test(streamUrl)
   const isRtmp = /^rtmp[s]?:\/\//i.test(streamUrl)
   const isTs = isHttpTsStream(streamUrl)
@@ -239,7 +317,12 @@ function buildInputArgs(streamUrl: string): string[] {
     '-probesize', '1000000',
   ]
   if (isHttp) {
-    base.push('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5', '-reconnect_at_eof', '1')
+    // Reconnect flags are for raw HTTP streams (RTMP pull, MPEG-TS over HTTP).
+    // Skip them for HLS — the hls demuxer manages segment-level retries itself
+    // and the reconnect options cause repeated "End of file" retry spam.
+    if (!isHls) {
+      base.push('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5', '-reconnect_at_eof', '1')
+    }
     base.push('-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36')
     base.push('-multiple_requests', '1')
     base.push('-timeout', '15000000')
@@ -249,6 +332,15 @@ function buildInputArgs(streamUrl: string): string[] {
   }
   if (isTs) {
     base.push('-f', 'mpegts')
+  }
+  if (isHls) {
+    // Obfuscated HLS: segments renamed to .jpg and EXT-X-MEDIA audio groups.
+    // -f hls forces the demuxer (ffmpeg won't auto-detect HLS on extensionless
+    //   .php / text/plain playlist URLs). The extension flags below relax the
+    //   segment-extension check so ffmpeg reads the .jpg segments and merges
+    //   audio+video into the MPEG-TS stream VLC receives.
+    base.push('-f', 'hls')
+    base.push('-allowed_segment_extensions', 'jpg', '-extension_picky', 'false')
   }
   base.push('-i', streamUrl)
   return base
@@ -275,7 +367,8 @@ async function handleProxyRequest(
 
   const useScale = currentScale && SCALE_MAP[currentScale]
   const gpuEnc = useScale ? await detectGpuEncoder(ffmpegPath) : null
-  const inputArgs = buildInputArgs(streamUrl)
+  const isHls = await isHlsStream(streamUrl)
+  const inputArgs = buildInputArgs(streamUrl, isHls)
   // Stream-copy mode: reduce analysis time for faster first-byte-to-VLC
   if (!useScale) {
     for (let i = 0; i < inputArgs.length; i++) {

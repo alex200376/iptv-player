@@ -5,6 +5,7 @@ import NavBar from './components/NavBar'
 import TitleBar from './components/TitleBar'
 import SettingsPage from './components/SettingsPage'
 import EpgPage from './components/EpgPage'
+import EditChannelPage from './components/EditChannelPage'
 import Onboarding from './components/Onboarding'
 import UpdateDialog from './components/UpdateDialog'
 import ImportDialog from './components/ImportDialog'
@@ -31,6 +32,8 @@ export default function App() {
   const addPlaylist = useStore((s) => s.addPlaylist)
   const settingsOpen = useStore((s) => s.settingsOpen)
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
+  const editChannel = useStore((s) => s.editChannel)
+  const setEditChannel = useStore((s) => s.setEditChannel)
   const volume = useStore((s) => s.volume)
   const setVolume = useStore((s) => s.setVolume)
   const epgSources = useStore((s) => s.epgSources)
@@ -144,6 +147,24 @@ export default function App() {
     }
   }, [])
 
+  const closeEditChannel = useCallback(() => {
+    const fromSettings = useStore.getState().settingsOpen
+    setEditChannel(null)
+    if (fromSettings) return
+    const state = useStore.getState()
+    if (state.currentChannel) {
+      requestAnimationFrame(() => {
+        window.electronAPI.switchChannel(state.currentChannel!.url)
+      })
+    }
+  }, [setEditChannel])
+
+  useEffect(() => {
+    if (editChannel) {
+      window.electronAPI.hidePlayer()
+    }
+  }, [editChannel])
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName
@@ -196,6 +217,10 @@ export default function App() {
           }
           break
         case 'Escape':
+          if (editChannel) {
+            closeEditChannel()
+            return
+          }
           if (settingsOpen) {
             closeSettings()
             return
@@ -220,7 +245,7 @@ export default function App() {
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [settingsOpen, openSettings, closeSettings])
+  }, [settingsOpen, editChannel, openSettings, closeSettings, closeEditChannel])
 
   const handleOnboardingDone = useCallback(() => {
     localStorage.setItem('iptv-player-onboarded', '1')
@@ -300,7 +325,9 @@ export default function App() {
           <Sidebar />
         </div>
         <div className="flex-1 flex flex-col min-w-0">
-          {settingsOpen ? (
+          {editChannel ? (
+            <EditChannelPage channel={editChannel} onClose={closeEditChannel} />
+          ) : settingsOpen ? (
             <SettingsPage variant="page" onClose={closeSettings} />
           ) : epgPageOpen ? (
             <EpgPage onClose={closeEpgPage} />

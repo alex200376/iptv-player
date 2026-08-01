@@ -58,6 +58,7 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
   const [dragGroupName, setDragGroupName] = useState<string | null>(null)
   const [dropTargetGroupName, setDropTargetGroupName] = useState<string | null>(null)
   const [dropGroupPos, setDropGroupPos] = useState<'before' | 'after'>('before')
+  const setEditChannel = useStore((s) => s.setEditChannel)
 
   const filteredGroups = useMemo(() => {
     let channels: ChannelWithGroup[] = groups.flatMap((g) => {
@@ -139,6 +140,7 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
         { id: 'toggle-favorite', label: (favoriteIds.includes(ch.id) ? '★ ' : '☆ ') + (favoriteIds.includes(ch.id) ? t('channel.unfavorite') : t('channel.favorite')) },
         { id: 'copy-url', label: '📋 ' + t('channel.copyUrl') },
         { id: 'check-link', label: '✓ ' + t('channel.checkLink') },
+        { id: 'edit', label: '✎ ' + t('channel.edit') },
         { separator: true, label: '' },
         { id: 'delete', label: '✕ ' + t('channel.deleteChannel'), danger: true },
       ],
@@ -161,13 +163,16 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
         case 'check-link':
           handleCheck(ch)
           break
+        case 'edit':
+          setEditChannel(ch)
+          break
         case 'delete':
           handleDelete(ch.id)
           break
       }
     })
     return off
-  }, [handlePlay, toggleFavorite, copyUrl, handleCheck, handleDelete])
+  }, [handlePlay, toggleFavorite, copyUrl, handleCheck, handleDelete, setEditChannel])
 
   const handleToggleFav = useCallback(
     (id: string) => {

@@ -3,7 +3,7 @@ import { VlcPlayer } from 'electron-vlc-player'
 import { readSettings } from '../settingsStore'
 import { getState, ensurePlayerEmbedded, ensureEmbedded, buildMediaOptions } from './shared'
 import { exitPipMode } from './pip'
-import { needsProxy, getProxyUrl, stopProxy, isFfmpegAvailable } from '../streamProxy'
+import { needsProxy, getProxyUrl, stopProxy, isFfmpegAvailable, isHlsStream } from '../streamProxy'
 import { probeChannel } from './playlist'
 
 let _playId = 0
@@ -108,16 +108,16 @@ export async function checkSingleChannel(
       if (!probeOnline) return settle(false, 'stream unreachable')
       if (!playingFired) return settle(false, 'VLC did not start')
 
-      let vout = 0
-      try { vout = checkPlayer.hasVout?.() ?? 0 } catch {}
-      if (vout > 0) return settle(true)
+      let hasVout = false
+      try { hasVout = checkPlayer.hasVout?.() ?? false } catch {}
+      if (hasVout) return settle(true)
 
       // Stage 2 — 15s grace: wait for hasVout
       stage2 = setTimeout(() => {
         if (settled) return
         if (rebuffered) return settle(true)
-        try { vout = checkPlayer.hasVout?.() ?? 0 } catch {}
-        settle(vout > 0, vout > 0 ? undefined : 'no video output')
+        try { hasVout = checkPlayer.hasVout?.() ?? false } catch {}
+        settle(hasVout, hasVout ? undefined : 'no video output')
       }, VERIFY_GRACE_MS)
     }, DEAD_STREAM_TIMEOUT_MS)
   })
@@ -283,9 +283,9 @@ async function createNewPlayer(
     // Playing fired but stream may still be dead (no video output)
     if (currentPlayId !== _playId) return
     try {
-      const vout = state.player?.hasVout() ?? 0
-      if (vout > 0) {
-        console.log('[dead-stream] hasVout =', vout, '— alive')
+      const hasVout = state.player?.hasVout() ?? false
+      if (hasVout) {
+        console.log('[dead-stream] hasVout — alive')
         // Schedule periodic auto-verify while playing
         clearVerifyInterval(currentPlayId)
         const startInterval = () => {
@@ -378,9 +378,13 @@ export function registerPlaybackIpc() {
 
     let playUrl = url
     const isNonHttp = /^rtmp[s]?:\/\/|^rtsp:\/\/|^udp:\/\/|^rtp:\/\//i.test(url)
-    if (needsProxy(url) && (isNonHttp || settings.streamProxy)) {
-      if (isNonHttp && !(await isFfmpegAvailable(state.vlcDir))) {
-        console.warn('[switch-channel] ffmpeg not found, passing RTMP/RTSP directly to VLC')
+    // Obfuscated HLS (redirect + .jpg segments + separate audio group) cannot
+    // be played by VLC 3.x directly — proxy it through ffmpeg which merges the
+    // audio back in. isHlsStream probes content and caches per-URL.
+    const isHls = await isHlsStream(url)
+    if ((needsProxy(url) || isHls) && (isNonHttp || settings.streamProxy || isHls)) {
+      if ((isNonHttp || isHls) && !(await isFfmpegAvailable(state.vlcDir))) {
+        console.warn('[switch-channel] ffmpeg not found, passing RTMP/RTSP/HLS directly to VLC')
       } else {
         try {
           playUrl = await getProxyUrl(url, state.vlcDir, settings.proxyResolution)

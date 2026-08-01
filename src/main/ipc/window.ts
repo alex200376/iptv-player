@@ -37,7 +37,7 @@ export function registerWindowIpc() {
   ipcMain.handle('get-vlc-version', async () => {
     try {
       const binding = getBinding()
-      const version = binding?.getVersion?.() || '3.0.23'
+      const version = binding?.getLibVlcVersion?.().version || '3.0.23'
       return version
     } catch {
       return '3.0.23'

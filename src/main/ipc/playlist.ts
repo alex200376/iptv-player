@@ -84,14 +84,18 @@ export async function refreshPlaylistUrl(
       if (freshUrlSet.has(old.url)) {
         const match = freshChannels.find((c) => c.url === old.url)
         if (match) {
-          kept.push({
-            ...old,
-            name: match.name,
-            logo: match.logo || old.logo,
-            group: match.group || old.group,
-            tvgId: match.tvgId || old.tvgId,
-            tvgUrl: match.tvgUrl || old.tvgUrl,
-          })
+          kept.push(
+            old.customEdited
+              ? { ...old }
+              : {
+                  ...old,
+                  name: match.name,
+                  logo: match.logo || old.logo,
+                  group: match.group || old.group,
+                  tvgId: match.tvgId || old.tvgId,
+                  tvgUrl: match.tvgUrl || old.tvgUrl,
+                },
+          )
           updateCount++
         }
         freshUrlSet.delete(old.url)

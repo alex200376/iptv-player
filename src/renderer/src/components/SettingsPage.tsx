@@ -1,10 +1,12 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import * as Tabs from '@radix-ui/react-tabs'
 import { themes, applyTheme, type ThemeId } from '../themes'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useStore, groupChannels } from '../stores/useStore'
 import type { Channel } from '../types'
 import UpdateDialog from './UpdateDialog'
+import { useLogoUrl } from '../hooks/useLogoUrl'
+import { getGroupDisplayName } from '../utils/groupLabels'
 import { toast } from '../stores/toastStore'
 import { useTranslation } from 'react-i18next'
 
@@ -36,6 +38,7 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
             {[
               { value: 'playback', label: t('settings.playback') },
               { value: 'appearance', label: t('settings.appearance') },
+              { value: 'channels', label: t('settings.channels') },
               { value: 'playlists', label: t('settings.playlists') },
               { value: 'verify', label: t('settings.verify') },
               { value: 'epg', label: t('settings.epg') },
@@ -307,6 +310,10 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                 <option value="en-US">{t('language.enUS')}</option>
               </select>
             </div>
+          </Tabs.Content>
+
+          <Tabs.Content value="channels" className="flex-1 overflow-y-auto p-8 space-y-4">
+            <ChannelManager />
           </Tabs.Content>
 
           <Tabs.Content value="playlists" className="flex-1 overflow-y-auto p-8 space-y-4">
@@ -690,6 +697,96 @@ function ChannelVerifier() {
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+function ChannelManager() {
+  const { t } = useTranslation()
+  const groups = useStore((s) => s.groups)
+  const setEditChannel = useStore((s) => s.setEditChannel)
+  const [query, setQuery] = useState('')
+
+  const channels = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    const all = groups.flatMap((g) => g.channels)
+    if (!q) return all
+    return all.filter(
+      (ch) =>
+        ch.name.toLowerCase().includes(q) ||
+        (ch.group || '').toLowerCase().includes(q) ||
+        ch.url.toLowerCase().includes(q),
+    )
+  }, [groups, query])
+
+  if (channels.length === 0) {
+    return (
+      <div className="space-y-4">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={t('channel.editSearchPlaceholder')}
+          className="w-full px-4 py-3 bg-tv-bg border border-tv-border rounded-tv-md text-tv-sm text-tv-text-primary placeholder-tv-text-secondary"
+        />
+        <div className="flex items-center justify-center h-32 border-2 border-dashed border-tv-border rounded-tv-md text-tv-sm text-tv-text-secondary">
+          {query ? t('channel.emptySearch') : t('channel.emptyGeneral')}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={t('channel.editSearchPlaceholder')}
+        className="w-full px-4 py-3 bg-tv-bg border border-tv-border rounded-tv-md text-tv-sm text-tv-text-primary placeholder-tv-text-secondary"
+      />
+      <div className="text-tv-xs text-tv-text-secondary">{t('channel.count', { count: channels.length })}</div>
+      <div className="space-y-2">
+        {channels.map((ch) => (
+          <ChannelManagerRow key={ch.id} channel={ch} onEdit={() => setEditChannel(ch)} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ChannelManagerRow({ channel, onEdit }: { channel: Channel; onEdit: () => void }) {
+  const { t } = useTranslation()
+  const logoUrl = useLogoUrl(channel.logo)
+  const playlistName = useStore((s) => s.playlists.find((p) => p.id === channel.playlistId)?.name)
+
+  return (
+    <div className="flex items-center justify-between px-4 py-2.5 bg-tv-bg border border-tv-border rounded-tv-md gap-3">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        {channel.logo ? (
+          <img src={logoUrl} alt="" className="w-8 h-8 object-contain flex-shrink-0" onError={(e) => { ;(e.target as HTMLImageElement).style.display = 'none' }} />
+        ) : (
+          <div className="w-8 h-8 rounded-tv-sm bg-tv-bg-surface flex items-center justify-center flex-shrink-0 text-tv-text-secondary">
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" />
+            </svg>
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="text-tv-sm text-tv-text-primary truncate">{channel.name}</div>
+          <div className="text-tv-xs text-tv-text-secondary truncate">
+            {channel.group ? getGroupDisplayName(channel.group, t) : t('channel.ungrouped')}
+            {playlistName && ` · ${playlistName}`}
+            {channel.customEdited && ` · ${t('channel.editedBadge')}`}
+          </div>
+        </div>
+      </div>
+      <button
+        onClick={onEdit}
+        className="px-3 py-1 rounded-tv-sm text-tv-xs bg-tv-bg-surface text-tv-text-secondary hover:text-tv-accent border border-tv-border transition-colors flex-shrink-0"
+      >
+        {t('channel.edit')}
+      </button>
     </div>
   )
 }
