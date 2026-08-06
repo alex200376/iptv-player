@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Settings } from '../../../../shared/types'
 import type { ThemeId } from '../themes'
+import { logger } from '../utils/logger'
 
 interface SettingsStore {
   settings: Settings
@@ -11,6 +12,7 @@ interface SettingsStore {
 
 const DEFAULTS: Settings = {
   theme: 'dark',
+  customTheme: null,
   hardwareAcceleration: 'd3d11va',
   networkCache: 800,
   fontSize: 'normal',
@@ -36,7 +38,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       const result = await window.electronAPI.getSettings()
       set({ settings: { ...DEFAULTS, ...result }, loaded: true })
     } catch (e) {
-      console.error('[settings] loadSettings failed:', e)
+      logger.error('[settings] loadSettings failed:', e)
     }
   },
 
@@ -46,7 +48,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     try {
       await window.electronAPI.saveSettings(next)
     } catch (e) {
-      console.error('[settings] updateSettings failed:', e)
+      logger.error('[settings] updateSettings failed:', e)
     }
   },
 }))

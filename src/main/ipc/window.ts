@@ -5,6 +5,7 @@ import { getState, ensureEmbedded } from './shared'
 import { showMenuPopup } from '../menu'
 import { t } from '../i18n'
 import type { Channel } from '../../shared/types'
+import { logger } from '../../shared/logger'
 
 // Rate-limit notify-layout-change so rapid sidebar toggles / React re-renders
 // do not hammer the VLC surface renegotiation path (causes ~200 ms freeze each time).
@@ -29,7 +30,7 @@ function debouncedNotifyLayout(force?: boolean) {
         _lastLayoutH = h
       }
     }
-    try { state.player.notifyLayoutChange() } catch (e) { console.error('[window] notifyLayoutChange:', e) }
+    try { state.player.notifyLayoutChange() } catch (e) { logger.error('[window] notifyLayoutChange:', e) }
   }, LAYOUT_DEBOUNCE_MS)
 }
 
@@ -46,7 +47,7 @@ export function registerWindowIpc() {
   ipcMain.handle('hide-player-window', async () => {
     const state = getState()
     if (ensureEmbedded()) {
-      try { getBinding().setPlayerWindowVisible(state.player!.playerId, false) } catch (e) { console.error('[window] hidePlayerWindow:', e) }
+      try { getBinding().setPlayerWindowVisible(state.player!.playerId, false) } catch (e) { logger.error('[window] hidePlayerWindow:', e) }
       state.player!.hideOverlay()
     }
   })
@@ -54,13 +55,13 @@ export function registerWindowIpc() {
   ipcMain.handle('show-player-window', async () => {
     const state = getState()
     if (ensureEmbedded()) {
-      try { getBinding().setPlayerWindowVisible(state.player!.playerId, true) } catch (e) { console.error('[window] showPlayerWindow:', e) }
+      try { getBinding().setPlayerWindowVisible(state.player!.playerId, true) } catch (e) { logger.error('[window] showPlayerWindow:', e) }
       state.player!.showOverlay()
     }
   })
 
-  ipcMain.on('hide-overlay', () => { try { getState().player?.hideOverlay() } catch (e) { console.error('[window] hideOverlay:', e) } })
-  ipcMain.on('show-overlay', () => { try { getState().player?.showOverlay() } catch (e) { console.error('[window] showOverlay:', e) } })
+  ipcMain.on('hide-overlay', () => { try { getState().player?.hideOverlay() } catch (e) { logger.error('[window] hideOverlay:', e) } })
+  ipcMain.on('show-overlay', () => { try { getState().player?.showOverlay() } catch (e) { logger.error('[window] showOverlay:', e) } })
 
   ipcMain.handle('minimize-window', () => {
     getState().mainWindow?.minimize()
@@ -127,7 +128,7 @@ export function registerWindowIpc() {
     try {
       state.player.notifyLayoutChange()
     } catch (e) {
-      console.error('[window] notifyLayoutChange-now:', e)
+      logger.error('[window] notifyLayoutChange-now:', e)
     }
   })
 

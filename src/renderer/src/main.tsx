@@ -6,6 +6,7 @@ import './i18n'
 import { I18nextProvider } from 'react-i18next'
 import i18n from './i18n'
 import ErrorBoundary from './components/ErrorBoundary'
+import { logger } from './utils/logger'
 
 window.electronAPI.getSettings().then((settings) => {
   if (settings.language) {
@@ -15,7 +16,7 @@ window.electronAPI.getSettings().then((settings) => {
 })
 
 window.addEventListener('unhandledrejection', (event) => {
-  console.error('[unhandledRejection]', event.reason)
+  logger.error('[unhandledRejection]', event.reason)
 })
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

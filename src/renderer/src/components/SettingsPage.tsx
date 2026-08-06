@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import * as Tabs from '@radix-ui/react-tabs'
-import { themes, applyTheme, type ThemeId } from '../themes'
+import { themes, applyTheme, type ThemeId, type ThemeVariables, CUSTOM_THEME_ID, getCustomCore, buildCustomThemeVariables } from '../themes'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useStore, groupChannels } from '../stores/useStore'
 import type { Channel } from '../types'
@@ -8,6 +8,7 @@ import UpdateDialog from './UpdateDialog'
 import { useLogoUrl } from '../hooks/useLogoUrl'
 import { getGroupDisplayName } from '../utils/groupLabels'
 import { toast } from '../stores/toastStore'
+import { logger } from '../utils/logger'
 import { useTranslation } from 'react-i18next'
 
 export default function SettingsPage({ variant = 'page', onClose }: { variant?: 'page' | 'overlay'; onClose?: () => void }) {
@@ -218,7 +219,7 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                 value={settings.theme}
                 onChange={(e) => {
                   updateSettings({ theme: e.target.value as ThemeId })
-                  applyTheme(e.target.value as ThemeId)
+                  applyTheme(e.target.value as ThemeId, settings.customTheme ?? undefined)
                 }}
                 className="w-full px-4 py-3 bg-tv-bg border border-tv-border rounded-tv-md text-tv-sm text-tv-text-primary"
               >
@@ -227,7 +228,9 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
                 ))}
               </select>
               {(() => {
-                const th = themes.find((th) => th.id === settings.theme) || themes[0]
+                const th = settings.theme === CUSTOM_THEME_ID
+                  ? { ...themes.find((t) => t.id === 'dark')!, variables: buildCustomThemeVariables(getCustomCore(settings.customTheme)) }
+                  : (themes.find((th) => th.id === settings.theme) || themes[0])
                 const bg = th.variables['--tv-bg']
                 const secondary = th.variables['--tv-bg-secondary']
                 const card = th.variables['--tv-bg-surface']
@@ -272,6 +275,7 @@ export default function SettingsPage({ variant = 'page', onClose }: { variant?: 
               })()}
             </div>
             <div className="space-y-3">
+              {settings.theme === CUSTOM_THEME_ID && <CustomThemeEditor />}
               <label className="block text-tv-sm font-medium text-tv-text-primary">{t('settings.fontSize')}</label>
               <div className="flex gap-3">
                 {[
@@ -457,9 +461,10 @@ onClick={async () => {
                             const newSettings = useSettingsStore.getState().settings
                             i18n.changeLanguage(newSettings.language)
                             document.documentElement.lang = newSettings.language
+                            toast(t('settings.clearAllDone'), 'success')
                             onClose?.()
                           } else {
-                            console.error('[clearAllData]', result.error)
+                            logger.error('[clearAllData]', result.error)
                           }
                           setConfirmClear(false)
                         }}
@@ -495,6 +500,86 @@ onClick={async () => {
   }
 
   return <div className="w-full h-full overflow-hidden">{content}</div>
+}
+
+const CUSTOM_COLOR_ROWS: { key: keyof ThemeVariables; labelKey: string }[] = [
+  { key: '--tv-bg', labelKey: 'settings.customTheme.bg' },
+  { key: '--tv-bg-surface', labelKey: 'settings.customTheme.surface' },
+  { key: '--tv-text-primary', labelKey: 'settings.customTheme.text' },
+  { key: '--tv-text-secondary', labelKey: 'settings.customTheme.textSecondary' },
+  { key: '--tv-accent', labelKey: 'settings.customTheme.accent' },
+  { key: '--tv-border', labelKey: 'settings.customTheme.border' },
+]
+
+function CustomThemeEditor() {
+  const { t } = useTranslation()
+  const { settings, updateSettings } = useSettingsStore()
+  const [draft, setDraft] = useState<ThemeVariables>(() => getCustomCore(settings.customTheme))
+  const draftRef = useRef(draft)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  // Keep the draft in sync when settings change (e.g. after restore / clear).
+  useEffect(() => {
+    const next = getCustomCore(settings.customTheme)
+    draftRef.current = next
+    setDraft(next)
+  }, [settings.customTheme])
+
+  // Flush any pending debounced save if the editor unmounts.
+  useEffect(() => {
+    return () => clearTimeout(saveTimer.current)
+  }, [])
+
+  const handleChange = (key: string, value: string) => {
+    const next = { ...draftRef.current, [key]: value }
+    draftRef.current = next
+    setDraft(next)
+    applyTheme(CUSTOM_THEME_ID, next)
+    clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      updateSettings({ customTheme: buildCustomThemeVariables(next) })
+    }, 400)
+  }
+
+  const handleReset = () => {
+    clearTimeout(saveTimer.current)
+    const next = getCustomCore(null)
+    setDraft(next)
+    applyTheme(CUSTOM_THEME_ID, next)
+    updateSettings({ customTheme: null, theme: CUSTOM_THEME_ID })
+    toast(t('settings.customTheme.resetDone'), 'success')
+  }
+
+  return (
+    <div className="mt-4 space-y-3 rounded-tv-md border border-tv-border bg-tv-bg p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-tv-sm font-medium text-tv-text-primary">{t('settings.customTheme')}</p>
+        <button
+          onClick={handleReset}
+          className="px-3 py-1.5 rounded-tv-md bg-tv-bg-surface border border-tv-border text-tv-xs text-tv-text-secondary hover:text-tv-accent transition-colors"
+        >
+          {t('settings.customTheme.reset')}
+        </button>
+      </div>
+      <p className="text-tv-xs text-tv-text-secondary">{t('settings.customThemeDesc')}</p>
+      <div className="grid grid-cols-2 gap-3">
+        {CUSTOM_COLOR_ROWS.map(({ key, labelKey }) => (
+          <label key={key} className="flex items-center gap-3 min-w-0 cursor-pointer">
+            <input
+              type="color"
+              value={draft[key] || '#000000'}
+              onChange={(e) => handleChange(key, e.target.value)}
+              className="w-10 h-10 rounded-tv-md cursor-pointer border border-tv-border bg-transparent p-1 flex-shrink-0"
+            />
+            <div className="min-w-0">
+              <span className="block text-tv-xs text-tv-text-primary truncate">{t(labelKey)}</span>
+              <span className="block text-tv-xs text-tv-text-secondary font-mono truncate">{draft[key]}</span>
+            </div>
+          </label>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function ChannelVerifier() {
@@ -807,7 +892,7 @@ function PlaylistSettingsList() {
     const result = await window.electronAPI.refreshPlaylistUrl(url)
     setRefreshingUrl(null)
     if (result.error) {
-      console.error('[refresh]', url, result.error)
+      logger.error('[refresh]', url, result.error)
     }
     const channels = await window.electronAPI.loadChannels()
     setChannels(channels)

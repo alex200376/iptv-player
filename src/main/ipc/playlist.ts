@@ -2,7 +2,8 @@ import { ipcMain, dialog, net, app, BrowserWindow } from 'electron'
 import { createConnection } from 'net'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
-import { parseM3U, urlToId } from '../m3uParser'
+import { pathToFileURL } from 'url'
+import { parseM3U, isHlsPlaylistContent, hlsSingleChannel } from '../m3uParser'
 import { saveChannels, loadChannels } from '../channelStore'
 import { getLocalLogoUrl, queueCacheLogos, clearLogoCache } from '../logoCache'
 import { saveUserData, loadUserData } from '../userDataStore'
@@ -13,6 +14,7 @@ import { getState } from './shared'
 import { checkSingleChannel } from './playback'
 import { createProxyUrl, stopProxy, needsProxy } from '../streamProxy'
 import { t } from '../i18n'
+import { logger } from '../../shared/logger'
 
 // ── Playlist ID counter ──────────────────────────────────────────────
 // Seeded from persisted data on first use so IDs never repeat across
@@ -67,7 +69,11 @@ export async function refreshPlaylistUrl(
     const content = await res.text()
     if (!content.trim()) return { added: 0, updated: 0, removed: 0, error: t('playlist.emptyResponse') }
 
-    const freshChannels = await parseM3U(content, playlistId)
+    // HLS playlists are single streams — keep the channel locked to the
+    // import URL instead of extracting a video-only variant URL (no audio).
+    const freshChannels = isHlsPlaylistContent(content)
+      ? [hlsSingleChannel(targetUrl, playlistId)]
+      : await parseM3U(content, playlistId)
     const existing: Channel[] = await loadChannels()
 
     const targetExisting = existing.filter((c) => c.playlistId === playlistId)
@@ -124,7 +130,7 @@ export async function refreshPlaylistUrl(
     return { added: addCount, updated: updateCount, removed: removeCount }
   } catch (e) {
     const msg = (e as Error).message
-    console.error('[refresh]', playlistId, msg)
+    logger.error('[refresh]', playlistId, msg)
     return { added: 0, updated: 0, removed: 0, error: msg }
   }
 }
@@ -194,7 +200,7 @@ async function withRetry(
     lastResult = await fn()
     if (lastResult === 'online' || lastResult === 'unknown') return lastResult
     if (attempt < maxAttempts) {
-      console.log(`[probe] attempt ${attempt}/${maxAttempts} offline — retrying in ${delayMs}ms`)
+      logger.info(`[probe] attempt ${attempt}/${maxAttempts} offline — retrying in ${delayMs}ms`)
       await new Promise<void>((r) => setTimeout(r, delayMs))
     }
   }
@@ -337,7 +343,7 @@ async function probeHttp(url: string): Promise<ProbeResult> {
         reader.cancel()
       }
     } catch (e) {
-      console.error('[probe] reader error:', e)
+      logger.error('[probe] reader error:', e)
     }
 
     clearTimeout(timer)
@@ -428,12 +434,12 @@ export async function probeChannel(url: string): Promise<{ result: ProbeResult; 
   switch (protocol) {
     case 'hls': {
       const result = await withRetry(() => probeHls(url))
-      console.log('[probe]', 'hls', url.slice(0, 60), result)
+      logger.info('[probe]', 'hls', url.slice(0, 60), result)
       return { result }
     }
     case 'http': {
       const result = await withRetry(() => probeHttp(url))
-      console.log('[probe]', 'http', url.slice(0, 60), result)
+      logger.info('[probe]', 'http', url.slice(0, 60), result)
       return { result }
     }
     case 'ts': {
@@ -445,7 +451,7 @@ export async function probeChannel(url: string): Promise<{ result: ProbeResult; 
           const proxyResult = await probeHttp(proxyUrl)
           stopProxy(probeId)
           if (proxyResult === 'online') {
-            console.log('[probe]', 'ts', url.slice(0, 60), 'online (via proxy)')
+            logger.info('[probe]', 'ts', url.slice(0, 60), 'online (via proxy)')
             return { result: 'online' }
           }
         } catch {
@@ -453,33 +459,33 @@ export async function probeChannel(url: string): Promise<{ result: ProbeResult; 
         }
       }
       const result = await withRetry(() => probeHttp(url))
-      console.log('[probe]', 'ts', url.slice(0, 60), result)
+      logger.info('[probe]', 'ts', url.slice(0, 60), result)
       return { result }
     }
     case 'm3u': {
       const result = await withRetry(() => probeM3u(url))
-      console.log('[probe]', 'm3u', url.slice(0, 60), result)
+      logger.info('[probe]', 'm3u', url.slice(0, 60), result)
       return { result }
     }
     case 'rtmp': {
       const parsed = parseHostPort(url, 1935)
       if (!parsed) return { result: 'offline' }
       const result = await withRetry(() => probeTcp(parsed.host, parsed.port, 4000))
-      console.log('[probe]', 'rtmp', url.slice(0, 60), result)
+      logger.info('[probe]', 'rtmp', url.slice(0, 60), result)
       return { result }
     }
     case 'rtsp': {
       const parsed = parseHostPort(url, 554)
       if (!parsed) return { result: 'offline' }
       const result = await withRetry(() => probeTcp(parsed.host, parsed.port, 4000))
-      console.log('[probe]', 'rtsp', url.slice(0, 60), result)
+      logger.info('[probe]', 'rtsp', url.slice(0, 60), result)
       return { result }
     }
     case 'udp':
-      console.log('[probe]', 'udp', url.slice(0, 60), 'skipped')
+      logger.info('[probe]', 'udp', url.slice(0, 60), 'skipped')
       return { result: 'unknown', skipped: true }
     default:
-      console.log('[probe]', 'unknown', url.slice(0, 60), 'offline')
+      logger.info('[probe]', 'unknown', url.slice(0, 60), 'offline')
       return { result: 'offline' }
   }
 }
@@ -588,7 +594,7 @@ export function registerPlaylistIpc() {
     const kept = channels.filter((ch) => ch.status !== 'offline')
     const removedCount = channels.length - kept.length
     await saveChannels(kept)
-    console.log(`[remove-offline] removed ${removedCount} offline channels`)
+    logger.info(`[remove-offline] removed ${removedCount} offline channels`)
     return { channels: kept, removedCount }
   })
 
@@ -605,7 +611,9 @@ export function registerPlaylistIpc() {
       const content = readFileSync(filePath, 'utf-8')
       const playlistId = await nextPlaylistId()
       const playlistName = playlistNameFromPath(filePath)
-      const channels = await parseM3U(content, playlistId)
+      const channels = isHlsPlaylistContent(content)
+        ? [hlsSingleChannel(pathToFileURL(filePath).href, playlistId)]
+        : await parseM3U(content, playlistId)
       queueCacheLogos(channels.map((ch) => ch.logo).filter((l): l is string => !!l))
       return { channels, playlistId, playlistName, filePath }
     } catch (e) {
@@ -618,7 +626,9 @@ export function registerPlaylistIpc() {
       const content = readFileSync(filePath, 'utf-8')
       const playlistId = await nextPlaylistId()
       const playlistName = playlistNameFromPath(filePath)
-      const channels = await parseM3U(content, playlistId)
+      const channels = isHlsPlaylistContent(content)
+        ? [hlsSingleChannel(pathToFileURL(filePath).href, playlistId)]
+        : await parseM3U(content, playlistId)
       queueCacheLogos(channels.map((ch) => ch.logo).filter((l): l is string => !!l))
       return { channels, playlistId, playlistName, filePath }
     } catch (e) {
@@ -642,17 +652,17 @@ export function registerPlaylistIpc() {
       const content = await res.text()
       if (!content.trim()) return { channels: [], error: t('playlist.emptyResponse') }
       const playlistId = await nextPlaylistId()
-      const channels = await parseM3U(content, playlistId)
+      // HLS master/media playlists are single streams — lock the channel to
+      // the import URL (parsing would extract the video-only variant, losing
+      // the separate audio group → silent video).
+      const channels = isHlsPlaylistContent(content)
+        ? [hlsSingleChannel(url, playlistId)]
+        : await parseM3U(content, playlistId)
 
       if (channels.length === 0) {
-        const name = url.split('/').pop()?.split('?')[0] || url.slice(0, 40)
-        channels.push({
-          id: urlToId(url),
-          name,
-          url,
-          group: t('playlist.ungrouped'),
-          playlistId,
-        })
+        // Content had no channel entries (e.g. an HTML page) — fall back to a
+        // single channel locked to the imported URL.
+        channels.push(hlsSingleChannel(url, playlistId))
       }
 
       queueCacheLogos(channels.map((ch) => ch.logo).filter((l): l is string => !!l))
@@ -665,7 +675,7 @@ export function registerPlaylistIpc() {
       }
     } catch (e) {
       const err = e as Error & { cause?: Error; code?: string }
-      console.error('[import-m3u-url]', url, err.message, err.code || '', err.cause?.message || '')
+      logger.error('[import-m3u-url]', url, err.message, err.code || '', err.cause?.message || '')
       const msg = err.message + (err.cause ? ` (${err.cause.message})` : '')
       if (msg.includes('abort')) return { channels: [], error: t('error.requestTimeout') }
       if (msg.includes('ECONNREFUSED'))
@@ -789,6 +799,7 @@ export function registerPlaylistIpc() {
       await saveUserData({ favoriteIds: [], historyEntries: [], playlists: [] })
       writeSettings({
         theme: 'dark',
+        customTheme: null,
         hardwareAcceleration: 'd3d11va',
         networkCache: 400,
         fontSize: 'normal',

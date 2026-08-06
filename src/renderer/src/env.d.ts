@@ -14,10 +14,12 @@ import type {
   UpdateInfo,
   ChannelCheckProgress,
   ChannelCheckLog,
+  PlayerStats,
 } from '../../shared/types'
 
 interface ElectronAPI {
-  switchChannel: (url: string) => Promise<PlayResult>
+  logToMain: (level: 'debug' | 'info' | 'warn' | 'error', msg: string, ...args: unknown[]) => void
+  switchChannel: (url: string, volume?: number) => Promise<PlayResult>
   importM3U: () => Promise<ImportResult>
   importM3UFromUrl: (url: string) => Promise<ImportResult>
   importM3UFromFile: (filePath: string) => Promise<ImportResult>
@@ -38,6 +40,8 @@ interface ElectronAPI {
   togglePlay: () => Promise<void>
   setVolume: (vol: number) => Promise<void>
   toggleMute: () => Promise<boolean>
+  getPlayerState: () => Promise<{ playing: boolean; muted: boolean; volume: number }>
+  getPlayerStats: () => Promise<PlayerStats>
   skipTime: (seconds: number) => Promise<void>
   getPlayerTime: () => Promise<number>
   getPlayerDuration: () => Promise<number>

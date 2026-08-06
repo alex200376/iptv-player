@@ -5,6 +5,7 @@ import { usePlayChannel } from '../hooks/usePlayChannel'
 import { useTranslation } from 'react-i18next'
 import LogoImg from './LogoImg'
 import MarqueeText from './MarqueeText'
+import { toast } from '../stores/toastStore'
 import type { Channel } from '../types'
 
 export default function HistoryList() {
@@ -29,8 +30,10 @@ export default function HistoryList() {
   const handlePlay = usePlayChannel()
 
   const copyUrl = useCallback((url: string) => {
-    navigator.clipboard.writeText(url).catch(() => {})
-  }, [])
+    navigator.clipboard.writeText(url)
+      .then(() => toast(t('channel.copied'), 'info'))
+      .catch(() => {})
+  }, [t])
 
   const handleContextMenu = useCallback((e: React.MouseEvent, ch: any) => {
     e.preventDefault()

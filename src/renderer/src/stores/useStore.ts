@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import i18n from '../i18n'
-import type { Channel, ChannelGroup, PlaylistMeta, HistoryEntry, EpgProgram, EpgSource, UserData } from '../types'
+import type { Channel, ChannelGroup, PlaylistMeta, HistoryEntry, EpgProgram, EpgSource, UserData, PlayerStats } from '../types'
 
 let directIdCounter = 0
 
@@ -29,18 +29,22 @@ interface PlayerStore extends PersistedChannelData {
   groups: ChannelGroup[]
   currentChannel: Channel | null
   isPlaying: boolean
+  isMuted: boolean
   searchQuery: string
   navTab: string
   settingsOpen: boolean
   editChannel: Channel | null
   epgCache: Record<string, EpgProgram[]>
   volume: number
+  playerStats: PlayerStats
+  setPlayerStats: (stats: PlayerStats) => void
   setVolume: (vol: number) => void
   setChannels: (channels: Channel[]) => void
   reorderGroup: (groupId: string, targetGroupId: string, position?: 'before' | 'after') => void
   reorderChannel: (channelId: string, targetChannelId: string, position?: 'before' | 'after') => void
   setCurrentChannel: (channel: Channel) => void
   setIsPlaying: (playing: boolean) => void
+  setIsMuted: (muted: boolean) => void
   setSearchQuery: (q: string) => void
   setNavTab: (tab: string) => void
   addDirectStream: (url: string) => Channel
@@ -134,6 +138,7 @@ export const useStore = create<PlayerStore>()(
       channels: [],
       currentChannel: null,
       isPlaying: false,
+      isMuted: false,
       searchQuery: '',
       navTab: 'channels',
       directStreams: [],
@@ -148,6 +153,17 @@ export const useStore = create<PlayerStore>()(
       checkRunning: false,
       checkTotal: 0,
       volume: parseInt(localStorage.getItem('iptv-volume') || '80', 10),
+      playerStats: {
+        playing: false,
+        muted: false,
+        volume: 0,
+        videoSize: null,
+        fps: null,
+        videoCodec: null,
+        audioCodec: null,
+        downloadSpeedBps: null,
+      },
+      setPlayerStats: (stats) => set({ playerStats: stats }),
 
       setChannels: (channels) => set({ groups: groupChannels(channels), channels }),
 
@@ -203,6 +219,7 @@ export const useStore = create<PlayerStore>()(
 
       setCurrentChannel: (channel) => set({ currentChannel: channel }),
       setIsPlaying: (playing) => set({ isPlaying: playing }),
+      setIsMuted: (muted) => set({ isMuted: muted }),
       setSearchQuery: (q) => set({ searchQuery: q }),
       setNavTab: (tab) => set({ navTab: tab }),
       setSettingsOpen: (open) => set({ settingsOpen: open }),

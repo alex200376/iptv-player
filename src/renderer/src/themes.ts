@@ -1,4 +1,4 @@
-export type ThemeId = 'dark' | 'midnight' | 'light' | 'oled' | 'forest' | 'ocean' | 'sunset' | 'coffee' | 'dracula' | 'nord'
+export type ThemeId = 'dark' | 'midnight' | 'light' | 'oled' | 'forest' | 'ocean' | 'sunset' | 'coffee' | 'dracula' | 'nord' | 'custom'
 
 export interface Theme {
   id: ThemeId
@@ -6,6 +6,10 @@ export interface Theme {
   labelKey: string
   variables: Record<string, string>
 }
+
+export type ThemeVariables = Record<string, string>
+
+export const CUSTOM_THEME_ID = 'custom'
 
 export const themes: Theme[] = [
   {
@@ -250,10 +254,131 @@ export const themes: Theme[] = [
   },
 ]
 
-export function applyTheme(themeId: ThemeId) {
+// Custom theme entry — appears in the theme picker; its variables act as a
+// preview fallback until the user customizes colors.
+themes.push({
+  id: CUSTOM_THEME_ID,
+  label: '自定义',
+  labelKey: 'theme.custom',
+  variables: { ...themes[0].variables },
+})
+
+// ── Custom theme helpers ──────────────────────────────────────────────
+// The editor exposes the 6 "core" colors; every other variable is derived
+// from them so a custom theme always produces a complete, coherent set.
+
+const CUSTOM_CORE_KEYS = [
+  '--tv-bg',
+  '--tv-bg-surface',
+  '--tv-text-primary',
+  '--tv-text-secondary',
+  '--tv-accent',
+  '--tv-border',
+] as const
+
+/** Returns the core colors for a custom theme, falling back to the dark theme. */
+export function getCustomCore(custom?: ThemeVariables | null): ThemeVariables {
+  const dark = themes.find((t) => t.id === 'dark')!
+  const core: ThemeVariables = {}
+  for (const key of CUSTOM_CORE_KEYS) {
+    core[key] = custom?.[key] || dark.variables[key]
+  }
+  return core
+}
+
+/** Expands the 6 core colors into the full CSS-variable set used by the app. */
+export function buildCustomThemeVariables(core: ThemeVariables): ThemeVariables {
+  const bg = core['--tv-bg'] || '#14161a'
+  const surface = core['--tv-bg-surface'] || '#1c1f24'
+  const text = core['--tv-text-primary'] || '#eef0f2'
+  const textSecondary = core['--tv-text-secondary'] || '#8a8f98'
+  const accent = core['--tv-accent'] || '#ff8a3d'
+  const border = core['--tv-border'] || '#2a2d33'
+
+  return {
+    '--tv-bg': bg,
+    '--tv-bg-secondary': mixHex(bg, surface, 0.55),
+    '--tv-bg-surface': surface,
+    '--tv-text-primary': text,
+    '--tv-text-secondary': textSecondary,
+    '--tv-accent': accent,
+    '--tv-accent-hover': shadeHex(accent, -12),
+    '--tv-border': border,
+    '--tv-focus-ring': accent,
+    '--background': hexToHsl(bg),
+    '--foreground': hexToHsl(text),
+    '--card': hexToHsl(surface),
+    '--primary': hexToHsl(accent),
+    '--primary-foreground': '0 0% 100%',
+    '--muted': hexToHsl(mixHex(bg, surface, 0.6)),
+    '--muted-foreground': hexToHsl(textSecondary),
+    '--border': hexToHsl(border),
+  }
+}
+
+// ── Color math (hex → hex / hsl) ─────────────────────────────────────
+function parseHex(hex: string): { r: number; g: number; b: number } {
+  let h = hex.replace('#', '').trim()
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('')
+  if (h.length !== 6) return { r: 0, g: 0, b: 0 }
+  const n = parseInt(h, 16)
+  if (Number.isNaN(n)) return { r: 0, g: 0, b: 0 }
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 }
+}
+
+function toHex(r: number, g: number, b: number): string {
+  const clamp = (v: number) => Math.round(Math.min(255, Math.max(0, v)))
+  const ch = (v: number) => clamp(v).toString(16).padStart(2, '0')
+  return `#${ch(r)}${ch(g)}${ch(b)}`
+}
+
+function mixHex(a: string, b: string, t: number): string {
+  const ca = parseHex(a)
+  const cb = parseHex(b)
+  return toHex(
+    ca.r + (cb.r - ca.r) * t,
+    ca.g + (cb.g - ca.g) * t,
+    ca.b + (cb.b - ca.b) * t,
+  )
+}
+
+function shadeHex(hex: string, percent: number): string {
+  const c = parseHex(hex)
+  const f = 1 + percent / 100
+  return toHex(c.r * f, c.g * f, c.b * f)
+}
+
+function hexToHsl(hex: string): string {
+  const { r, g, b } = parseHex(hex)
+  const rn = r / 255
+  const gn = g / 255
+  const bn = b / 255
+  const max = Math.max(rn, gn, bn)
+  const min = Math.min(rn, gn, bn)
+  const l = (max + min) / 2
+  if (max === min) return `0 0% ${Math.round(l * 100)}%`
+  const d = max - min
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+  let h = 0
+  if (max === rn) h = (gn - bn) / d + (gn < bn ? 6 : 0)
+  else if (max === gn) h = (bn - rn) / d + 2
+  else h = (rn - gn) / d + 4
+  h *= 60
+  return `${Math.round(h)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`
+}
+
+export function applyTheme(themeId: ThemeId, custom?: ThemeVariables | null) {
+  const root = document.documentElement
+  if (themeId === CUSTOM_THEME_ID) {
+    const vars = buildCustomThemeVariables(getCustomCore(custom))
+    Object.entries(vars).forEach(([key, value]) => {
+      root.style.setProperty(key, value)
+    })
+    root.setAttribute('data-theme', CUSTOM_THEME_ID)
+    return
+  }
   const theme = themes.find((t) => t.id === themeId)
   if (!theme) return
-  const root = document.documentElement
   Object.entries(theme.variables).forEach(([key, value]) => {
     root.style.setProperty(key, value)
   })

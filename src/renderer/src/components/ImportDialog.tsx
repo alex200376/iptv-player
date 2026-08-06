@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useStore } from '../stores/useStore'
+import { toast } from '../stores/toastStore'
 import type { Channel, PlaylistMeta } from '../types'
 import { useTranslation } from 'react-i18next'
 
@@ -76,6 +77,7 @@ export default function ImportDialog({
       ? t('import.successWithDup', { count: unique.length, dup: dupCount })
       : t('import.success', { count: unique.length })
     setSuccessMsg(msg)
+    toast(msg, 'success')
     return true
   }
 

@@ -9,4 +9,5 @@ export type {
   Settings,
   ImportResult,
   PlayResult,
+  PlayerStats,
 } from '../../../../shared/types'

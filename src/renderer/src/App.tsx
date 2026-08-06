@@ -13,6 +13,7 @@ import OpenStreamDialog from './components/OpenStreamDialog'
 import ToastContainer from './components/ToastContainer'
 import { useStore } from './stores/useStore'
 import { useSettingsStore } from './stores/settingsStore'
+import { toast } from './stores/toastStore'
 import { applyTheme } from './themes'
 import { useTranslation } from 'react-i18next'
 
@@ -43,9 +44,9 @@ export default function App() {
   useEffect(() => { loadSettings() }, [loadSettings])
 
   useEffect(() => {
-    if (settings.theme) applyTheme(settings.theme as import('./themes').ThemeId)
+    if (settings.theme) applyTheme(settings.theme as import('./themes').ThemeId, settings.customTheme ?? undefined)
     document.documentElement.setAttribute('data-font-size', settings.fontSize)
-  }, [settings.theme, settings.fontSize])
+  }, [settings.theme, settings.fontSize, settings.customTheme])
 
   const [hydrated, setHydrated] = useState(() => useStore.persist.hasHydrated())
   useEffect(() => {
@@ -129,7 +130,7 @@ export default function App() {
     const state = useStore.getState()
     if (state.currentChannel) {
       requestAnimationFrame(() => {
-        window.electronAPI.switchChannel(state.currentChannel!.url)
+        window.electronAPI.switchChannel(state.currentChannel!.url, state.volume)
       })
     }
   }, [])
@@ -143,7 +144,7 @@ export default function App() {
     setEpgPageOpen(false)
     const state = useStore.getState()
     if (state.currentChannel) {
-      window.electronAPI.switchChannel(state.currentChannel!.url)
+      window.electronAPI.switchChannel(state.currentChannel!.url, state.volume)
     }
   }, [])
 
@@ -154,7 +155,7 @@ export default function App() {
     const state = useStore.getState()
     if (state.currentChannel) {
       requestAnimationFrame(() => {
-        window.electronAPI.switchChannel(state.currentChannel!.url)
+        window.electronAPI.switchChannel(state.currentChannel!.url, state.volume)
       })
     }
   }, [setEditChannel])
@@ -173,6 +174,9 @@ export default function App() {
       switch (e.key) {
         case ' ':
           e.preventDefault()
+          if (useStore.getState().currentChannel) {
+            useStore.setState({ isPlaying: !useStore.getState().isPlaying })
+          }
           window.electronAPI.togglePlay()
           break
         case 'ArrowLeft':
@@ -206,7 +210,9 @@ export default function App() {
         case 'M':
           if (!e.ctrlKey && !e.metaKey) {
             e.preventDefault()
-            window.electronAPI.toggleMute()
+            window.electronAPI.toggleMute().then((muted: boolean) => {
+              useStore.setState({ isMuted: muted })
+            })
           }
           break
         case 'p':
@@ -215,6 +221,10 @@ export default function App() {
             e.preventDefault()
             window.electronAPI.togglePip()
           }
+          break
+        case 'F1':
+          e.preventDefault()
+          setShowOnboarding(true)
           break
         case 'Escape':
           if (editChannel) {
@@ -238,7 +248,7 @@ export default function App() {
             break
           case 'i':
             e.preventDefault()
-            setShowOnboarding(true)
+            setImportOpen(true)
             break
         }
       }
@@ -294,9 +304,10 @@ export default function App() {
         })
         const channels = await window.electronAPI.loadChannels()
         setChannels(channels)
+        toast(t('import.success', { count: result.channels.length }), 'success')
       }
     }
-  }, [groups, setChannels, addPlaylist])
+  }, [groups, setChannels, addPlaylist, t])
 
   return (
     <div

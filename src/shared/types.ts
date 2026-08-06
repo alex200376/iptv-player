@@ -65,6 +65,7 @@ export interface UserData {
 // ── Settings ────────────────────────────────────────────
 export interface Settings {
   theme: string
+  customTheme?: Record<string, string> | null
   hardwareAcceleration: string
   networkCache: number
   fontSize: string
@@ -122,4 +123,16 @@ export interface ChannelCheckLog {
   latencyMs?: number
   checked: number
   total: number
+}
+
+// ── Player stats (real, read from the live player) ─────────
+export interface PlayerStats {
+  playing: boolean
+  muted: boolean
+  volume: number
+  videoSize: { width: number; height: number } | null
+  fps: number | null
+  videoCodec: string | null
+  audioCodec: string | null
+  downloadSpeedBps: number | null
 }

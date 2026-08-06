@@ -8,6 +8,9 @@ import type { Channel, ChannelGroup, EpgProgram } from '../types'
 import { useTranslation } from 'react-i18next'
 import { getGroupDisplayName } from '../utils/groupLabels'
 import MarqueeText from './MarqueeText'
+import { logger } from '../utils/logger'
+import { toast } from '../stores/toastStore'
+import { ChevronDown } from 'lucide-react'
 
 const CHANNEL_ROW_HEIGHT = 48
 
@@ -94,11 +97,14 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
       const result = await window.electronAPI.removeOfflineChannels()
       if (result.channels.length >= 0) {
         setChannels(result.channels as Channel[])
+        if (result.removedCount > 0) {
+          toast(t('channel.removedOffline', { count: result.removedCount }), 'success')
+        }
       }
     } finally {
       setRemoving(false)
     }
-  }, [removing, offlineCount, setChannels])
+  }, [removing, offlineCount, setChannels, t])
 
   useEffect(() => {
     if (activeRef.current) {
@@ -111,15 +117,23 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
   const updateChannelStatus = useStore((s) => s.updateChannelStatus)
 
   const copyUrl = useCallback((url: string) => {
-    navigator.clipboard.writeText(url).catch((e) => console.error('[clipboard] copy failed:', e))
-  }, [])
+    navigator.clipboard.writeText(url)
+      .then(() => toast(t('channel.copied'), 'info'))
+      .catch((e) => logger.error('[clipboard] copy failed:', e))
+  }, [t])
 
   const handleCheck = useCallback(
     async (ch: Channel) => {
       const result = await window.electronAPI.checkChannelUrl(ch.url)
       updateChannelStatus(ch.id, result.online ? 'online' : 'offline', result.lastCheckedAt)
+      toast(
+        result.online
+          ? t('channel.checkOnline', { name: ch.name })
+          : t('channel.checkOffline', { name: ch.name }),
+        result.online ? 'success' : 'error',
+      )
     },
-    [updateChannelStatus],
+    [updateChannelStatus, t],
   )
 
   const handleDelete = useCallback(
@@ -245,9 +259,9 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground border-b border-border flex-shrink-0">
-        <span>{t('channel.count', { count: totalChannels })}</span>
-        &nbsp;
+      <div className="ch-toolbar">
+        <span className="ch-toolbar-dot" />
+        <span className="ch-toolbar-count">{t('channel.count', { count: totalChannels })}</span>
         {offlineCount > 0 && (
           <button
             onClick={handleRemoveOffline}
@@ -275,18 +289,19 @@ function ChannelList({ categoryFilter }: { categoryFilter?: string | null }) {
                 onDragEnd={handleGroupDragEnd}
                 className={dragGroupName === group.name ? 'opacity-40' : ''}
               >
-                <Accordion.Header>
+                <Accordion.Header className="ch-group-header">
                   <Accordion.Trigger
                     onClick={(e) => e.stopPropagation()}
-                    className="flex items-center w-full gap-2 px-2 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors group"
+                    className="ch-group-trigger group"
                   >
-                    <span className="cursor-grab active:cursor-grabbing" onMouseDown={(e) => e.stopPropagation()}>
+                    <span className="ch-group-grip" onMouseDown={(e) => e.stopPropagation()}>
                       <GripIcon />
                     </span>
                     <span className="flex-1 text-left truncate">
                       {getGroupDisplayName(group.name, t)}
                     </span>
-                    <span className="text-muted-foreground/60">{group.channels.length}</span>
+                    <span className="ch-group-count">{group.channels.length}</span>
+                    <ChevronDown className="ch-group-chevron" />
                   </Accordion.Trigger>
                 </Accordion.Header>
                 <Accordion.Content>
@@ -522,9 +537,9 @@ const ChannelRowWrapper = memo(function ChannelRowWrapper({
       onDragOver={(e) => onDragOver(e, ch.id)}
       onDrop={(e) => onDrop(e, ch.id)}
       onDragEnd={onDragEnd}
-      className={`relative flex items-center h-[48px] overflow-hidden select-none transition-all duration-150 ${
-        isDragging ? 'opacity-40 scale-[0.98]' : 'opacity-100'
-      }`}
+      className={`group relative flex items-center h-[48px] overflow-hidden select-none transition-all duration-150 ${
+        isActive ? 'ch-row-active' : ''
+      } ${isDragging ? 'opacity-40 scale-[0.98]' : 'opacity-100'}`}
     >
       {showTopIndicator && (
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-primary z-10 rounded-full" />
@@ -534,7 +549,7 @@ const ChannelRowWrapper = memo(function ChannelRowWrapper({
       <div
         draggable
         onDragStart={(e) => onDragStart(e, ch.id)}
-        className="flex-shrink-0 w-5 flex items-center justify-center px-0.5 cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-muted-foreground/70 transition-colors rounded-sm hover:bg-muted/50"
+        className="ch-grip"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <GripIcon />
@@ -544,34 +559,33 @@ const ChannelRowWrapper = memo(function ChannelRowWrapper({
         ref={isActive ? activeRef : undefined}
         onClick={() => onPlay(ch)}
         onContextMenu={(e) => onContextMenu(e, ch)}
-        className={`flex-1 flex items-center gap-1 py-1.5 text-sm text-left transition-all duration-150 group overflow-hidden h-full border-l-2 ${
+        className={`flex-1 flex items-center gap-2 pl-1 pr-1 text-sm text-left transition-all duration-150 overflow-hidden h-full border-l-2 ${
           isActive
             ? 'border-primary bg-primary/10'
             : ch.status === 'offline'
-              ? 'border-transparent opacity-50 text-muted-foreground'
+              ? 'border-transparent opacity-60 hover:opacity-100 text-muted-foreground'
               : 'border-transparent hover:bg-muted/60 text-foreground'
         }`}
       >
-        <span className="text-[11px] text-muted-foreground/50 w-4 shrink-0 text-center tabular-nums font-medium">
-          {ch.tvgChno || ''}
-        </span>
+        <span className="ch-no">{ch.tvgChno || ''}</span>
         {ch.logo ? (
           <img
             src={logoUrl}
             alt={ch.name}
-            className="h-5 w-8 object-contain shrink-0"
+            className="ch-logo"
             onError={(e) => {
               ;(e.target as HTMLImageElement).style.display = 'none'
             }}
           />
         ) : (
-          <div className="h-5 w-8 shrink-0 flex items-center justify-center">
-            <div className="w-4 h-4 rounded bg-muted/50" />
-          </div>
+          <div className="ch-logo-empty" />
         )}
         <div className="flex flex-col min-w-0 flex-1 gap-0.5">
-          <div className="overflow-hidden whitespace-nowrap min-w-0 w-full text-xs font-semibold truncate">
-            <MarqueeText className={isActive ? 'text-primary' : 'text-foreground'}>{ch.name}</MarqueeText>
+          <div className="flex items-center gap-1.5 min-w-0 w-full">
+            {isActive && <EqBars />}
+            <div className="min-w-0 flex-1">
+              <MarqueeText className={isActive ? 'text-primary' : 'text-foreground'}>{ch.name}</MarqueeText>
+            </div>
           </div>
           {currentEpg && (
             <span className="text-[10px] text-muted-foreground/80 truncate leading-tight">
@@ -589,12 +603,14 @@ const ChannelRowWrapper = memo(function ChannelRowWrapper({
         className={`p-1.5 rounded-md transition-all flex-shrink-0 ${
           isFav
             ? 'text-yellow-500 opacity-100'
-            : 'text-muted-foreground/50 opacity-70 group-hover:opacity-100 hover:opacity-100 hover:bg-muted/50'
+            : 'text-muted-foreground/50 opacity-0 group-hover:opacity-100 hover:opacity-100 hover:bg-muted/50'
         }`}
         title={isFav ? t('channel.unfavoriteTitle') : t('channel.favoriteTitle')}
       >
         <StarIcon filled={isFav} />
       </button>
+
+      <span className={`ch-status-dot ${ch.status || 'unknown'}`} title={ch.status || 'unknown'} />
 
       {showBottomIndicator && (
         <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary z-10 rounded-full" />
@@ -602,6 +618,16 @@ const ChannelRowWrapper = memo(function ChannelRowWrapper({
     </div>
   )
 })
+
+function EqBars() {
+  return (
+    <span className="eq-bars" aria-hidden="true">
+      <span />
+      <span />
+      <span />
+    </span>
+  )
+}
 
 function StarIcon({ filled }: { filled: boolean }) {
   return (

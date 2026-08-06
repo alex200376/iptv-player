@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import i18n from '../i18n'
+import { logger } from '../utils/logger'
 
 interface Props {
   children: ReactNode
@@ -22,7 +23,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('[ErrorBoundary]', error, info.componentStack)
+    logger.error('[ErrorBoundary]', error, info.componentStack)
   }
 
   handleReset = () => {

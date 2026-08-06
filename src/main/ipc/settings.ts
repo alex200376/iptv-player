@@ -3,6 +3,7 @@ import { readSettings, writeSettings } from '../settingsStore'
 import { getState } from './shared'
 import { refreshAllUrlPlaylists } from './playlist'
 import type { Settings } from '../../shared/types'
+import { logger } from '../../shared/logger'
 
 function startPlaylistRefreshTimer() {
   const state = getState()
@@ -22,7 +23,7 @@ export function registerSettingsIpc() {
     const state = getState()
     const lang = s.language
     if (lang && state.player && !state.player.destroyed) {
-      try { state.player.setLocale(lang === 'zh-CN' ? 'zh-CN' : 'en') } catch (e) { console.error('[settings] setLocale:', e) }
+      try { state.player.setLocale(lang === 'zh-CN' ? 'zh-CN' : 'en') } catch (e) { logger.error('[settings] setLocale:', e) }
     }
     return true
   })

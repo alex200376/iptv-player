@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react'
 import { useStore } from '../stores/useStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import type { Channel } from '../types'
+import { logger } from '../utils/logger'
 
 export function usePlayChannel() {
   const setCurrentChannel = useStore((s) => s.setCurrentChannel)
@@ -28,7 +29,7 @@ export function usePlayChannel() {
         const state = useStore.getState()
         if (state.settingsOpen) state.setSettingsOpen(false)
 
-        window.electronAPI.switchChannel(channel.url).then((result) => {
+        window.electronAPI.switchChannel(channel.url, useStore.getState().volume).then((result) => {
           // Stale response — user already moved to another channel
           if (id !== playIdRef.current) return
 
@@ -38,7 +39,7 @@ export function usePlayChannel() {
             const settings = useSettingsStore.getState().settings
             if (settings.autoReconnect && retryCount < 5) {
               const delay = settings.reconnectInterval * (retryCount + 1)
-              console.warn(
+              logger.warn(
                 `[play] ${channel.name} failed, retrying in ${delay}ms (${retryCount + 1}/5)`,
               )
               retryTimerRef.current = setTimeout(() => {
@@ -48,7 +49,7 @@ export function usePlayChannel() {
                 }
               }, delay)
             } else {
-              console.error('[play]', channel.name, result.error)
+              logger.error('[play]', channel.name, result.error)
             }
           }
         })

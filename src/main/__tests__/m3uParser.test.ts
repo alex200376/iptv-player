@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseM3U, urlToId } from '../m3uParser'
+import { parseM3U, urlToId, isHlsPlaylistContent, hlsSingleChannel } from '../m3uParser'
 
 describe('urlToId', () => {
   it('produces a stable id for the same URL', () => {
@@ -83,5 +83,41 @@ describe('parseM3U', () => {
     const ids = channels.map((c) => c.id)
     const unique = new Set(ids)
     expect(unique.size).toBe(channels.length)
+  })
+})
+
+describe('isHlsPlaylistContent', () => {
+  const OBFUSCATED_MASTER = [
+    '#EXTM3U',
+    '#EXT-X-VERSION:7',
+    '#EXT-X-INDEPENDENT-SEGMENTS',
+    '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="au1",DEFAULT=YES,AUTOSELECT=YES,URI="https://cdn.example/audio/index.php"',
+    '#EXT-X-STREAM-INF:BANDWIDTH=5000000,CODECS="hev1.1.6.L123.b0,mp4a.40.2",RESOLUTION=1920x1080,AUDIO="audio"',
+    'https://cdn.example/video/index.php',
+  ].join('\n')
+
+  it('detects HLS master playlists', () => {
+    expect(isHlsPlaylistContent(OBFUSCATED_MASTER)).toBe(true)
+  })
+
+  it('detects HLS media playlists', () => {
+    const media = ['#EXTM3U', '#EXT-X-TARGETDURATION:8', '#EXT-X-MEDIA-SEQUENCE:43', '#EXTINF:8.000,', 'seg.jpg'].join('\n')
+    expect(isHlsPlaylistContent(media)).toBe(true)
+  })
+
+  it('does not flag a normal M3U channel list', () => {
+    const m3u = ['#EXTM3U', '#EXTINF:-1,Channel A', 'http://example.com/a'].join('\n')
+    expect(isHlsPlaylistContent(m3u)).toBe(false)
+  })
+})
+
+describe('hlsSingleChannel', () => {
+  it('locks the channel to the import URL instead of the variant', () => {
+    const ch = hlsSingleChannel('http://r.jdshipin.com/62WM7', 'pl-1')
+    expect(ch.url).toBe('http://r.jdshipin.com/62WM7')
+    expect(ch.id).toBe(urlToId('http://r.jdshipin.com/62WM7'))
+    expect(ch.playlistId).toBe('pl-1')
+    expect(ch.group).toBeTruthy()
+    expect(ch.name).toBe('62WM7')
   })
 })

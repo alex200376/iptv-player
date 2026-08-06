@@ -4,12 +4,13 @@ import { readSettings } from '../settingsStore'
 import { getState, buildMediaOptions } from './shared'
 import { createPipWindow, getPipHtml, positionPipBottomRight } from '../pipManager'
 import { needsProxy, getProxyUrl, stopProxy, isFfmpegAvailable } from '../streamProxy'
+import { logger } from '../../shared/logger'
 
 function destroyPlayerAsync(player: InstanceType<typeof VlcPlayer> | null) {
   if (!player || player.destroyed) return
   try { player.removeAllListeners() } catch { /* ignore */ }
   setImmediate(() => {
-    try { player.destroy() } catch (e) { console.error('[pip] async destroy failed:', e) }
+    try { player.destroy() } catch (e) { logger.error('[pip] async destroy failed:', e) }
   })
 }
 
@@ -23,7 +24,7 @@ async function enterPipMode() {
     try {
       pipUrl = await getProxyUrl(state.originalUrl, state.vlcDir, settings.proxyResolution)
     } catch (e) {
-      console.error('[pip] proxy failed, using original URL:', e)
+      logger.error('[pip] proxy failed, using original URL:', e)
     }
   }
   const wasPlaying = state.player.isPlaying()
@@ -51,19 +52,19 @@ async function enterPipMode() {
   state.player.removeAllListeners('playing')
   state.player.removeAllListeners('buffering')
   state.player.on('error', (...args) => {
-    console.error('[pip-vlc-error]', pipUrl.substring(0, 60), ...args)
+    logger.error('[pip-vlc-error]', pipUrl.substring(0, 60), ...args)
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
       state.mainWindow.webContents.send('player-error')
     }
   })
   state.player.on('playing', () => {
-    console.log('[pip-vlc-playing]', pipUrl.substring(0, 60))
+    logger.info('[pip-vlc-playing]', pipUrl.substring(0, 60))
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
       state.mainWindow.webContents.send('player-playing')
     }
   })
   state.player.on('buffering', () => {
-    console.log('[pip-vlc-buffering]', pipUrl.substring(0, 60))
+    logger.info('[pip-vlc-buffering]', pipUrl.substring(0, 60))
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
       state.mainWindow.webContents.send('player-buffering')
     }
@@ -79,7 +80,7 @@ async function enterPipMode() {
   state.pipWindow.on('resize', () => {
     const s = getState()
     if (!s.player || !s.pipWindow || s.pipWindow.isDestroyed()) return
-    try { s.player.notifyLayoutChange() } catch (e) { console.error('[pip] notifyLayoutChange:', e) }
+    try { s.player.notifyLayoutChange() } catch (e) { logger.error('[pip] notifyLayoutChange:', e) }
   })
 
   state.pipWindow.on('closed', () => {
@@ -112,7 +113,7 @@ export async function exitPipMode() {
     try {
       playUrl = await getProxyUrl(state.originalUrl, state.vlcDir, settings.proxyResolution)
     } catch (e) {
-      console.error('[pip] exit proxy failed:', e)
+      logger.error('[pip] exit proxy failed:', e)
     }
   }
 
@@ -151,7 +152,7 @@ export async function reloadPipSource() {
     try {
       playUrl = await getProxyUrl(state.originalUrl, state.vlcDir, settings.proxyResolution, 'pip')
     } catch (e) {
-      console.error('[pip] reload proxy failed:', e)
+      logger.error('[pip] reload proxy failed:', e)
     }
   }
 
@@ -159,7 +160,7 @@ export async function reloadPipSource() {
   const effectiveCache = isProxied ? 150 : settings.networkCache
   const mediaOptions = buildMediaOptions({ ...settings, networkCache: effectiveCache })
 
-  console.log('[pip] reloading source:', playUrl?.substring(0, 60))
+  logger.info('[pip] reloading source:', playUrl?.substring(0, 60))
 
   const savedBounds = state.pipWindow.getBounds()
 
@@ -179,19 +180,19 @@ export async function reloadPipSource() {
   state.player.removeAllListeners('playing')
   state.player.removeAllListeners('buffering')
   state.player.on('error', (...args) => {
-    console.error('[pip-vlc-error]', playUrl?.substring(0, 60), ...args)
+    logger.error('[pip-vlc-error]', playUrl?.substring(0, 60), ...args)
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
       state.mainWindow.webContents.send('player-error')
     }
   })
   state.player.on('playing', () => {
-    console.log('[pip-vlc-playing]', playUrl?.substring(0, 60))
+    logger.info('[pip-vlc-playing]', playUrl?.substring(0, 60))
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
       state.mainWindow.webContents.send('player-playing')
     }
   })
   state.player.on('buffering', () => {
-    console.log('[pip-vlc-buffering]', playUrl?.substring(0, 60))
+    logger.info('[pip-vlc-buffering]', playUrl?.substring(0, 60))
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
       state.mainWindow.webContents.send('player-buffering')
     }
@@ -201,7 +202,7 @@ export async function reloadPipSource() {
 
   if (!state.pipWindow.isDestroyed()) {
     state.pipWindow.setBounds(savedBounds)
-    try { state.player.notifyLayoutChange() } catch (e) { console.error('[pip] notifyLayoutChange after reload:', e) }
+    try { state.player.notifyLayoutChange() } catch (e) { logger.error('[pip] notifyLayoutChange after reload:', e) }
   }
 }
 

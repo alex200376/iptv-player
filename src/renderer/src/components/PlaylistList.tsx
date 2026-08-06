@@ -1,7 +1,9 @@
 import { useState, useCallback } from 'react'
 import { useStore } from '../stores/useStore'
 import ImportDialog from './ImportDialog'
+import { toast } from '../stores/toastStore'
 import { useTranslation } from 'react-i18next'
+import { logger } from '../utils/logger'
 
 function formatDate(ts: number): string {
   const d = new Date(ts)
@@ -27,15 +29,23 @@ export default function PlaylistList() {
     setExporting(true)
     const result = await window.electronAPI.exportM3U()
     setExporting(false)
-    if (result.error) console.error('[export]', result.error)
-  }, [])
+    if (result.error) {
+      logger.error('[export]', result.error)
+      toast(result.error, 'error')
+    } else {
+      toast(t('playlist.exportSuccess'), 'success')
+    }
+  }, [t])
 
   const handleRefreshAll = async () => {
     setRefreshing(true)
     const result = await window.electronAPI.refreshPlaylists()
     setRefreshing(false)
     if (result.errors.length > 0) {
-      console.error('[refresh]', result.errors.join('; '))
+      logger.error('[refresh]', result.errors.join('; '))
+      toast(t('playlist.refreshErrors', { count: result.errors.length }), 'error')
+    } else if (result.total > 0) {
+      toast(t('playlist.refreshDone', { count: result.total }), 'success')
     }
     const channels = await window.electronAPI.loadChannels()
     setChannels(channels)
@@ -47,7 +57,10 @@ export default function PlaylistList() {
     const result = await window.electronAPI.refreshPlaylistUrl(pl.id, pl.url)
     setRefreshingUrl(null)
     if (result.error) {
-      console.error('[refresh]', pl.url, result.error)
+      logger.error('[refresh]', pl.url, result.error)
+      toast(result.error, 'error')
+    } else {
+      toast(t('playlist.refreshUrlDone', { added: result.added, updated: result.updated }), 'success')
     }
     const channels = await window.electronAPI.loadChannels()
     setChannels(channels)
@@ -69,6 +82,7 @@ export default function PlaylistList() {
     if (confirmDelete === id) {
       removePlaylist(id)
       setConfirmDelete(null)
+      toast(t('playlist.deleted', { name: pl.name }), 'info')
     } else {
       setConfirmDelete(id)
     }

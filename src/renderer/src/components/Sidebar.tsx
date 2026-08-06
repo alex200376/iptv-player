@@ -82,24 +82,26 @@ export default function Sidebar() {
 
   return (
     <aside className="w-full h-full bg-card flex flex-col border-r border-border">
-      <div className="px-2 py-2">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+      <div className="px-3 py-2">
+        <div className="sidebar-search-wrap">
+          <Search className="sidebar-search-icon" />
           <input
             ref={inputRef}
             type="text"
             value={localSearch}
             onChange={handleSearchChange}
             placeholder={t('sidebar.search')}
-            className="w-full pl-8 pr-7 py-1.5 bg-background border border-border rounded-md text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary"
+            className="sidebar-search-input"
           />
-          {localSearch && (
+          {localSearch ? (
             <button
               onClick={() => { setLocalSearch(''); setSearchQuery(''); setCategoryFilter(null) }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              className="sidebar-search-clear"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-3 h-3" />
             </button>
+          ) : (
+            <kbd className="sidebar-search-kbd">Ctrl F</kbd>
           )}
         </div>
       </div>
@@ -111,13 +113,11 @@ export default function Sidebar() {
           onMouseMove={handlePillMouseMove}
           onMouseUp={handlePillMouseUp}
           onMouseLeave={handlePillMouseLeave}
-          className="px-2 pb-2 overflow-x-auto flex-nowrap flex gap-2 scrollbar-none cursor-grab active:cursor-grabbing select-none"
+          className="sidebar-pills"
         >
           <button
             onClick={() => setCategoryFilter(null)}
-            className={`text-sm px-3 py-1 rounded-full whitespace-nowrap transition-colors shrink-0 ${
-              !categoryFilter ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
-            }`}
+            className={`sidebar-pill ${!categoryFilter ? 'sidebar-pill-active' : ''}`}
           >
              {t('sidebar.all')}
           </button>
@@ -125,9 +125,7 @@ export default function Sidebar() {
             <button
               key={cat}
               onClick={() => setCategoryFilter(cat)}
-              className={`text-sm px-3 py-1 rounded-full whitespace-nowrap transition-colors shrink-0 ${
-                categoryFilter === cat ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
-              }`}
+              className={`sidebar-pill ${categoryFilter === cat ? 'sidebar-pill-active' : ''}`}
             >
               {getGroupDisplayName(cat, t)}
             </button>

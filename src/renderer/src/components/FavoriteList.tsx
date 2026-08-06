@@ -4,6 +4,7 @@ import { useState } from 'react'
 import MarqueeText from './MarqueeText'
 import { usePlayChannel } from '../hooks/usePlayChannel'
 import LogoImg from './LogoImg'
+import { toast } from '../stores/toastStore'
 import { useTranslation } from 'react-i18next'
 import type { Channel } from '../types'
 
@@ -25,8 +26,10 @@ export default function FavoriteList() {
   const handlePlay = usePlayChannel()
 
   const copyUrl = useCallback((url: string) => {
-    navigator.clipboard.writeText(url).catch(() => {})
-  }, [])
+    navigator.clipboard.writeText(url)
+      .then(() => toast(t('channel.copied'), 'info'))
+      .catch(() => {})
+  }, [t])
 
   const handleContextMenu = useCallback((e: React.MouseEvent, ch: any) => {
     e.preventDefault()

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '../stores/useStore'
+import { toast } from '../stores/toastStore'
 import { useTranslation } from 'react-i18next'
 import { useLogoUrl } from '../hooks/useLogoUrl'
 import { getGroupDisplayName } from '../utils/groupLabels'
@@ -48,6 +49,7 @@ export default function EditChannelPage({ channel, onClose }: EditChannelPagePro
       window.electronAPI.cacheLogos([trimmedLogo]).catch(() => {})
     }
 
+    toast(t('channel.saved'), 'success')
     onClose()
   }
 

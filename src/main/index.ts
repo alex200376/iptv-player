@@ -1,4 +1,4 @@
-import { BrowserWindow, app, dialog, session, protocol, net } from 'electron'
+import { BrowserWindow, app, dialog, session, protocol, net, ipcMain } from 'electron'
 import { join, resolve, isAbsolute } from 'path'
 import { existsSync } from 'fs'
 import { VlcPlayer, probeDefaultVlcDir, initLibVlc } from 'electron-vlc-player'
@@ -57,7 +57,7 @@ async function createWindow() {
       resizeTimer = null
       const p = getState().player
       if (p && !p.destroyed) {
-        try { p.notifyLayoutChange() } catch (e) { console.error('[main] notifyLayoutChange:', e) }
+        try { p.notifyLayoutChange() } catch (e) { logger.error('[main] notifyLayoutChange:', e) }
       }
     }, 150)
   })
@@ -101,7 +101,7 @@ async function createWindow() {
   if (isAbsolute(safeVlcDir) && existsSync(safeVlcDir)) {
     process.env.PATH = safeVlcDir + ';' + (process.env.PATH ?? '')
   } else {
-    console.error('[main] vlcDir failed path validation, skipping PATH injection:', vlcDir)
+    logger.error('[main] vlcDir failed path validation, skipping PATH injection:', vlcDir)
   }
 
   initLibVlc(vlcDir)
@@ -115,6 +115,23 @@ function setupIPC() {
   registerEpgIpc()
   registerWindowIpc()
   registerUpdateIpc()
+  setupRendererLogForward()
+}
+
+// Forward renderer logs to electron-log so they land in the same log file.
+const RENDERER_LOG_LEVELS = {
+  debug: logger.debug,
+  info: logger.info,
+  warn: logger.warn,
+  error: logger.error,
+} as const
+
+function setupRendererLogForward() {
+  ipcMain.on('renderer-log', (_event, level: string, msg: string, args: unknown[]) => {
+    const fn = RENDERER_LOG_LEVELS[level as keyof typeof RENDERER_LOG_LEVELS]
+    if (!fn) return
+    fn(`[renderer] ${msg}`, ...(Array.isArray(args) ? args : []))
+  })
 }
 
 import { logger } from '../shared/logger'

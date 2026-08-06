@@ -12,6 +12,39 @@ export function urlToId(url: string): string {
 }
 
 /**
+ * True when the fetched content is an HLS playlist (master or media).
+ * A normal M3U channel list uses #EXTM3U/#EXTINF tags; HLS adds #EXT-X-* tags.
+ *
+ * Used to stop an HLS master playlist being mis-parsed as a channel list:
+ * the first non-comment line of a master playlist is the video-only variant
+ * URL, and extracting it as the channel URL drops the separate
+ * EXT-X-MEDIA audio group → silent video (e.g. short links like
+ * `r.jdshipin.com/62WM7` that redirect to an obfuscated master).
+ */
+export function isHlsPlaylistContent(content: string): boolean {
+  // HLS tags always begin at the start of a line. Anchoring avoids false
+  // positives from channel URLs that merely contain "#EXT-X-" as a fragment.
+  return /^\s*#EXT-X-/m.test(content)
+}
+
+/**
+ * Build the single channel representing an HLS playlist, locked to the
+ * original source URL ("import URL") instead of a variant URL. VLC's
+ * adaptive demux (and the ffmpeg proxy) then use the full master playlist,
+ * which includes the separate audio group.
+ */
+export function hlsSingleChannel(sourceUrl: string, playlistId?: string): Channel {
+  const name = sourceUrl.split('/').pop()?.split('?')[0] || sourceUrl.slice(0, 40)
+  return {
+    id: urlToId(sourceUrl),
+    name,
+    url: sourceUrl,
+    group: t('group.ungrouped'),
+    playlistId,
+  }
+}
+
+/**
  * Parse M3U content without blocking the event loop.
  * Large playlists (10 000+ channels) are processed in 500-line chunks
  * with a setImmediate yield between each chunk so IPC calls can

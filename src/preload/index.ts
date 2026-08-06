@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Channel, PlaylistMeta, HistoryEntry, EpgSource, UserData } from '../shared/types'
+import type { Channel, PlaylistMeta, HistoryEntry, EpgSource, UserData, PlayerStats } from '../shared/types'
 
 // Helper: register a listener and return a cleanup function.
 function on<T>(channel: string, cb: (payload: T) => void): () => void {
@@ -9,7 +9,10 @@ function on<T>(channel: string, cb: (payload: T) => void): () => void {
 }
 
 const api = {
-  switchChannel: (url: string) => ipcRenderer.invoke('switch-channel', url),
+  logToMain: (level: 'debug' | 'info' | 'warn' | 'error', msg: string, ...args: unknown[]) =>
+    ipcRenderer.send('renderer-log', level, msg, args),
+
+  switchChannel: (url: string, volume?: number) => ipcRenderer.invoke('switch-channel', url, volume),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   getVlcVersion: () => ipcRenderer.invoke('get-vlc-version'),
   snoozeUpdate: (until: number) => ipcRenderer.invoke('snooze-update', until),
@@ -59,6 +62,8 @@ const api = {
   togglePlay: () => ipcRenderer.invoke('toggle-play'),
   setVolume: (vol: number) => ipcRenderer.invoke('set-volume', vol),
   toggleMute: () => ipcRenderer.invoke('toggle-mute'),
+  getPlayerState: () => ipcRenderer.invoke('get-player-state'),
+  getPlayerStats: () => ipcRenderer.invoke('get-player-stats') as Promise<PlayerStats>,
   skipTime: (seconds: number) => ipcRenderer.invoke('skip-time', seconds),
   getPlayerTime: () => ipcRenderer.invoke('get-player-time'),
   getPlayerDuration: () => ipcRenderer.invoke('get-player-duration'),

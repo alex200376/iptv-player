@@ -1,10 +1,12 @@
 import { ipcMain, BrowserWindow } from 'electron'
-import { VlcPlayer } from 'electron-vlc-player'
+import { VlcPlayer, getBinding } from 'electron-vlc-player'
 import { readSettings } from '../settingsStore'
 import { getState, ensurePlayerEmbedded, ensureEmbedded, buildMediaOptions } from './shared'
 import { exitPipMode } from './pip'
-import { needsProxy, getProxyUrl, stopProxy, isFfmpegAvailable, isHlsStream } from '../streamProxy'
+import { needsProxy, getProxyUrl, stopProxy, isFfmpegAvailable, isHlsStream, getProxyDownloadSpeed, isProxyActive } from '../streamProxy'
 import { probeChannel } from './playlist'
+import { logger } from '../../shared/logger'
+import type { PlayerStats } from '../../shared/types'
 
 let _playId = 0
 let _lastSwitchTime = 0
@@ -28,6 +30,82 @@ function clearVerifyInterval(playId: number) {
 
 /** States where stop() is guaranteed non-blocking */
 const SAFE_STATES = new Set([0, 3, 4, 5, 6, 7])
+
+let _lastPlayerStats: PlayerStats = {
+  playing: false,
+  muted: false,
+  volume: 0,
+  videoSize: null,
+  fps: null,
+  videoCodec: null,
+  audioCodec: null,
+  downloadSpeedBps: null,
+}
+
+/**
+ * Read real stats from the live player. Guards against blocking on a stuck
+ * player (see abandonPlayer notes): only query native libVLC getters when the
+ * player is in a safe state; otherwise return the last-known values.
+ */
+function buildPlayerStats(): PlayerStats {
+  const state = getState()
+  const stats = _lastPlayerStats
+  if (!state.player || state.player.destroyed || !state.mainWindow) return stats
+
+  try {
+    const playerState = state.player.getState()
+    if (!SAFE_STATES.has(playerState)) return stats
+
+    const playing = state.player.isPlaying()
+    const volume = state.player.getVolume()
+    const muted = getBinding().getMute(state.player.playerId)
+    const next: PlayerStats = {
+      playing,
+      muted,
+      volume: Math.max(0, Math.min(100, Math.round(volume))),
+      videoSize: stats.videoSize,
+      fps: stats.fps,
+      videoCodec: stats.videoCodec,
+      audioCodec: stats.audioCodec,
+      downloadSpeedBps: stats.downloadSpeedBps,
+    }
+
+    try {
+      const vs = state.player.getVideoSize()
+      if (vs && vs.width > 0 && vs.height > 0) next.videoSize = { width: vs.width, height: vs.height }
+    } catch { /* ignore */ }
+
+    try {
+      const fps = state.player.getFps()
+      if (Number.isFinite(fps) && fps > 0) next.fps = Math.round(fps * 100) / 100
+    } catch { /* ignore */ }
+
+    try {
+      const tracks = state.player.getMediaTracks()
+      if (Array.isArray(tracks)) {
+        const video = tracks.find((t) => t.type === 'video')
+        const audio = tracks.find((t) => t.type === 'audio')
+        if (video?.codec) next.videoCodec = video.codec
+        if (audio?.codec) next.audioCodec = audio.codec
+      }
+    } catch { /* ignore */ }
+
+    try {
+      // Keep tracking while a proxy session is live — report real bytes/sec
+      // including 0 so the badge doesn't flicker out on momentary dips.
+      if (isProxyActive('main')) {
+        next.downloadSpeedBps = getProxyDownloadSpeed('main') ?? 0
+      } else {
+        next.downloadSpeedBps = null
+      }
+    } catch { /* ignore */ }
+
+    _lastPlayerStats = next
+    return next
+  } catch {
+    return stats
+  }
+}
 
 export async function checkSingleChannel(
   url: string,
@@ -157,7 +235,7 @@ function abandonPlayer(player: InstanceType<typeof VlcPlayer> | null) {
   if (notEmbedded) return
 
   if (SAFE_STATES.has(state)) {
-    try { player.destroy() } catch (e) { console.error('[playback] destroy failed:', e) }
+    try { player.destroy() } catch (e) { logger.error('[playback] destroy failed:', e) }
   } else {
     try { player.unloadMedia() } catch { /* ignore */ }
     setTimeout(() => {
@@ -175,6 +253,7 @@ async function createNewPlayer(
   settings: ReturnType<typeof readSettings>,
   currentPlayId: number,
   mediaOptions: string[],
+  volume?: number,
 ): Promise<{ success: boolean; error?: string }> {
   const state = getState()
   const vlcLocale = settings.language === 'zh-CN' ? 'zh-CN' : 'en'
@@ -199,10 +278,10 @@ async function createNewPlayer(
   ]).catch(() => true)
 
   if (embedTimedOut) {
-    console.warn('[playback] embed timed out')
+    logger.warn('[playback] embed timed out')
     try { state.player?.removeAllListeners() } catch {}
     setImmediate(() => {
-      try { state.player?.destroy() } catch (e) { console.error('[playback] destroy new player:', e) }
+      try { state.player?.destroy() } catch (e) { logger.error('[playback] destroy new player:', e) }
     })
     state.player = null
     return { success: false, error: 'embed timeout' }
@@ -223,9 +302,9 @@ async function createNewPlayer(
 
     state.player!.on('error', (...args: unknown[]) => {
       if (currentPlayId !== _playId) return
-      console.error('[vlc-error]', url.substring(0, 60), ...args)
-      try { console.error('[vlc-state]', state.player?.getState()) } catch {}
-      try { console.error('[vlc-hasVout]', state.player?.hasVout()) } catch {}
+      logger.error('[vlc-error]', url.substring(0, 60), ...args)
+      try { logger.error('[vlc-state]', state.player?.getState()) } catch {}
+      try { logger.error('[vlc-hasVout]', state.player?.hasVout()) } catch {}
       if (state.mainWindow && !state.mainWindow.isDestroyed()) {
         state.mainWindow.webContents.send('player-error')
       }
@@ -233,7 +312,7 @@ async function createNewPlayer(
     state.player!.on('playing', () => {
       if (currentPlayId !== _playId) return
       playingFired = true
-      console.log('[vlc-playing]', url.substring(0, 60))
+      logger.info('[vlc-playing]', url.substring(0, 60))
       if (state.mainWindow && !state.mainWindow.isDestroyed()) {
         state.mainWindow.webContents.send('player-playing')
       }
@@ -241,7 +320,7 @@ async function createNewPlayer(
     state.player!.on('buffering', () => {
       if (currentPlayId !== _playId) return
       if (playingFired) clearDeadTimer(currentPlayId)
-      console.log('[vlc-buffering]', url.substring(0, 60))
+      logger.info('[vlc-buffering]', url.substring(0, 60))
       if (state.mainWindow && !state.mainWindow.isDestroyed()) {
         state.mainWindow.webContents.send('player-buffering')
       }
@@ -252,12 +331,17 @@ async function createNewPlayer(
   state.player.showOverlay()
   state.player.setSource(url, { mediaOptions })
   state.player.play()
+  // Apply the renderer's saved volume so what the HUD shows matches what's
+  // actually playing (VLC otherwise starts at its own default).
+  if (typeof volume === 'number' && Number.isFinite(volume)) {
+    try { state.player.setVolume(Math.max(0, Math.min(100, Math.round(volume)))) } catch { /* ignore */ }
+  }
   state.currentUrl = url
 
   clearDeadTimer(currentPlayId)
   _deadTimers.set(currentPlayId, setTimeout(async () => {
     if (currentPlayId !== _playId) return
-    console.log('[dead-stream] 10s elapsed, probing...', url.substring(0, 60))
+    logger.info('[dead-stream] 10s elapsed, probing...', url.substring(0, 60))
 
     const probeUrl = state.originalUrl || url
     let probeOnline = false
@@ -265,18 +349,18 @@ async function createNewPlayer(
       const { result } = await probeChannel(probeUrl)
       probeOnline = result === 'online'
     } catch (e) {
-      console.warn('[dead-stream] probe failed:', (e as Error).message)
+      logger.warn('[dead-stream] probe failed:', (e as Error).message)
     }
 
     if (!probeOnline) {
-      console.log('[dead-stream] probe offline — removing')
+      logger.info('[dead-stream] probe offline — removing')
       if (state.mainWindow && !state.mainWindow.isDestroyed())
         state.mainWindow.webContents.send('player-dead', url)
       return
     }
 
     if (!playingFired) {
-      console.log('[dead-stream] probe online but VLC not playing yet — keeping')
+      logger.info('[dead-stream] probe online but VLC not playing yet — keeping')
       return
     }
 
@@ -285,22 +369,22 @@ async function createNewPlayer(
     try {
       const hasVout = state.player?.hasVout() ?? false
       if (hasVout) {
-        console.log('[dead-stream] hasVout — alive')
+        logger.info('[dead-stream] hasVout — alive')
         // Schedule periodic auto-verify while playing
         clearVerifyInterval(currentPlayId)
         const startInterval = () => {
           _verifyIntervals.set(currentPlayId, setInterval(async () => {
             if (currentPlayId !== _playId) { clearVerifyInterval(currentPlayId); return }
-            console.log('[auto-verify] probing', probeUrl.substring(0, 60))
+            logger.info('[auto-verify] probing', probeUrl.substring(0, 60))
             try {
               const { result } = await probeChannel(probeUrl)
               if (result === 'offline') {
-                console.log('[auto-verify] offline — notifying', probeUrl.substring(0, 60))
+                logger.info('[auto-verify] offline — notifying', probeUrl.substring(0, 60))
                 if (state.mainWindow && !state.mainWindow.isDestroyed())
                   state.mainWindow.webContents.send('player-dead-notify', url)
               }
             } catch (e) {
-              console.warn('[auto-verify] probe failed:', (e as Error).message)
+              logger.warn('[auto-verify] probe failed:', (e as Error).message)
             }
           }, AUTO_VERIFY_INTERVAL_MS))
         }
@@ -308,9 +392,9 @@ async function createNewPlayer(
         setTimeout(startInterval, AUTO_VERIFY_FIRST_MS)
         return
       }
-      console.log('[dead-stream] playing fired but hasVout = 0 — dead')
+      logger.info('[dead-stream] playing fired but hasVout = 0 — dead')
     } catch {
-      console.warn('[dead-stream] hasVout check failed')
+      logger.warn('[dead-stream] hasVout check failed')
     }
 
     if (state.mainWindow && !state.mainWindow.isDestroyed())
@@ -325,6 +409,7 @@ async function doPlay(
   settings: ReturnType<typeof readSettings>,
   currentPlayId: number,
   cacheOverride?: number,
+  volume?: number,
 ): Promise<{ success: boolean; error?: string }> {
   const effectiveCache = cacheOverride ?? settings.networkCache
   const mediaOptions = buildMediaOptions({ ...settings, networkCache: effectiveCache })
@@ -336,14 +421,14 @@ async function doPlay(
   state.player = null
 
   try {
-    return await createNewPlayer(url, settings, currentPlayId, mediaOptions)
+    return await createNewPlayer(url, settings, currentPlayId, mediaOptions, volume)
   } catch (e) {
-    console.error('[playback] createNewPlayer error:', url, (e as Error).message)
+    logger.error('[playback] createNewPlayer error:', url, (e as Error).message)
     abandonPlayer(state.player)
     state.player = null
     if (currentPlayId !== _playId) return { success: false }
     try {
-      return await createNewPlayer(url, settings, currentPlayId, mediaOptions)
+      return await createNewPlayer(url, settings, currentPlayId, mediaOptions, volume)
     } catch (e2) {
       return { success: false, error: (e2 as Error).message }
     }
@@ -351,10 +436,10 @@ async function doPlay(
 }
 
 export function registerPlaybackIpc() {
-  ipcMain.handle('switch-channel', async (_event, url: string) => {
+  ipcMain.handle('switch-channel', async (_event, url: string, volume?: number) => {
     const now = Date.now()
     if (now - _lastSwitchTime < SWITCH_DEBOUNCE_MS) {
-      console.log('[switch-channel] debounced, ignoring rapid switch')
+      logger.info('[switch-channel] debounced, ignoring rapid switch')
       return { success: false }
     }
     _lastSwitchTime = now
@@ -384,13 +469,13 @@ export function registerPlaybackIpc() {
     const isHls = await isHlsStream(url)
     if ((needsProxy(url) || isHls) && (isNonHttp || settings.streamProxy || isHls)) {
       if ((isNonHttp || isHls) && !(await isFfmpegAvailable(state.vlcDir))) {
-        console.warn('[switch-channel] ffmpeg not found, passing RTMP/RTSP/HLS directly to VLC')
+        logger.warn('[switch-channel] ffmpeg not found, passing RTMP/RTSP/HLS directly to VLC')
       } else {
         try {
           playUrl = await getProxyUrl(url, state.vlcDir, settings.proxyResolution)
-          console.log('[switch-channel] proxied:', url.substring(0, 60), '->', playUrl)
+          logger.info('[switch-channel] proxied:', url.substring(0, 60), '->', playUrl)
         } catch (e) {
-          console.error('[switch-channel] proxy failed, falling back:', (e as Error).message)
+          logger.error('[switch-channel] proxy failed, falling back:', (e as Error).message)
         }
       }
     }
@@ -399,7 +484,7 @@ export function registerPlaybackIpc() {
 
     const isProxied = playUrl.startsWith('http://127.0.0.1')
     state.originalUrl = isProxied ? url : ''
-    return doPlay(playUrl, settings, currentPlayId, isProxied ? 150 : undefined)
+    return doPlay(playUrl, settings, currentPlayId, isProxied ? 150 : undefined, volume)
   })
 
   ipcMain.handle('toggle-play', async () => {
@@ -414,12 +499,28 @@ export function registerPlaybackIpc() {
   ipcMain.handle('toggle-mute', async () => {
     if (ensureEmbedded()) {
       const p = getState().player!
-      const muted = !(p as any).isMuted()
+      const muted = !(p as unknown as { isMuted(): boolean }).isMuted()
       p.setMute(muted)
       return muted
     }
     return false
   })
+
+  ipcMain.handle('get-player-state', () => {
+    const state = getState()
+    if (!state.player) return { playing: false, muted: false, volume: 0 }
+    try {
+      return {
+        playing: state.player.isPlaying(),
+        muted: getBinding().getMute(state.player.playerId),
+        volume: state.player.getVolume(),
+      }
+    } catch {
+      return { playing: false, muted: false, volume: 0 }
+    }
+  })
+
+  ipcMain.handle('get-player-stats', () => buildPlayerStats())
 
   ipcMain.handle('skip-time', async (_e, seconds: number) => {
     if (ensureEmbedded()) {

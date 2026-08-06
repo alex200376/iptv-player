@@ -5,6 +5,7 @@ import type { Settings } from '../shared/types'
 
 const DEFAULTS: Settings = {
   theme: 'dark',
+  customTheme: null,
   hardwareAcceleration: 'd3d11va',
   // Raised from 400 ms → 800 ms default.
   // 400 ms caused frequent micro-stalls on jittery CDN/IPTV streams.

@@ -3,6 +3,9 @@ import { useStore } from '../stores/useStore'
 import EpgOverlay from './EpgOverlay'
 import LogoImg from './LogoImg'
 import MarqueeText from './MarqueeText'
+import PlayerControls from './PlayerControls'
+import StreamInfo from './StreamInfo'
+import { toast } from '../stores/toastStore'
 import type { Channel, EpgProgram } from '../types'
 import { useTranslation } from 'react-i18next'
 
@@ -97,7 +100,6 @@ const [showInfo, setShowInfo] = useState(false)
 const [showEpg, setShowEpg] = useState(false)
 const [isBuffering, setIsBuffering] = useState(false)
 const [playerError, setPlayerError] = useState<string | null>(null)
-const [deadNotification, setDeadNotification] = useState<string | null>(null)
 const [autoDeadNotify, setAutoDeadNotify] = useState<{ url: string; name: string } | null>(null)
 
   const pipActiveRef = useRef(false)
@@ -153,9 +155,11 @@ const [autoDeadNotify, setAutoDeadNotify] = useState<{ url: string; name: string
     retryCountRef.current = 0
     setPlayerError(null)
     setIsBuffering(false)
-    const result = await window.electronAPI.switchChannel(currentChannel.url)
+    const result = await window.electronAPI.switchChannel(currentChannel.url, useStore.getState().volume)
     if (!result.success) {
       setPlayerError(result.error || t('player.playError'))
+    } else {
+      useStore.setState({ isPlaying: true })
     }
   }, [currentChannel, t])
 
@@ -189,9 +193,9 @@ const [autoDeadNotify, setAutoDeadNotify] = useState<{ url: string; name: string
 
       const remaining = useStore.getState().channels
       window.electronAPI.saveChannels(remaining as any)
+      useStore.setState({ isPlaying: false })
 
-      setDeadNotification(t('player.deadRemoved', { name }))
-      setTimeout(() => setDeadNotification(null), 3000)
+      toast(t('player.deadRemoved', { name }), 'error')
     })
     return () => {
       if (typeof offDead === 'function') offDead()
@@ -244,6 +248,7 @@ const [autoDeadNotify, setAutoDeadNotify] = useState<{ url: string; name: string
       retryCountRef.current = 0
       setPlayerError(null)
       setIsBuffering(false)
+      useStore.setState({ isPlaying: true })
     })
 
     const offError = window.electronAPI.onPlayerError(() => {
@@ -252,6 +257,7 @@ const [autoDeadNotify, setAutoDeadNotify] = useState<{ url: string; name: string
       clearTimeout(errorTimerRef.current)
       clearTimeout(reconnectTimerRef.current)
       setIsBuffering(false)
+      useStore.setState({ isPlaying: false })
 
       errorTimerRef.current = setTimeout(() => {
         const { autoReconnect, reconnectInterval } = settingsRef.current
@@ -266,7 +272,7 @@ const [autoDeadNotify, setAutoDeadNotify] = useState<{ url: string; name: string
             if (pipActiveRef.current) {
               window.electronAPI.pipReloadSource()
             } else {
-              window.electronAPI.switchChannel(ch.url)
+              window.electronAPI.switchChannel(ch.url, useStore.getState().volume)
             }
           }, reconnectInterval)
         } else {
@@ -293,6 +299,7 @@ const [autoDeadNotify, setAutoDeadNotify] = useState<{ url: string; name: string
     setIsBuffering(false)
     setPlayerError(null)
     setShowInfo(true)
+    useStore.setState({ isPlaying: true })
 
     timerRef.current = setTimeout(() => {
       if (switchTokenRef.current !== token) return
@@ -324,6 +331,32 @@ const [autoDeadNotify, setAutoDeadNotify] = useState<{ url: string; name: string
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
+  }, [currentChannel])
+
+  // Poll real player stats (volume, resolution, fps, codec, download speed)
+  // so the bottom-bar info stays in sync with the actual VLC player.
+  useEffect(() => {
+    if (!currentChannel) return
+    let cancelled = false
+    const tick = async () => {
+      try {
+        const stats = await window.electronAPI.getPlayerStats()
+        if (cancelled) return
+        useStore.setState({ playerStats: stats })
+        // Keep volume/muted/playing store fields real (only when a live player exists).
+        if (stats.playing || stats.volume > 0) {
+          useStore.setState({ isPlaying: stats.playing, isMuted: stats.muted, volume: stats.volume })
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
   }, [currentChannel])
 
   // Fix Bug 1: use double-rAF so VLC resizes only after DOM has fully painted
@@ -402,6 +435,9 @@ const [autoDeadNotify, setAutoDeadNotify] = useState<{ url: string; name: string
             <p className="text-xs">{t('player.emptyHint')}</p>
           </div>
         )}
+        {currentChannel && !playerError && (
+          <PlayerControls onToggleEpg={() => setShowEpg((v) => !v)} />
+        )}
       </div>
 
       {/* Bottom info/EPG panel - flex-shrink-0 prevents it from eating into the player */}
@@ -411,26 +447,38 @@ const [autoDeadNotify, setAutoDeadNotify] = useState<{ url: string; name: string
             <EpgProgressBar program={currentProgram} t={t} />
           )}
 
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-2.5 min-w-0">
             {currentChannel.logo ? (
-              <LogoImg src={currentChannel.logo} alt={currentChannel.name} className="h-5 w-auto flex-shrink-0" />
+              <div className="h-6 w-6 rounded-md bg-muted flex items-center justify-center flex-shrink-0 overflow-hidden">
+                <LogoImg src={currentChannel.logo} alt={currentChannel.name} className="h-5 w-auto" />
+              </div>
             ) : (
-              <div className="h-5 w-5 rounded bg-muted flex-shrink-0" />
+              <div className="h-6 w-6 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase">
+                  {currentChannel.name.slice(0, 1)}
+                </span>
+              </div>
             )}
-            <div className="flex-1 min-w-0">
-              <MarqueeText className="text-sm font-medium truncate">{currentChannel.name}</MarqueeText>
+            <div className="flex items-center gap-2 min-w-0 flex-[0_1_auto]">
+              <MarqueeText className="text-sm font-medium">{currentChannel.name}</MarqueeText>
+              <span className="live-badge">
+                <span className="live-badge-dot" />
+                LIVE
+              </span>
             </div>
-            <span className="text-xs font-semibold text-red-500 flex-shrink-0">LIVE</span>
-            <button
-              onClick={() => setShowEpg((v) => !v)}
-              className={`shrink-0 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                showEpg
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80'
-              }`}
-            >
-              {t('player.epgButton')}
-            </button>
+            <div className="ml-auto flex items-center gap-2.5 flex-shrink-0">
+              <StreamInfo />
+              <button
+                onClick={() => setShowEpg((v) => !v)}
+                className={`shrink-0 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  showEpg
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80'
+                }`}
+              >
+                {t('player.epgButton')}
+              </button>
+            </div>
           </div>
 
           {currentProgram && (
@@ -454,12 +502,6 @@ const [autoDeadNotify, setAutoDeadNotify] = useState<{ url: string; name: string
               />
             </div>
           )}
-        </div>
-      )}
-
-      {deadNotification && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-red-600 text-white rounded-lg shadow-lg text-sm animate-fade-in">
-          {deadNotification}
         </div>
       )}
 

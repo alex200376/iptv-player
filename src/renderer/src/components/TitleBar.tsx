@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { Tv, Minus, Square, Copy, X } from 'lucide-react'
+import { useStore } from '../stores/useStore'
 
 interface TitleBarProps {}
 
@@ -9,6 +11,7 @@ export default function TitleBar(_props: TitleBarProps) {
   const titleRef = useRef<HTMLDivElement>(null)
   const hideTimerRef = useRef<ReturnType<typeof setTimeout>>()
   const overlayTimerRef = useRef<ReturnType<typeof setTimeout>>()
+  const currentChannel = useStore((s) => s.currentChannel)
 
   useEffect(() => {
     window.electronAPI.isWindowMaximized().then(setMaximized)
@@ -58,6 +61,45 @@ export default function TitleBar(_props: TitleBarProps) {
     }
   }, [])
 
+  const appBrand = (
+    <>
+      <div className="titlebar-logo">
+        <Tv className="w-3.5 h-3.5" />
+      </div>
+      <span className="titlebar-app-name">
+        IPTV <span className="titlebar-app-name-accent">Player</span>
+      </span>
+    </>
+  )
+
+  const windowButtons = (
+    <>
+      <button
+        className="titlebar-btn titlebar-ctrl-btn"
+        onClick={() => window.electronAPI.minimizeWindow()}
+        title="Minimize"
+      >
+        <Minus className="w-3.5 h-3.5" />
+      </button>
+
+      <button
+        className="titlebar-btn titlebar-ctrl-btn"
+        onClick={() => window.electronAPI.maximizeWindow()}
+        title={maximized ? 'Restore' : 'Maximize'}
+      >
+        {maximized ? <Copy className="w-3 h-3" /> : <Square className="w-3 h-3" />}
+      </button>
+
+      <button
+        className="titlebar-btn titlebar-close-btn"
+        onClick={() => window.electronAPI.closeWindow()}
+        title="Close"
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
+    </>
+  )
+
   if (fullscreen) {
     return (
       <div
@@ -74,8 +116,8 @@ export default function TitleBar(_props: TitleBarProps) {
           onDoubleClick={handleDoubleClick}
           style={{ WebkitAppRegion: 'drag' as unknown as string }}
         >
-          <div className="flex items-center gap-1 pl-1 min-w-0" style={{ WebkitAppRegion: 'no-drag' as unknown as string }}>
-            <span className="text-xs font-semibold text-white/80 uppercase tracking-wider ml-1 select-none">IPTV Player</span>
+          <div className="flex items-center gap-2 pl-2 min-w-0" style={{ WebkitAppRegion: 'no-drag' as unknown as string }}>
+            {appBrand}
           </div>
 
           <div className="flex-1" />
@@ -86,9 +128,7 @@ export default function TitleBar(_props: TitleBarProps) {
               onClick={() => window.electronAPI.minimizeWindow()}
               title="Minimize"
             >
-              <svg width="12" height="12" viewBox="0 0 12 1">
-                <rect y="0" width="12" height="1" fill="currentColor" />
-              </svg>
+              <Minus className="w-3.5 h-3.5" />
             </button>
 
             <button
@@ -96,16 +136,7 @@ export default function TitleBar(_props: TitleBarProps) {
               onClick={() => window.electronAPI.maximizeWindow()}
               title={maximized ? 'Restore' : 'Maximize'}
             >
-              {maximized ? (
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <rect x="2.5" y="0.5" width="9" height="9" rx="0.5" stroke="currentColor" />
-                  <rect x="0.5" y="2.5" width="9" height="9" rx="0.5" fill="transparent" stroke="currentColor" />
-                </svg>
-              ) : (
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <rect x="0.5" y="0.5" width="11" height="11" rx="1" stroke="currentColor" />
-                </svg>
-              )}
+              {maximized ? <Copy className="w-3 h-3" /> : <Square className="w-3 h-3" />}
             </button>
 
             <button
@@ -113,9 +144,7 @@ export default function TitleBar(_props: TitleBarProps) {
               onClick={() => window.electronAPI.closeWindow()}
               title="Close"
             >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -130,48 +159,17 @@ export default function TitleBar(_props: TitleBarProps) {
       onDoubleClick={handleDoubleClick}
     >
       <div className="titlebar-left">
-        <span className="titlebar-app-name">IPTV Player</span>
+        {appBrand}
       </div>
 
-      <div className="titlebar-center" />
+      <div className="titlebar-center">
+        {currentChannel && (
+          <span className="titlebar-channel truncate">{currentChannel.name}</span>
+        )}
+      </div>
 
       <div className="titlebar-right">
-        <button
-          className="titlebar-btn titlebar-ctrl-btn"
-          onClick={() => window.electronAPI.minimizeWindow()}
-          title="Minimize"
-        >
-          <svg width="12" height="12" viewBox="0 0 12 1">
-            <rect y="0" width="12" height="1" fill="currentColor" />
-          </svg>
-        </button>
-
-        <button
-          className="titlebar-btn titlebar-ctrl-btn"
-          onClick={() => window.electronAPI.maximizeWindow()}
-          title={maximized ? 'Restore' : 'Maximize'}
-        >
-          {maximized ? (
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <rect x="2.5" y="0.5" width="9" height="9" rx="0.5" stroke="currentColor" />
-              <rect x="0.5" y="2.5" width="9" height="9" rx="0.5" fill="var(--tv-bg-secondary)" stroke="currentColor" />
-            </svg>
-          ) : (
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <rect x="0.5" y="0.5" width="11" height="11" rx="1" stroke="currentColor" />
-            </svg>
-          )}
-        </button>
-
-        <button
-          className="titlebar-btn titlebar-close-btn"
-          onClick={() => window.electronAPI.closeWindow()}
-          title="Close"
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-        </button>
+        {windowButtons}
       </div>
     </div>
   )

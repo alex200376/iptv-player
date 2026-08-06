@@ -4,6 +4,7 @@ import { spawn, execFile, ChildProcess } from 'child_process'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { app, net } from 'electron'
+import { logger } from '../shared/logger'
 
 // RTMP/RTSP/UDP always need proxy.
 // HTTP .ts streams (MPEG-TS over HTTP) also need proxy — VLC cannot reliably
@@ -147,10 +148,10 @@ async function probeGpuEncoder(ffmpegPath: string): Promise<string | null> {
         })
       })
       _gpuEncoder = enc
-      console.log('[stream-proxy] GPU encoder available:', enc)
+      logger.info('[stream-proxy] GPU encoder available:', enc)
       return enc
     } catch {
-      console.log('[stream-proxy] GPU encoder not available:', enc)
+      logger.info('[stream-proxy] GPU encoder not available:', enc)
     }
   }
   _gpuEncoder = null
@@ -179,6 +180,54 @@ function encoderArgs(enc: string): string[] {
 
 let httpServer: ReturnType<typeof createServer> | null = null
 let serverPort = 0
+
+/**
+ * Per-session download-speed tracking. Bytes delivered to VLC (ffmpeg stdout
+ * → response) are counted in a rolling window so the HUD can show a real
+ * bytes/sec figure for proxied streams.
+ */
+interface SpeedSample {
+  ts: number
+  bytes: number
+}
+const sessionSpeed = new Map<string, { totalBytes: number; samples: SpeedSample[] }>()
+
+function getSessionSpeed(sessionId: string): { totalBytes: number; samples: SpeedSample[] } {
+  let e = sessionSpeed.get(sessionId)
+  if (!e) {
+    e = { totalBytes: 0, samples: [] }
+    sessionSpeed.set(sessionId, e)
+  }
+  return e
+}
+
+function resetSessionSpeed(sessionId: string) {
+  sessionSpeed.set(sessionId, { totalBytes: 0, samples: [] })
+}
+
+/**
+ * Rolling bytes/sec delivered to VLC for a proxy session. `null` when there
+ * is no active (or recently active) proxy for that session.
+ */
+export function getProxyDownloadSpeed(sessionId = 'main'): number | null {
+  const e = sessionSpeed.get(sessionId)
+  if (!e) return null
+  const now = Date.now()
+  e.samples.push({ ts: now, bytes: e.totalBytes })
+  const cutoff = now - 3000
+  while (e.samples.length > 1 && e.samples[0].ts < cutoff) e.samples.shift()
+  if (e.samples.length < 2) return 0
+  const oldest = e.samples[0]
+  const newest = e.samples[e.samples.length - 1]
+  const dt = (newest.ts - oldest.ts) / 1000
+  if (dt <= 0) return 0
+  return Math.max(0, (newest.bytes - oldest.bytes) / dt)
+}
+
+/** Whether a proxy session is currently running for the given session. */
+export function isProxyActive(sessionId = 'main'): boolean {
+  return activeProcesses.has(sessionId)
+}
 
 /**
  * FIX(critical): Replaced single global `currentProcess` with a per-session
@@ -264,7 +313,7 @@ function safeKill(proc: ChildProcess): void {
       proc.kill('SIGKILL')
     }
   } catch (e) {
-    console.error('[stream-proxy] safeKill error:', e)
+    logger.error('[stream-proxy] safeKill error:', e)
   }
 }
 
@@ -297,7 +346,7 @@ function ensureServer(vlcDir?: string | null): Promise<number> {
     })
     httpServer.listen(0, '127.0.0.1', () => {
       serverPort = (httpServer!.address() as AddressInfo).port
-      console.log('[stream-proxy] HTTP server on port', serverPort)
+      logger.info('[stream-proxy] HTTP server on port', serverPort)
       resolve(serverPort)
     })
   })
@@ -362,6 +411,7 @@ async function handleProxyRequest(
     safeKill(activeProcesses.get(sessionId)!)
     activeProcesses.delete(sessionId)
   }
+  resetSessionSpeed(sessionId)
 
   const ffmpegPath = findFfmpeg(vlcDir)
 
@@ -393,8 +443,8 @@ async function handleProxyRequest(
     'pipe:1',
   ]
 
-  if (gpuEnc) console.log('[stream-proxy] using GPU encoder:', gpuEnc)
-  console.log('[stream-proxy] ffmpeg cmd:', ffmpegPath, args.join(' '))
+  if (gpuEnc) logger.info('[stream-proxy] using GPU encoder:', gpuEnc)
+  logger.info('[stream-proxy] ffmpeg cmd:', ffmpegPath, args.join(' '))
 
   const proc = spawn(ffmpegPath, args, {
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -411,11 +461,11 @@ async function handleProxyRequest(
 
   const outputTimeout = setTimeout(() => {
     if (activeProcesses.get(sessionId) === proc) {
-      console.warn('[stream-proxy] ffmpeg no output for 20s, killing')
+      logger.warn('[stream-proxy] ffmpeg no output for 20s, killing')
       activeProcesses.delete(sessionId)
       safeKill(proc)
       if (!res.writableEnded) {
-        try { res.destroy() } catch (e) { console.error('[stream-proxy] destroy response:', e) }
+        try { res.destroy() } catch (e) { logger.error('[stream-proxy] destroy response:', e) }
       }
     }
   }, 20000)
@@ -423,10 +473,13 @@ async function handleProxyRequest(
   proc.stdout?.pipe(res)
 
   let hasOutput = false
-  proc.stdout?.on('data', () => {
+  proc.stdout?.on('data', (chunk: Buffer) => {
     if (!hasOutput) {
       hasOutput = true
       clearTimeout(outputTimeout)
+    }
+    if (chunk.length > 0) {
+      getSessionSpeed(sessionId).totalBytes += chunk.length
     }
   })
 
@@ -435,22 +488,24 @@ async function handleProxyRequest(
     for (const line of text.split('\n')) {
       const t = line.trim()
       if (t && (t.includes('Error') || t.includes('error') || t.includes('Invalid') || t.includes('frame=') || t.includes('Stream'))) {
-        console.debug('[ffmpeg]', t)
+        logger.debug('[ffmpeg]', t)
       }
     }
   })
 
   proc.on('close', (code) => {
-    console.log('[stream-proxy] ffmpeg exited, code:', code)
+    logger.info('[stream-proxy] ffmpeg exited, code:', code)
     clearTimeout(outputTimeout)
     if (activeProcesses.get(sessionId) === proc) activeProcesses.delete(sessionId)
+    sessionSpeed.delete(sessionId)
     if (!res.writableEnded) res.end()
   })
 
   proc.on('error', (err) => {
-    console.error('[stream-proxy] ffmpeg error:', err.message)
+    logger.error('[stream-proxy] ffmpeg error:', err.message)
     clearTimeout(outputTimeout)
     if (activeProcesses.get(sessionId) === proc) activeProcesses.delete(sessionId)
+    sessionSpeed.delete(sessionId)
     if (!res.writableEnded) res.end()
   })
 
@@ -476,12 +531,14 @@ export function stopProxy(sessionId = 'main') {
       safeKill(proc)
       activeProcesses.delete(id)
     }
+    sessionSpeed.clear()
     return
   }
   if (activeProcesses.has(sessionId)) {
     safeKill(activeProcesses.get(sessionId)!)
     activeProcesses.delete(sessionId)
   }
+  sessionSpeed.delete(sessionId)
 }
 
 export function getProxyUrl(
